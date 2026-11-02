@@ -68,15 +68,6 @@
   "prop.plaza.lamp": {
     "file": "props/prop_plaza_lamp_ph.glb"
   },
-  "tile.plaza": {
-    "file": "tiles/tile_plaza_ph.png",
-    "tile": [
-      32,
-      32
-    ],
-    "columns": 4,
-    "count": 8
-  },
   "ui.icon.cheer": {
     "file": "ui/ui_icon_cheer_ph.svg"
   },
@@ -95,9 +86,6 @@
   "ui.icon.exit": {
     "file": "ui/ui_icon_exit_ph.svg"
   },
-  "map.plaza": {
-    "file": "maps/plaza.json"
-  },
   "font.pretendard": {
     "file": "fonts/pretendard/pretendard.css"
   },
@@ -107,5 +95,29 @@
       1080,
       1350
     ]
+  },
+  "prop.village.house": {
+    "file": "props/prop_village_house_ph.glb"
+  },
+  "prop.village.flag": {
+    "file": "props/prop_village_flag_ph.glb"
+  },
+  "prop.village.sign": {
+    "file": "props/prop_village_sign_ph.glb"
+  },
+  "tile.town": {
+    "file": "tiles/tile_town_ph.png",
+    "tile": [
+      32,
+      32
+    ],
+    "columns": 4,
+    "count": 9
+  },
+  "ui.icon.map": {
+    "file": "ui/ui_icon_map_ph.svg"
+  },
+  "map.town": {
+    "file": "maps/town.json"
   }
 }

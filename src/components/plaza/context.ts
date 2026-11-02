@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { PlazaMap } from '@/shared/plazaMap';
+import type { Territory } from '@/shared/territory';
 import type { PlazaSession } from './session';
 import type { PlazaAssets } from './assets';
 
@@ -13,6 +14,12 @@ export interface PlazaInput {
   self: { x: number; z: number; ready: boolean };
   /** 탭 표시 위치와 시각 */
   marker: { x: number; z: number; at: number };
+  /** 걷기 화면 / 전체 지도 (위에서 내려다보기) */
+  view: 'walk' | 'map';
+  /** 전체 지도로 넘어간 정도 (0 = 걷기, 1 = 지도). 카메라가 매 프레임 바꾼다. */
+  mapBlend: number;
+  /** 전체 지도 이름표 DOM. 장면이 매 프레임 화면 위치를 옮긴다. 키 = 유형 코드 또는 'plaza'. */
+  labels: Map<string, HTMLElement>;
 }
 
 export interface PlazaContextValue {
@@ -21,6 +28,8 @@ export interface PlazaContextValue {
   map: PlazaMap;
   assets: PlazaAssets;
   input: PlazaInput;
+  /** 땅따먹기: 칸별 땅 주인 */
+  territory: Territory;
 }
 
 export const PlazaContext = createContext<PlazaContextValue | null>(null);

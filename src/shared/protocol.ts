@@ -1,4 +1,4 @@
-// 광장 클라이언트와 실시간 서버가 함께 쓰는 메시지 규약.
+// 마을 클라이언트와 실시간 서버가 함께 쓰는 메시지 규약.
 // 자유 채팅은 없다. 소통은 동작과 이모티콘으로만 한다.
 import type { MbtiType } from '../design/mbti';
 
@@ -26,6 +26,10 @@ export interface ActionMessage {
 export interface EmoteMessage {
   kind: EmoteKind;
 }
+/** 전체 지도에서 다른 곳을 눌러 바로 간다 */
+export interface WarpMessage {
+  to: MbtiType | 'plaza';
+}
 
 /** 서버 → 클라이언트 */
 export interface SnapMessage {
@@ -45,5 +49,6 @@ export const MSG = {
   move: 'move',
   action: 'action',
   emote: 'emote',
+  warp: 'warp',
   snap: 'snap',
 } as const;

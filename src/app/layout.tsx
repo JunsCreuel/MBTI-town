@@ -6,7 +6,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'MBTI 마을',
-  description: 'MBTI 16개 유형이 팀이 되어 매일 토론 대항전을 벌이는 광장',
+  description: 'MBTI 16개 유형이 모여 사는 3D 마을. 광장에서 만나고, 토론 이벤트로 마을 땅을 넓힌다.',
 };
 
 export const viewport: Viewport = {

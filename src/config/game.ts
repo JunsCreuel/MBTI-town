@@ -25,6 +25,30 @@ export const plazaConfig = {
   maxVisiblePlayers: 40,
 } as const;
 
+// 마을 전체 구조: 가운데 광장 + 둘레에 16개 유형 마을. 땅 배치는 Tiled 맵(map.town)에 있다.
+export const townConfig = {
+  /** 마을 사이 순간 이동 재사용 대기 (ms) */
+  warpCooldownMs: 1500,
+  /** 지분이 같아도 마을 한가운데 이 반지름(칸) 안은 늘 그 마을 땅이다 */
+  coreRadius: 4.5,
+  /** 걸어 다닐 때 땅 주인 색을 잔디에 섞는 정도 (0~1). 전체 지도에서는 진하게 칠한다. */
+  groundTint: 0.12,
+  /** 땅 지분을 다시 받아 오는 주기 (ms). 결과 발표 뒤 곧 반영된다. */
+  refreshMs: 5 * 60 * 1000,
+} as const;
+
+// 땅따먹기 규칙 (PROJECT_GUIDE.md 7장). 처음에는 16개 유형이 땅을 똑같이 나눠 갖는다.
+export const landConfig = {
+  /** 이긴 팀이 진 팀 땅에서 가져오는 기본 비율 */
+  takeBase: 0.05,
+  /** 판정 득표율 차 1%p마다 더 가져오는 비율 */
+  takePerPoint: 0.005,
+  /** 한 경기에서 가져오는 비율 상한 */
+  takeMax: 0.3,
+  /** 한 유형 땅은 전체의 이 비율보다 작아지지 않는다 */
+  minShare: 0.015,
+} as const;
+
 export const cameraConfig = {
   /** 내려다보는 각도 (도). 가까이 당기면 낮아져 하늘이 보이고, 멀리 빼면 높아진다. */
   pitchNearDeg: 16,
@@ -36,6 +60,8 @@ export const cameraConfig = {
   portraitDistance: 19,
   minDistance: 8,
   maxDistance: 26,
+  /** 전체 지도: 위에서 내려다보는 각도 (도, 90이면 바로 위) */
+  mapPitchDeg: 72,
 } as const;
 
 /** 대진 방식. 초기 인원이 적으면 축 대전이나 기질 그룹 대전으로 바꾼다. */

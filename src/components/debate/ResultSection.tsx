@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { MBTI_TYPES, mbtiColor } from '@/design/mbti';
 import type { Side } from '@/shared/debate';
@@ -31,6 +32,14 @@ export function ResultSection({ view }: { view: DebateView }) {
         <span style={{ color: color('b') }}>{Math.round(r.vote.b)}% {label('b')}</span>
       </p>
       <p className="muted">{r.summary}</p>
+
+      {r.land && r.winner !== 'draw' && (
+        <p className="land-change">
+          <span className="land-change__tag">땅따먹기</span>
+          {label(r.winner)}이 {label(r.winner === 'a' ? 'b' : 'a')} 땅 {Math.round(r.land.rate * 100)}%를 가져왔어요.{' '}
+          <Link href="/plaza">마을 지도에서 보기 ›</Link>
+        </p>
+      )}
 
       {r.decisive && (
         <blockquote className="decisive" style={teamVars(team(r.decisive.side), r.decisive.side) as CSSProperties}>

@@ -1,37 +1,56 @@
 import { describe, expect, it } from 'vitest';
 import { findPath, hasLineOfSight } from './pathfinding';
 import { MOVE_BUDGET_MAX, isMoveAllowed, lerpAngle, moveWithCollision, refillMoveBudget, yawFromVector } from './movement';
-import { groundHeightAt, isBlockedAt, isBlockedTile, randomSpawnPoint } from './plazaMap';
+import { MBTI_TYPES } from '../design/mbti';
+import { groundHeightAt, isBlockedAt, isBlockedTile, randomSpawnPoint, spawnName } from './plazaMap';
 import { loadPlazaMapForTest } from './testMap';
 
 const map = loadPlazaMapForTest();
 const THREE_DEG = (d: number) => (d * Math.PI) / 180;
 
-describe('광장 맵', () => {
+describe('마을 맵', () => {
   it('레이어를 읽는다', () => {
-    expect(map.width).toBe(32);
-    expect(map.height).toBe(24);
-    expect(map.tileset.key).toBe('tile.plaza');
+    expect(map.width).toBe(96);
+    expect(map.height).toBe(96);
+    expect(map.tileset.key).toBe('tile.town');
     expect(map.props.some((p) => p.key === 'prop.plaza.fountain')).toBe(true);
-    // 테두리는 막혀 있다
+    // 바다와 맵 바깥은 막혀 있다
     expect(isBlockedTile(map, 0, 5)).toBe(true);
     expect(isBlockedTile(map, -1, 5)).toBe(true);
     // 분수 자리는 막혀 있다
-    expect(isBlockedTile(map, 16, 12)).toBe(true);
+    expect(isBlockedTile(map, 48, 48)).toBe(true);
+  });
+
+  it('광장 둘레에 16개 유형 마을이 있고, 마을마다 집 3채·깃발·표지판이 있다', () => {
+    expect(Object.keys(map.villages).sort()).toEqual([...MBTI_TYPES].sort());
+    for (const t of MBTI_TYPES) {
+      const own = map.props.filter((p) => p.village === t);
+      expect(own.filter((p) => p.key === 'prop.village.house')).toHaveLength(3);
+      expect(own.filter((p) => p.key === 'prop.village.flag')).toHaveLength(1);
+      expect(own.filter((p) => p.key === 'prop.village.sign')).toHaveLength(1);
+      const c = map.villages[t]!;
+      expect(map.land[Math.floor(c.z) * map.width + Math.floor(c.x)]).toBe(1);
+    }
+    // 광장은 누구의 땅도 아니다
+    expect(map.land[48 * map.width + 48]).toBe(0);
+    expect(map.land.reduce((a, b) => a + b, 0)).toBeGreaterThan(4000);
   });
 
   it('스폰 지점은 항상 걸을 수 있는 칸이다', () => {
-    for (let i = 0; i < 200; i++) {
-      const p = randomSpawnPoint(map);
-      expect(isBlockedAt(map, p.x, p.z)).toBe(false);
+    for (const name of ['spawn', ...MBTI_TYPES.map((t) => spawnName(t))]) {
+      expect(map.spawns[name]).toBeDefined();
+      for (let i = 0; i < 40; i++) {
+        const p = randomSpawnPoint(map, Math.random, name);
+        expect(isBlockedAt(map, p.x, p.z)).toBe(false);
+      }
     }
   });
 });
 
 describe('길찾기', () => {
   it('분수를 돌아서 게시판 앞까지 간다', () => {
-    const start = { x: 16.5, z: 18.5 };
-    const goal = { x: 16.5, z: 7.5 };
+    const start = { x: 48.5, z: 54.5 };
+    const goal = { x: 48.5, z: 43.5 };
     const path = findPath(map, start, goal)!;
     expect(path).not.toBeNull();
     expect(path.at(-1)).toEqual(goal);
@@ -44,27 +63,27 @@ describe('길찾기', () => {
   });
 
   it('막힌 칸을 누르면 가장 가까운 빈 칸으로 간다', () => {
-    const path = findPath(map, { x: 16.5, z: 18.5 }, { x: 16.5, z: 13.2 })!;
+    const path = findPath(map, { x: 48.5, z: 54.5 }, { x: 48.5, z: 49.2 })!;
     const end = path.at(-1)!;
     expect(isBlockedAt(map, end.x, end.z)).toBe(false);
-    expect(Math.abs(end.z - 14.5)).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(end.z - 50.5)).toBeLessThanOrEqual(1.5);
   });
 });
 
 describe('이동', () => {
   it('벽을 따라 미끄러진다', () => {
-    // 왼쪽 산울타리(x=0)에 붙은 상태에서 왼쪽 위로 가면 위로만 움직인다
-    const p = moveWithCollision(map, 1.35, 10.5, -0.2, -0.2);
-    expect(p.x).toBe(1.35);
-    expect(p.z).toBeCloseTo(10.3);
+    // 분수(x=47~49) 동쪽에 붙은 상태에서 왼쪽 위로 가면 위로만 움직인다
+    const p = moveWithCollision(map, 50.35, 48.5, -0.2, -0.2);
+    expect(p.x).toBe(50.35);
+    expect(p.z).toBeCloseTo(48.3);
   });
 
   it('너무 멀리 뛰면 서버가 거부한다', () => {
-    const from = { x: 16.5, z: 18.5 };
-    expect(isMoveAllowed(map, from, { x: 16.5, z: 18.1 }, 0.5)).toBe(true);
-    expect(isMoveAllowed(map, from, { x: 16.5, z: 10.5 }, MOVE_BUDGET_MAX)).toBe(false);
-    expect(isMoveAllowed(map, from, { x: 16.5, z: 12.5 }, 99)).toBe(false); // 분수 안
-    expect(isMoveAllowed(map, from, { x: NaN, z: 18 }, 1)).toBe(false);
+    const from = { x: 48.5, z: 54.5 };
+    expect(isMoveAllowed(map, from, { x: 48.5, z: 54.1 }, 0.5)).toBe(true);
+    expect(isMoveAllowed(map, from, { x: 48.5, z: 46.5 }, MOVE_BUDGET_MAX)).toBe(false);
+    expect(isMoveAllowed(map, from, { x: 48.5, z: 48.5 }, 99)).toBe(false); // 분수 안
+    expect(isMoveAllowed(map, from, { x: NaN, z: 54 }, 1)).toBe(false);
   });
 
   it('이동 예산은 걷는 속도만큼 차고 상한이 있다', () => {
@@ -90,8 +109,8 @@ describe('입체 타일', () => {
   it('타일셋 terrain·height 속성을 읽는다', () => {
     expect(Object.values(map.terrain)).toContain('stone');
     expect(Object.values(map.tileHeights)).toContain(0.75);
-    expect(groundHeightAt(map, 16.5, 17.5)).toBe(0.05); // 돌바닥
-    expect(groundHeightAt(map, 3.5, 12.5)).toBe(0); // 길
+    expect(groundHeightAt(map, 48.5, 53.5)).toBe(0.05); // 돌바닥
+    expect(groundHeightAt(map, 48.5, 58.5)).toBe(0); // 길
   });
 
   it('소품 방향을 읽는다', () => {

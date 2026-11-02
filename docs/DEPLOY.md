@@ -7,11 +7,11 @@ MBTI 마을을 인터넷 주소로 띄우는 순서입니다. 처음 한 번 설
 
 | 무엇 | 어디에 | 하는 일 | 비용 |
 |---|---|---|---|
-| 웹 화면 (Next.js) | Vercel | 입장, 광장 화면, 오늘의 토론, 로그인, 토론 API | Hobby 무료 (개인·비상업용. 수익을 내면 Pro) |
-| 광장 실시간 서버 (Colyseus) | Render | 광장 접속, 이동·몸짓 동기화, 채널 나누기 | Free 무료 (15분 쉬면 잠듦. 운영은 Starter 권장) |
+| 웹 화면 (Next.js) | Vercel | 입장, 마을 화면, 오늘의 토론, 로그인, 토론·땅 API | Hobby 무료 (개인·비상업용. 수익을 내면 Pro) |
+| 마을 실시간 서버 (Colyseus) | Render | 마을 접속, 이동·몸짓·마을 이동 동기화, 채널 나누기 | Free 무료 (15분 쉬면 잠듦. 운영은 Starter 권장) |
 | DB와 로그인 | Supabase | 토론 데이터, 카카오·구글·이메일 로그인 | Free 무료 (일주일 동안 쓰지 않으면 일시 정지) |
 
-웹 화면은 Vercel에 두고, 광장 서버만 Render에 따로 둡니다. Vercel은 오래 연결을 유지하는 웹소켓 서버를 돌릴 수 없기 때문입니다.
+웹 화면은 Vercel에 두고, 마을 실시간 서버만 Render에 따로 둡니다. Vercel은 오래 연결을 유지하는 웹소켓 서버를 돌릴 수 없기 때문입니다.
 
 준비물: GitHub 계정, 그리고 Supabase·Render·Vercel 계정 (셋 다 GitHub로 가입할 수 있습니다).
 
@@ -63,7 +63,7 @@ DB 접속 주소의 `[YOUR-PASSWORD]` 는 1-1에서 정한 비밀번호로 바�
 
 ---
 
-## 2. Render: 광장 실시간 서버
+## 2. Render: 마을 실시간 서버
 
 저장소의 `render.yaml` 이 설정을 담고 있습니다.
 
@@ -73,7 +73,7 @@ DB 접속 주소의 `[YOUR-PASSWORD]` 는 1-1에서 정한 비밀번호로 바�
 4. 배포가 끝나면 서비스 주소를 복사합니다. 예: `https://mbti-town-realtime.onrender.com` (이름이 겹치면 뒤에 글자가 붙습니다)
 5. 확인: 브라우저로 `주소/__healthcheck` 를 열어 오류 없이 열리면 됩니다.
 
-Free 플랜은 15분 동안 접속이 없으면 잠들고, 다음 사람이 광장에 들어올 때 깨어나는 데 1분 가까이 걸립니다. 실제로 사람을 받기 시작하면 서비스 Settings에서 **Instance Type** 을 Starter로 올리세요.
+Free 플랜은 15분 동안 접속이 없으면 잠들고, 다음 사람이 마을에 들어올 때 깨어나는 데 1분 가까이 걸립니다. 실제로 사람을 받기 시작하면 서비스 Settings에서 **Instance Type** 을 Starter로 올리세요.
 
 공식 문서: https://render.com/docs/infrastructure-as-code
 
@@ -147,9 +147,10 @@ Vercel 환경변수 `NEXT_PUBLIC_AUTH_PROVIDERS` 에 켠 것만 적고 Redeploy 
 
 휴대폰과 PC로 Vercel 주소에 들어가서 차례로 확인합니다.
 
-- [ ] 입장 화면에서 MBTI를 고르고 광장에 들어간다 (Render가 자고 있었다면 첫 접속에 1분쯤 걸린다)
+- [ ] 입장 화면에서 MBTI를 고르면 내 유형 마을에서 시작한다 (Render가 자고 있었다면 첫 접속에 1분쯤 걸린다)
+- [ ] 오른쪽 위 지도 버튼을 누르면 섬 전체가 보이고, 다른 마을이나 광장을 누르면 그리로 간다
 - [ ] 두 기기가 같은 채널에서 서로 보이고, 이동·이모티콘이 상대 화면에 나온다
-- [ ] 광장의 **오늘의 토론** 버튼이나 게시판을 누르면 토론 화면이 열린다
+- [ ] **오늘의 토론** 버튼이나 광장 게시판을 누르면 토론 화면이 열린다
 - [ ] 로그인하고 내 MBTI를 정한다
 - [ ] 출전 팀이면 논거를 낸다. 비하 표현이 있으면 거부된다
 - [ ] 18시 뒤 관전 유형 계정으로 대표 논거 하나를 고른다
@@ -176,7 +177,7 @@ Vercel 환경변수 `NEXT_PUBLIC_AUTH_PROVIDERS` 에 켠 것만 적고 Redeploy 
 
 | 증상 | 확인할 것 |
 |---|---|
-| 광장에서 "광장 서버에 연결하지 못했어요" | `NEXT_PUBLIC_REALTIME_URL` 이 Render 주소와 같은지 (`https://`, 끝에 `/` 없이). 바꿨다면 Redeploy. Render Free가 자고 있었다면 1분 뒤 다시 |
+| 마을 화면에서 "마을 서버에 연결하지 못했어요" | `NEXT_PUBLIC_REALTIME_URL` 이 Render 주소와 같은지 (`https://`, 끝에 `/` 없이). 바꿨다면 Redeploy. Render Free가 자고 있었다면 1분 뒤 다시 |
 | 토론 화면 "잠시 후 다시 시도해 주세요" | `DATABASE_URL` 이 Transaction pooler(포트 6543) 주소이고 비밀번호가 맞는지. 1-2의 SQL 두 개를 실행했는지. Vercel **Logs** 에서 오류 확인 |
 | 로그인 뒤 `/login?error=1` | 4-1의 Redirect URLs에 `…/auth/callback` 이 있는지 |
 | 카카오·구글 버튼을 누르면 오류 | Supabase에서 그 로그인을 켰는지, `NEXT_PUBLIC_AUTH_PROVIDERS` 에 켠 것만 적었는지 |

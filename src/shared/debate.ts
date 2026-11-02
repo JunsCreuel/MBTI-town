@@ -1,6 +1,7 @@
 // 토론 매치 규칙 (PROJECT_GUIDE.md 7장). 서버와 화면이 함께 쓰는 순수 함수만 둔다.
 import { debateConfig, type MatchupMode } from '../config/game';
 import { MBTI_GROUPS, MBTI_TYPES, groupOf, type MbtiGroup, type MbtiType } from '../design/mbti';
+import type { LandChange } from './territory';
 
 export type Side = 'a' | 'b';
 export type Phase = 'writing' | 'voting' | 'judging' | 'done';
@@ -37,6 +38,8 @@ export interface MatchResult {
   summary: string;
   representative: Record<Side, string[]>;
   decidedAt: string;
+  /** 땅따먹기: 이긴 팀이 진 팀에게서 가져온 땅. 무승부면 null. 이 기능 전의 결과에는 없다. */
+  land?: LandChange | null;
 }
 
 export interface Match {

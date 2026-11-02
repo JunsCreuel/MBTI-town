@@ -463,8 +463,69 @@ export function treeParts(): Part[] {
     [[0.25, 2.55, -0.1], 0.6, W.leafLight],
   ];
   return [
-    part(cyl(0.16, 0.26, 1.5, 14), W.trunk, { pos: [0, 0.75, 0] }),
-    ...blobs.map(([p, r, c]) => part(sphere(r, 16, 12), c, { pos: p, scale: [1, 0.9, 1] })),
+    part(cyl(0.16, 0.26, 1.5, 10), W.trunk, { pos: [0, 0.75, 0] }),
+    // 마을 전체에 많이 심으므로 면 수를 줄인다
+    ...blobs.map(([p, r, c]) => part(sphere(r, 11, 8), c, { pos: p, scale: [1, 0.9, 1] })),
+  ];
+}
+
+// ───────────────────────── 유형 마을 소품 ─────────────────────────
+// 'outfit' 재질 부분(흰색)은 화면에서 그 마을 유형 색으로 칠한다 (캐릭터 옷과 같은 규칙).
+
+const TINT = '#FFFFFF';
+
+/** 작은 집: 크림색 벽 + 유형 색 지붕. 바닥 2.4×2.2, 정면(+Z)에 문. */
+export function houseParts(): Part[] {
+  const roofSlope = 32;
+  const roof = (side: 1 | -1) =>
+    part(box(1.62, 0.16, 2.7), TINT, {
+      pos: [side * 0.66, 2.02, 0],
+      rot: [0, 0, -side * roofSlope],
+      mat: 'outfit',
+    });
+  const gable = new THREE.BufferGeometry();
+  gable.setAttribute('position', new THREE.Float32BufferAttribute([-1.2, 0, 0, 1.2, 0, 0, 0, 0.78, 0], 3));
+  gable.setIndex([0, 1, 2]);
+  gable.computeVertexNormals();
+  return [
+    part(box(2.5, 0.16, 2.3), W.stoneDark, { pos: [0, 0.08, 0] }),
+    part(box(2.3, 1.5, 2.1), W.paper, { pos: [0, 0.9, 0] }),
+    part(gable, W.paper, { pos: [0, 1.65, 1.05] }),
+    part(gable, W.paper, { pos: [0, 1.65, -1.05], rot: [0, 180, 0] }),
+    roof(1),
+    roof(-1),
+    part(box(0.62, 0.98, 0.08), W.woodDark, { pos: [0, 0.65, 1.07] }),
+    part(sphere(0.04, 8, 6), W.gold, { pos: [0.2, 0.66, 1.12] }),
+    part(box(0.5, 0.46, 0.06), W.waterLight, { pos: [-0.75, 1.0, 1.06] }),
+    part(box(0.5, 0.46, 0.06), W.waterLight, { pos: [0.75, 1.0, 1.06] }),
+    part(box(0.58, 0.08, 0.1), W.wood, { pos: [-0.75, 0.74, 1.1] }),
+    part(box(0.58, 0.08, 0.1), W.wood, { pos: [0.75, 0.74, 1.1] }),
+    part(box(0.3, 0.7, 0.3), W.stoneDark, { pos: [0.62, 2.25, -0.45] }),
+  ];
+}
+
+/** 마을 깃발: 유형 색 큰 깃발 */
+export function villageFlagParts(): Part[] {
+  const cloth = new THREE.BufferGeometry();
+  cloth.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 1.25, -0.1, 0, 1.25, -0.72, 0, 0, -0.82, 0], 3));
+  cloth.setIndex([0, 1, 2, 0, 2, 3]);
+  cloth.computeVertexNormals();
+  return [
+    part(cyl(0.3, 0.36, 0.2, 20), W.stoneDark, { pos: [0, 0.1, 0] }),
+    part(cyl(0.05, 0.06, 3.4, 12), W.wood, { pos: [0, 1.7, 0] }),
+    part(sphere(0.09, 12, 10), W.gold, { pos: [0, 3.45, 0] }),
+    part(cloth, TINT, { pos: [0.05, 3.3, 0], mat: 'outfit' }),
+  ];
+}
+
+/** 마을 입구 표지판: 나무 기둥 + 유형 색 띠 */
+export function signParts(): Part[] {
+  return [
+    part(box(0.12, 1.3, 0.12), W.woodDark, { pos: [0, 0.65, 0] }),
+    part(box(1.3, 0.62, 0.1), W.wood, { pos: [0, 1.2, 0] }),
+    part(box(1.14, 0.14, 0.02), TINT, { pos: [0, 1.38, 0.06], mat: 'outfit' }),
+    part(box(0.9, 0.06, 0.01), W.ink, { pos: [0, 1.14, 0.06] }),
+    part(box(0.7, 0.06, 0.01), W.ink, { pos: [0, 1.02, 0.06] }),
   ];
 }
 
@@ -482,4 +543,5 @@ export const PROP_MATERIALS: Record<string, MaterialSpec> = {
   water: { roughness: 0.15, metallic: 0.05 },
   cloth: { roughness: 0.9, doubleSided: true },
   glow: { roughness: 0.6, emissive: [1, 0.86, 0.55] },
+  outfit: { roughness: 0.75, doubleSided: true },
 };

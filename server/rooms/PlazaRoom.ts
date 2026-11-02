@@ -1,12 +1,14 @@
-// 광장 방 하나 = 채널 하나. 정원이 차면 matchmaker가 새 방(다음 채널)을 만든다.
+// 마을 방 하나 = 채널 하나. 한 방이 마을 전체(가운데 광장 + 둘레 16개 유형 마을)를 맡는다.
+// 정원이 차면 matchmaker가 새 방(다음 채널)을 만든다.
 import { Room, matchMaker, type Client } from '@colyseus/core';
-import { plazaConfig } from '../../src/config/game';
+import { plazaConfig, townConfig } from '../../src/config/game';
 import { isMbtiType } from '../../src/design/mbti';
 import { MOVE_BUDGET_MAX, isMoveAllowed, normalizeAngle, refillMoveBudget } from '../../src/shared/movement';
-import { randomSpawnPoint } from '../../src/shared/plazaMap';
+import { randomSpawnPoint, spawnName } from '../../src/shared/plazaMap';
 import {
   ACTIONS, EMOTES, MSG,
   type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type JoinOptions, type MoveMessage,
+  type SnapMessage,
 } from '../../src/shared/protocol';
 import { getPlazaMap } from '../assets';
 import { Player, PlazaState } from './PlazaState';
@@ -41,6 +43,7 @@ export class PlazaRoom extends Room<{ state: PlazaState; metadata: { channel: nu
   /** 손님별 이동 예산 (movement.ts 참고) */
   private readonly moveBudget = new Map<string, { value: number; at: number }>();
   private readonly lastGestureAt = new Map<string, number>();
+  private readonly lastWarpAt = new Map<string, number>();
 
   async onCreate() {
     this.state.channel = await this.nextChannelNumber();
@@ -61,11 +64,14 @@ export class PlazaRoom extends Room<{ state: PlazaState; metadata: { channel: nu
       const payload: EmoteBroadcast = { id: client.sessionId, kind };
       this.broadcast(MSG.emote, payload, { except: client });
     });
+
+    this.onMessage(MSG.warp, (client, message: unknown) => this.handleWarp(client, message));
   }
 
   onJoin(client: Client, options?: JoinOptions) {
     if (!isMbtiType(options?.mbti)) throw new Error('MBTI 유형이 올바르지 않습니다');
-    const spawn = randomSpawnPoint(this.map);
+    // 들어오면 내 유형 마을에서 시작한다
+    const spawn = randomSpawnPoint(this.map, Math.random, spawnName(options.mbti));
     const player = new Player();
     player.mbti = options.mbti;
     player.x = spawn.x;
@@ -80,6 +86,24 @@ export class PlazaRoom extends Room<{ state: PlazaState; metadata: { channel: nu
     this.state.players.delete(client.sessionId);
     this.moveBudget.delete(client.sessionId);
     this.lastGestureAt.delete(client.sessionId);
+    this.lastWarpAt.delete(client.sessionId);
+  }
+
+  /** 전체 지도에서 광장이나 유형 마을을 누르면 그 마을 스폰으로 옮긴다 */
+  private handleWarp(client: Client, message: unknown) {
+    const player = this.state.players.get(client.sessionId);
+    const to = (message as { to?: unknown } | null)?.to;
+    if (!player || (to !== 'plaza' && !isMbtiType(to))) return;
+    const now = Date.now();
+    if (now - (this.lastWarpAt.get(client.sessionId) ?? 0) < townConfig.warpCooldownMs) return;
+    this.lastWarpAt.set(client.sessionId, now);
+    const spawn = randomSpawnPoint(this.map, Math.random, spawnName(to));
+    player.x = spawn.x;
+    player.z = spawn.z;
+    player.moving = false;
+    this.moveBudget.set(client.sessionId, { value: MOVE_BUDGET_MAX, at: now });
+    const snap: SnapMessage = { x: spawn.x, z: spawn.z };
+    client.send(MSG.snap, snap);
   }
 
   private handleMove(client: Client, message: unknown) {

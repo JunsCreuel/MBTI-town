@@ -1,17 +1,24 @@
 'use client';
 
 import { type ThreeEvent } from '@react-three/fiber';
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { townConfig } from '@/config/game';
+import { MBTI_TYPES, mbtiColor } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import type { PlazaMap } from '@/shared/plazaMap';
+import type { Territory } from '@/shared/territory';
 import { usePlaza } from './context';
 
 // 맵의 terrain 속성으로 3D 땅을 만든다. 장식은 모두 인스턴싱으로 그려 그리기 호출을 줄인다.
+// 유형 마을 땅의 잔디에는 땅 주인 색을 살짝 섞는다 (땅따먹기로 주인이 바뀌면 다시 칠한다).
 
 const S = tokens.scene;
+/** 바다 수면 높이. 모래사장이 바다보다 살짝 높다. */
+export const WATER_LEVEL = -0.14;
+const OWNER_COLORS = MBTI_TYPES.map((t) => new THREE.Color(mbtiColor(t)));
 
 /** 위치로 정해지는 0~1 난수 (같은 맵은 항상 같은 모양) */
 function hash(x: number, z: number, seed = 0): number {
@@ -48,7 +55,7 @@ function cells(map: PlazaMap): Cell[] {
       const gid = map.ground[z * map.width + x];
       const terrain = map.terrain[gid] ?? 'grass';
       // 산울타리는 덤불 모델로 세우므로 바닥은 평평하게 둔다
-      const h = terrain === 'hedge' ? 0 : (map.tileHeights[gid] ?? 0);
+      const h = terrain === 'water' ? WATER_LEVEL : terrain === 'hedge' ? 0 : (map.tileHeights[gid] ?? 0);
       out.push({ x, z, terrain, h });
     }
   }
@@ -68,22 +75,26 @@ function topColor(terrain: string, wx: number, wz: number, out: THREE.Color): TH
     case 'flowerbed':
       return out.set(S.soil);
     case 'water':
-      return out.set(S.water);
+      return out.set(S.sea);
+    case 'sand':
+      return out.set(S.sand).offsetHSL(0, 0, (noise(wx * 0.7, wz * 0.7) - 0.5) * 0.05);
     default:
       return out.copy(grassA).lerp(grassB, noise(wx * 0.45, wz * 0.45) * 0.9);
   }
 }
 
-const SIDE_COLOR: Record<string, string> = { stone: S.stoneSide, stoneEdge: S.stoneSide, flowerbed: S.planter };
+const SIDE_COLOR: Record<string, string> = {
+  stone: S.stoneSide, stoneEdge: S.stoneSide, flowerbed: S.planter, sand: S.sandSide, grass: S.sandSide, grass2: S.sandSide,
+};
 
 /** 바닥 윗면과 솟은 칸의 옆면을 메시 하나로 만든다 */
-function buildGround(map: PlazaMap, all: Cell[]): THREE.BufferGeometry {
+function buildGround(map: PlazaMap, all: Cell[], territory: Territory): THREE.BufferGeometry {
   const pos: number[] = [];
   const col: number[] = [];
   const idx: number[] = [];
   const c = new THREE.Color();
   const heightAt = (x: number, z: number) =>
-    x < 0 || z < 0 || x >= map.width || z >= map.height ? 0 : all[z * map.width + x].h;
+    x < 0 || z < 0 || x >= map.width || z >= map.height ? WATER_LEVEL : all[z * map.width + x].h;
   const quad = (pts: number[][], colors: THREE.Color[]) => {
     const i = pos.length / 3;
     pts.forEach((p, k) => {
@@ -95,8 +106,16 @@ function buildGround(map: PlazaMap, all: Cell[]): THREE.BufferGeometry {
   for (const cell of all) {
     const { x, z, h, terrain } = cell;
     const corners = [[x, h, z], [x + 1, h, z], [x + 1, h, z + 1], [x, h, z + 1]];
-    quad(corners, corners.map(([wx, , wz]) => topColor(terrain, wx, wz, new THREE.Color())));
-    if (h <= 0) continue;
+    const owner = territory.owner[z * map.width + x];
+    const tint = owner >= 0 && terrain.startsWith('grass') ? OWNER_COLORS[owner] : null;
+    quad(
+      corners,
+      corners.map(([wx, , wz]) => {
+        const out = topColor(terrain, wx, wz, new THREE.Color());
+        return tint ? out.lerp(tint, townConfig.groundTint) : out;
+      }),
+    );
+    if (h <= WATER_LEVEL) continue;
     const side = c.set(SIDE_COLOR[terrain] ?? S.stoneSide).clone();
     const sides: [number, number, number[][]][] = [
       [x, z - 1, [[x + 1, h, z], [x, h, z]]],
@@ -169,21 +188,24 @@ function Instances({
 
 const slabGeometry = new RoundedBoxGeometry(0.46, 0.06, 0.46, 2, 0.025);
 const hedgeGeometry = new RoundedBoxGeometry(1.02, 0.75, 1.02, 3, 0.2);
-const blobGeometry = new THREE.SphereGeometry(1, 12, 9);
-// 잔디 위 클로버 덤불: 납작한 구 몇 개
+const blobGeometry = new THREE.SphereGeometry(1, 10, 7);
+// 잔디 위 클로버 덤불: 납작한 구 몇 개 (마을 전체에 깔리므로 면 수를 아낀다)
 const cloverGeometry = mergeGeometries(
   [[0, 0, 0, 1], [0.9, 0, 0.3, 0.75], [-0.7, 0, 0.5, 0.7], [0.2, 0, -0.8, 0.65]].map(([x, y, z, r]) =>
-    new THREE.SphereGeometry(r, 10, 6).scale(1, 0.35, 1).translate(x, y, z),
+    new THREE.SphereGeometry(r, 8, 4).scale(1, 0.35, 1).translate(x, y, z),
   ),
 );
+/** 잔디 칸 가운데 클로버 덤불을 심는 비율 */
+const TUFT_RATE = 0.14;
 
 const FLOWER_COLORS = [S.flowerPink, S.flowerYellow, S.flowerWhite, S.flowerLilac];
 const LOW_HEDGE = 0.4;
 
 export function Terrain({ onGroundClick }: { onGroundClick: (e: ThreeEvent<MouseEvent>) => void }) {
-  const { map, assets } = usePlaza();
+  const { map, territory } = usePlaza();
   const all = useMemo(() => cells(map), [map]);
-  const ground = useMemo(() => buildGround(map, all), [map, all]);
+  const ground = useMemo(() => buildGround(map, all, territory), [map, all, territory]);
+  useEffect(() => () => ground.dispose(), [ground]);
 
   const deco = useMemo(() => {
     const slabs: Instance[] = [];
@@ -237,7 +259,7 @@ export function Terrain({ onGroundClick }: { onGroundClick: (e: ThreeEvent<Mouse
           }
           break;
         default:
-          if (terrain.startsWith('grass') && r(50) < 0.3) {
+          if (terrain.startsWith('grass') && r(50) < TUFT_RATE) {
             const s = 0.09 + r(52) * 0.06;
             tufts.push({ p: [x + 0.15 + r(54) * 0.7, 0, z + 0.15 + r(56) * 0.7], s: [s, s, s], r: r(58) * 6, color: S.grassTuft, shade: (r(59) - 0.5) * 0.04 });
           }
@@ -246,60 +268,15 @@ export function Terrain({ onGroundClick }: { onGroundClick: (e: ThreeEvent<Mouse
     return { slabs, hedges, leaves, flowers, tufts, pebbles };
   }, [all, map]);
 
-  // 산울타리 밖을 둘러싼 나무 (광장 소품 나무 모델을 그대로 인스턴싱).
-  // 카메라는 남쪽에서 북쪽을 보므로 남쪽 줄은 심지 않는다 (화면 아래를 가린다).
-  const forest = useMemo(() => {
-    const tree = assets.props['prop.plaza.tree'];
-    let mesh: THREE.Mesh | undefined;
-    tree?.traverse((o) => {
-      if (!mesh && (o as THREE.Mesh).isMesh) mesh = o as THREE.Mesh;
-    });
-    if (!mesh) return null;
-    const items: THREE.Matrix4[] = [];
-    const o = new THREE.Object3D();
-    const W = map.width;
-    const H = map.height;
-    let k = 0;
-    const place = (x: number, z: number) => {
-      const s = 0.95 + hash(x, z, 3) * 0.55;
-      o.position.set(x, 0, z);
-      o.scale.setScalar(s);
-      o.rotation.set(0, hash(x, z, 4) * 6, 0);
-      o.updateMatrix();
-      items.push(o.matrix.clone());
-      k++;
-    };
-    for (let ring = 0; ring < 3; ring++) {
-      const d = 1.6 + ring * 2.1;
-      for (let x = -d; x <= W + d; x += 2.2 + hash(ring, x) * 0.8) {
-        place(x + hash(x, ring) * 0.8, -d - hash(ring, x, 1));
-      }
-      for (let z = -d + 1.5; z <= H - 4; z += 2.2 + hash(z, ring) * 0.8) {
-        place(-d - hash(z, ring, 6), z);
-        place(W + d + hash(ring, z, 7), z);
-      }
-    }
-    return { geometry: mesh.geometry, material: mesh.material as THREE.Material, items, count: k };
-  }, [assets, map]);
-
-  const forestRef = useRef<THREE.InstancedMesh>(null);
-  useLayoutEffect(() => {
-    const m = forestRef.current;
-    if (!m || !forest) return;
-    forest.items.forEach((mat, i) => m.setMatrixAt(i, mat));
-    m.instanceMatrix.needsUpdate = true;
-    m.computeBoundingSphere();
-  }, [forest]);
-
   return (
     <>
       <mesh geometry={ground} receiveShadow onClick={onGroundClick}>
         <meshStandardMaterial vertexColors roughness={0.95} />
       </mesh>
-      {/* 맵 바깥 잔디 */}
-      <mesh rotation-x={-Math.PI / 2} position={[map.width / 2, -0.01, map.height / 2]} receiveShadow onClick={onGroundClick}>
-        <planeGeometry args={[map.width + 160, map.height + 160]} />
-        <meshStandardMaterial color={S.grass} roughness={1} />
+      {/* 섬을 둘러싼 바다 */}
+      <mesh rotation-x={-Math.PI / 2} position={[map.width / 2, WATER_LEVEL - 0.01, map.height / 2]} receiveShadow>
+        <planeGeometry args={[map.width + 900, map.height + 900]} />
+        <meshStandardMaterial color={S.sea} roughness={0.35} metalness={0.05} />
       </mesh>
       <Instances geometry={slabGeometry} items={deco.slabs} roughness={0.85} />
       <Instances geometry={hedgeGeometry} items={deco.hedges} castShadow />
@@ -307,9 +284,6 @@ export function Terrain({ onGroundClick }: { onGroundClick: (e: ThreeEvent<Mouse
       <Instances geometry={blobGeometry} items={deco.flowers} roughness={0.7} />
       <Instances geometry={blobGeometry} items={deco.pebbles} />
       <Instances geometry={cloverGeometry} items={deco.tufts} />
-      {forest && (
-        <instancedMesh ref={forestRef} args={[forest.geometry, forest.material, forest.count]} castShadow receiveShadow />
-      )}
     </>
   );
 }

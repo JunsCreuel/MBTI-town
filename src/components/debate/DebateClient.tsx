@@ -143,7 +143,7 @@ function TopBar({ me }: { me: MeResponse | null }) {
   }
   return (
     <header className="topbar">
-      <Link className="topbar__back" href="/plaza">‹ 광장</Link>
+      <Link className="topbar__back" href="/plaza">‹ 마을</Link>
       <span className="topbar__title">오늘의 토론</span>
       {me?.loggedIn ? (
         <button className="topbar__me" onClick={logout} disabled={busy} title="로그아웃">

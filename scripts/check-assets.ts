@@ -6,8 +6,8 @@ import { join, relative } from 'node:path';
 
 const ROOT = join(import.meta.dirname, '..', 'public', 'assets');
 const PLAZA_BUDGET_BYTES = 3 * 1024 * 1024;
-// 광장 첫 화면에서 불러오는 키 접두사
-const PLAZA_PREFIXES = ['char.', 'map.plaza', 'prop.plaza.', 'ui.'];
+// 마을 첫 화면에서 불러오는 키 접두사
+const PLAZA_PREFIXES = ['char.', 'map.town', 'prop.plaza.', 'prop.village.', 'ui.'];
 // 규칙 검사에서 빼는 파일 (폰트 묶음은 외부 배포본의 파일명을 그대로 쓴다)
 const EXEMPT_DIRS = ['fonts/'];
 const META_FILES = ['manifest.json', 'LICENSES.md'];
@@ -53,9 +53,9 @@ const plazaFiles = new Set(
 let plazaBytes = 0;
 for (const f of plazaFiles) plazaBytes += statSync(join(ROOT, f)).size;
 const mb = (n: number) => (n / 1024 / 1024).toFixed(2);
-if (plazaBytes > PLAZA_BUDGET_BYTES) errors.push(`광장 첫 화면 에셋 ${mb(plazaBytes)}MB가 기준 3MB를 넘습니다.`);
+if (plazaBytes > PLAZA_BUDGET_BYTES) errors.push(`마을 첫 화면 에셋 ${mb(plazaBytes)}MB가 기준 3MB를 넘습니다.`);
 
-console.log(`광장 첫 화면 에셋: ${mb(plazaBytes)}MB / 3MB (폰트는 쓰는 글자 범위만 따로 내려받음)`);
+console.log(`마을 첫 화면 에셋: ${mb(plazaBytes)}MB / 3MB (폰트는 쓰는 글자 범위만 따로 내려받음)`);
 if (placeholders.length) {
   console.log(`\n아직 임시(_ph) 에셋 ${placeholders.length}개가 남아 있습니다. 배포 전에 실제 에셋으로 바꾸세요:`);
   for (const f of placeholders) console.log(`  - ${f}`);

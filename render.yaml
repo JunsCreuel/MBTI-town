@@ -1,4 +1,4 @@
-# Render 블루프린트: 광장 실시간 서버 (Colyseus, 웹소켓)
+# Render 블루프린트: 마을 실시간 서버 (Colyseus, 웹소켓)
 # Render 대시보드 > New > Blueprint 에서 이 저장소를 고르면 아래 서비스가 만들어진다.
 # 웹 화면(Next.js)은 Vercel에 따로 올린다. docs/DEPLOY.md 참고.
 services:

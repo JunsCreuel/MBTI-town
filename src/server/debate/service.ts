@@ -8,6 +8,7 @@ import {
   tallyByType, voteScore, type Match, type MatchResult, type Phase, type Side, type Topic,
 } from '@/shared/debate';
 import { moderate } from '@/shared/moderation';
+import { landTransfer, sharesFrom, type TownView } from '@/shared/territory';
 import { TOPICS } from '@/shared/topics';
 import type { DebateStore, Profile } from './store';
 
@@ -271,6 +272,25 @@ export class DebateService {
     if (!ok) throw new DebateError('already_voted', '이미 판정했어요.');
   }
 
+  /** 마을 땅 지분: 지금까지 끝난 경기의 땅 이동을 처음부터 더한다 */
+  async town(): Promise<TownView> {
+    await this.finalizeDue();
+    const history = await this.store.landHistory();
+    const lastLand = [...history].reverse().find((h) => h.land && h.winner !== 'draw');
+    let last: TownView['last'] = null;
+    if (lastLand?.land) {
+      const [w, l] = lastLand.winner === 'a' ? [lastLand.teamA, lastLand.teamB] : [lastLand.teamB, lastLand.teamA];
+      last = {
+        matchId: lastLand.matchId,
+        decidedAt: lastLand.decidedAt,
+        winner: { label: w.label, members: w.members },
+        loser: { label: l.label, members: l.members },
+        land: lastLand.land,
+      };
+    }
+    return { shares: sharesFrom(history.map((h) => h.land)), last };
+  }
+
   /** 판정 시간이 끝난 경기를 모두 집계한다. 다른 요청이 집계 중인 경기는 건너뛴다. */
   async finalizeDue(): Promise<Match[]> {
     const done: Match[] = [];
@@ -294,6 +314,17 @@ export class DebateService {
       for (const v of votes) if (v.argumentId && repIds.has(v.argumentId)) picks[v.argumentId] = (picks[v.argumentId] ?? 0) + 1;
       const decisive = winner === 'draw' ? null : decisiveArgument(reps[winner], picks);
       const byType = tallyByType(votes);
+      // 땅따먹기: 이긴 팀이 진 팀 땅을 판정 득표율 차에 비례해 가져온다
+      const [winTeam, loseTeam] = winner === 'a' ? [match.teamA, match.teamB] : [match.teamB, match.teamA];
+      const land =
+        winner === 'draw'
+          ? null
+          : landTransfer(
+              sharesFrom((await this.store.landHistory()).map((h) => h.land)),
+              winTeam.members,
+              loseTeam.members,
+              Math.abs(vote.a - vote.b),
+            );
       const result: MatchResult = {
         vote,
         voters: votes.length,
@@ -304,6 +335,7 @@ export class DebateService {
         summary: summarize(match, winner, byType, votes.length),
         representative: { a: reps.a.map((x) => x.id), b: reps.b.map((x) => x.id) },
         decidedAt: this.now().toISOString(),
+        land,
       };
       await this.store.finishJudging(match.id, result);
       return { ...match, status: 'done', result };

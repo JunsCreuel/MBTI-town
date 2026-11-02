@@ -1,7 +1,7 @@
 // 아트가 나오기 전에 쓸 임시(_ph) 에셋을 실제 규격대로 만든다 (PROJECT_GUIDE.md 16장).
 // - _ph 파일은 매번 다시 만든다.
 // - manifest.json에는 없는 키만 추가한다. 이미 있는 키(실제 에셋으로 바꾼 키)는 건드리지 않는다.
-// - maps/plaza.json은 없을 때만 만든다. Tiled에서 고친 맵을 덮어쓰지 않기 위해서다. 다시 만들려면 --map.
+// - maps/town.json은 없을 때만 만든다. Tiled에서 고친 맵을 덮어쓰지 않기 위해서다. 다시 만들려면 --map.
 // - LICENSES.md는 없는 파일의 줄을 지우고, 새 파일의 줄을 더한다.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -11,9 +11,9 @@ import { TILE_PX } from '../src/shared/plazaMap';
 import { Bitmap, hex } from './lib/bitmap';
 import {
   PROP_MATERIALS, benchParts, boardParts, buildSkinned, buildStatic, chibiCharacterSpec, flagParts, fountainParts,
-  groupPropParts, lampParts, treeParts, type Part,
+  groupPropParts, houseParts, lampParts, signParts, treeParts, villageFlagParts, type Part,
 } from './lib/models';
-import { PLAZA_TILES, buildPlazaMap } from './lib/plaza-map';
+import { TOWN_TILES, buildTownMap } from './lib/town-map';
 
 const ROOT = join(import.meta.dirname, '..', 'public', 'assets');
 const TODAY = new Date().toISOString().slice(0, 10);
@@ -79,12 +79,21 @@ async function genProps() {
   for (const [name, parts] of props) {
     await model(`prop.plaza.${name}`, `props/prop_plaza_${name}_ph.glb`, buildStatic(`prop_plaza_${name}`, parts, PROP_MATERIALS));
   }
+  // 유형 마을 소품: outfit 재질 부분은 화면에서 마을 유형 색으로 칠한다
+  const village: [string, Part[]][] = [
+    ['house', houseParts()],
+    ['flag', villageFlagParts()],
+    ['sign', signParts()],
+  ];
+  for (const [name, parts] of village) {
+    await model(`prop.village.${name}`, `props/prop_village_${name}_ph.glb`, buildStatic(`prop_village_${name}`, parts, PROP_MATERIALS));
+  }
 }
 
 // ───────────────────────── Tiled 타일셋 견본 ─────────────────────────
 
-// Tiled에서 땅을 칠할 때 보는 견본 그림. 광장 화면은 타일 속성 terrain으로 3D 땅을 따로 만든다.
-const SWATCH: Record<(typeof PLAZA_TILES)[number], string> = {
+// Tiled에서 땅을 칠할 때 보는 견본 그림. 마을 화면은 타일 속성 terrain으로 3D 땅을 따로 만든다.
+const SWATCH: Record<(typeof TOWN_TILES)[number], string> = {
   grass: '#9ED67F',
   grass2: '#90CC70',
   stone: '#EFE3D2',
@@ -93,21 +102,22 @@ const SWATCH: Record<(typeof PLAZA_TILES)[number], string> = {
   flowerbed: '#C98FA0',
   hedge: '#5FAE5A',
   stoneEdge: '#D9C8B0',
+  sand: '#F3E2B3',
 };
 
 function genTileset() {
   const cols = 4;
-  const b = new Bitmap(cols * TILE_PX, Math.ceil(PLAZA_TILES.length / cols) * TILE_PX);
-  PLAZA_TILES.forEach((name, i) => {
+  const b = new Bitmap(cols * TILE_PX, Math.ceil(TOWN_TILES.length / cols) * TILE_PX);
+  TOWN_TILES.forEach((name, i) => {
     const ox = (i % cols) * TILE_PX;
     const oy = Math.floor(i / cols) * TILE_PX;
     b.fillRect(ox, oy, TILE_PX, TILE_PX, hex(SWATCH[name]));
     b.fillRect(ox, oy, TILE_PX, 1, hex('#FFFFFF', 90));
     b.fillRect(ox, oy, 1, TILE_PX, hex('#FFFFFF', 90));
   });
-  const file = 'tiles/tile_plaza_ph.png';
+  const file = 'tiles/tile_town_ph.png';
   save(file, b.toPng());
-  register('tile.plaza', { file, tile: [TILE_PX, TILE_PX], columns: cols, count: PLAZA_TILES.length });
+  register('tile.town', { file, tile: [TILE_PX, TILE_PX], columns: cols, count: TOWN_TILES.length });
   record(file);
 }
 
@@ -125,6 +135,8 @@ const ICONS: Record<string, string> = {
   wow: '<path d="M12 4v10.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="19.2" r="1.6"/>',
   exit:
     '<path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M9.5 16.5 5 12l4.5-4.5M5 12h10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  map:
+    '<path d="M3.5 6.2 9 4l6 2.2 5.5-2.2v13.8L15 20l-6-2.2-5.5 2.2Z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M9 4v13.8M15 6.2V20" stroke="currentColor" stroke-width="2"/>',
 };
 
 function genIcons() {
@@ -166,12 +178,12 @@ function genCardBackground() {
 }
 
 function genMap() {
-  const file = 'maps/plaza.json';
+  const file = 'maps/town.json';
   if (FORCE_MAP || !existsSync(join(ROOT, file))) {
-    save(file, JSON.stringify(buildPlazaMap(manifest['tile.plaza'].file as string), null, 1) + '\n');
+    save(file, JSON.stringify(buildTownMap(manifest['tile.town'].file as string)) + '\n');
   }
-  register('map.plaza', { file });
-  record(file, '자체 제작 (scripts/lib/plaza-map.ts, Tiled JSON)');
+  register('map.town', { file });
+  record(file, '자체 제작 (scripts/lib/town-map.ts, Tiled JSON)');
 }
 
 function writeLicenses() {

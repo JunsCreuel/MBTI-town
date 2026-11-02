@@ -1,11 +1,11 @@
-// 광장 실시간 연결. React 화면(HUD)은 snapshot을 구독하고, 3D 장면은 매 프레임 room.state를 직접 읽는다.
+// 마을 실시간 연결. React 화면(HUD)은 snapshot을 구독하고, 3D 장면은 매 프레임 room.state를 직접 읽는다.
 import { Callbacks, Client, type Room } from '@colyseus/sdk';
 import { plazaConfig } from '@/config/game';
 import type { MbtiType } from '@/design/mbti';
 import {
   MSG,
   type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type JoinOptions,
-  type MoveMessage, type SnapMessage,
+  type MoveMessage, type SnapMessage, type WarpMessage,
 } from '@/shared/protocol';
 
 /** 서버 상태 중 클라이언트가 읽는 부분 */
@@ -97,7 +97,7 @@ export class PlazaSession {
     } catch (e) {
       if (attempt !== this.attempt) return;
       console.error(e);
-      this.update({ status: 'error', error: '광장 서버에 연결하지 못했어요.' });
+      this.update({ status: 'error', error: '마을 서버에 연결하지 못했어요.' });
     }
   }
 
@@ -123,6 +123,12 @@ export class PlazaSession {
   }
 
   /** 내 몸짓은 바로 보여 주고 서버로 보낸다 (다른 사람에게만 전달된다) */
+  /** 전체 지도에서 고른 곳으로 간다. 서버가 자리를 정해 snap으로 알려 준다. */
+  sendWarp(to: WarpMessage['to']) {
+    const msg: WarpMessage = { to };
+    this.room?.send(MSG.warp, msg);
+  }
+
   sendAction(kind: ActionKind) {
     this.applyAction(this.snapshot.selfId, kind);
     this.room?.send(MSG.action, { kind });

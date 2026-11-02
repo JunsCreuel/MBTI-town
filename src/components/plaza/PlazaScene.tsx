@@ -1,7 +1,6 @@
 'use client';
 
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -10,90 +9,14 @@ import { tokens } from '@/design/tokens';
 import { groundHeightAt } from '@/shared/plazaMap';
 import { LocalPlayer, RemotePlayer } from './Characters';
 import { PlazaContext, usePlaza, type PlazaContextValue } from './context';
+import { MapLabelSync, TerritoryOverlay } from './MapView';
+import { Props } from './Props';
 import { now } from './session';
 import { Terrain } from './Terrain';
 
 const S = tokens.scene;
 /** 저가폰을 고려해 휴대폰에서는 그림자 해상도를 낮춘다 */
 const isSmallScreen = () => typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 700;
-
-/** 누르면 오늘의 토론으로 가는 소품 */
-const DEBATE_BOARD_KEY = 'prop.plaza.board';
-
-/** 이보다 키가 큰 소품은 카메라와 내 캐릭터 사이에 오면 반투명해진다 */
-const FADE_MIN_HEIGHT = 1.4;
-const FADE_OPACITY = 0.3;
-
-/** 소품 모델을 맵에 적힌 자리와 방향으로 세운다 */
-function Props() {
-  const { map, assets, input } = usePlaza();
-  const router = useRouter();
-  const objects = useMemo(
-    () =>
-      map.props.flatMap((p) => {
-        const src = assets.props[p.key];
-        if (!src) return [];
-        const o = src.clone();
-        o.position.set(p.x, groundHeightAt(map, p.x, p.z), p.z);
-        o.rotation.y = p.yaw;
-        const box = new THREE.Box3().setFromObject(o);
-        const tall = box.max.y - box.min.y > FADE_MIN_HEIGHT;
-        const materials: THREE.Material[] = [];
-        o.traverse((c) => {
-          const mesh = c as THREE.Mesh;
-          if (!mesh.isMesh) return;
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-          if (tall) {
-            // 가릴 때 이 소품만 투명하게 하려고 재질을 따로 갖는다
-            mesh.material = (mesh.material as THREE.Material).clone();
-            materials.push(mesh.material);
-          }
-        });
-        return [{ o, key: p.key, materials, halfWidth: (box.max.x - box.min.x) / 2, opacity: 1 }];
-      }),
-    [map, assets],
-  );
-
-  useFrame((_, dt) => {
-    const k = 1 - Math.exp(-Math.min(dt, 0.1) * 8);
-    for (const it of objects) {
-      if (!it.materials.length) continue;
-      const dz = it.o.position.z - input.self.z;
-      const blocking = dz > 0.4 && dz < 8 && Math.abs(it.o.position.x - input.self.x) < it.halfWidth + 0.6;
-      const next = it.opacity + ((blocking ? FADE_OPACITY : 1) - it.opacity) * k;
-      if (Math.abs(next - it.opacity) < 1e-3) continue;
-      it.opacity = next;
-      for (const m of it.materials) {
-        m.opacity = next;
-        m.transparent = next < 0.99;
-        m.depthWrite = next >= 0.99;
-      }
-    }
-  });
-
-  return (
-    <>
-      {objects.map((it, i) =>
-        it.key === DEBATE_BOARD_KEY ? (
-          <primitive
-            key={i}
-            object={it.o}
-            onClick={(e: ThreeEvent<MouseEvent>) => {
-              // 게시판 뒤 바닥으로 걸어가지 않게 막는다
-              e.stopPropagation();
-              if (e.delta <= 10) router.push('/debate');
-            }}
-            onPointerOver={() => (document.body.style.cursor = 'pointer')}
-            onPointerOut={() => (document.body.style.cursor = '')}
-          />
-        ) : (
-          <primitive key={i} object={it.o} />
-        ),
-      )}
-    </>
-  );
-}
 
 /** 위는 파랗고 지평선은 옅은 하늘 */
 function Sky() {
@@ -133,7 +56,7 @@ function Sky() {
 
 /** 몽실몽실한 구름이 천천히 흘러간다 */
 function Clouds() {
-  const { map } = usePlaza();
+  const { map, input } = usePlaza();
   const ref = useRef<THREE.InstancedMesh>(null);
   const geometry = useMemo(
     () =>
@@ -163,6 +86,9 @@ function Clouds() {
   useFrame(() => {
     const m = ref.current;
     if (!m) return;
+    // 전체 지도에서는 구름이 섬을 가리지 않게 숨긴다
+    m.visible = input.mapBlend < 0.25;
+    if (!m.visible) return;
     const t = now();
     const span = 180;
     clouds.forEach((c, i) => {
@@ -228,13 +154,19 @@ const pinchState = {
   },
 };
 
-/** 내 캐릭터를 따라가는 카메라. 휠과 두 손가락으로 거리를 바꾼다. */
+/** 내 캐릭터를 따라가는 카메라. 휠과 두 손가락으로 거리를 바꾼다. 전체 지도에서는 섬 전체를 위에서 본다. */
 function CameraRig() {
-  const { input } = usePlaza();
+  const { input, map } = usePlaza();
   const { camera, gl, size } = useThree();
   const distance = useRef<number>(size.width < size.height ? cameraConfig.portraitDistance : cameraConfig.distance);
   const target = useRef(new THREE.Vector3(input.self.x, 0, input.self.z));
   const goal = useMemo(() => new THREE.Vector3(), []);
+  const blend = useRef(0);
+  const v = useMemo(
+    () => ({ walkPos: new THREE.Vector3(), walkLook: new THREE.Vector3(), mapPos: new THREE.Vector3(), look: new THREE.Vector3() }),
+    [],
+  );
+  const center = useMemo(() => new THREE.Vector3(map.width / 2, 0, map.height / 2), [map]);
 
   useEffect(() => {
     const el = gl.domElement;
@@ -248,6 +180,7 @@ function CameraRig() {
     };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (input.view !== 'walk') return;
       distance.current = clamp(distance.current * Math.exp(e.deltaY * 0.0012));
     };
     const onDown = (e: PointerEvent) => {
@@ -261,7 +194,7 @@ function CameraRig() {
     const onMove = (e: PointerEvent) => {
       if (!pointers.has(e.pointerId)) return;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 2 && pinchStart > 0) distance.current = clamp((distStart * pinchStart) / spread());
+      if (pointers.size === 2 && pinchStart > 0 && input.view === 'walk') distance.current = clamp((distStart * pinchStart) / spread());
     };
     const onUp = (e: PointerEvent) => {
       pointers.delete(e.pointerId);
@@ -282,20 +215,53 @@ function CameraRig() {
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
     };
-  }, [gl]);
+  }, [gl, input]);
 
-  useFrame((_, dt) => {
-    const k = 1 - Math.exp(-Math.min(dt, 0.1) * 6);
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.1);
+    const k = 1 - Math.exp(-dt * 6);
     target.current.lerp(goal.set(input.self.x, 0, input.self.z), k);
     const d = distance.current;
     const zoom = (d - cameraConfig.minDistance) / (cameraConfig.maxDistance - cameraConfig.minDistance);
     const pitch = THREE.MathUtils.degToRad(THREE.MathUtils.lerp(cameraConfig.pitchNearDeg, cameraConfig.pitchFarDeg, zoom));
-    camera.position.set(
-      target.current.x,
-      target.current.y + 0.8 + Math.sin(pitch) * d,
-      target.current.z + Math.cos(pitch) * d,
-    );
-    camera.lookAt(target.current.x, target.current.y + 0.8, target.current.z);
+    v.walkPos.set(target.current.x, target.current.y + 0.8 + Math.sin(pitch) * d, target.current.z + Math.cos(pitch) * d);
+    v.walkLook.set(target.current.x, target.current.y + 0.8, target.current.z);
+
+    // 걷기 ↔ 전체 지도 사이를 부드럽게 오간다
+    const goalBlend = input.view === 'map' ? 1 : 0;
+    blend.current += (goalBlend - blend.current) * (1 - Math.exp(-dt * 3.2));
+    if (Math.abs(goalBlend - blend.current) < 0.002) blend.current = goalBlend;
+    input.mapBlend = blend.current;
+    const e = THREE.MathUtils.smootherstep(blend.current, 0, 1);
+    if (e > 0) {
+      const cam = camera as THREE.PerspectiveCamera;
+      const vfov = THREE.MathUtils.degToRad(cam.fov);
+      const hfov = 2 * Math.atan(Math.tan(vfov / 2) * cam.aspect);
+      // 섬 전체(반지름)가 화면에 들어오는 거리
+      const fit = ((map.width / 2) / Math.tan(Math.min(vfov, hfov) / 2)) * 1.06;
+      const mp = THREE.MathUtils.degToRad(cameraConfig.mapPitchDeg);
+      v.mapPos.set(center.x, Math.sin(mp) * fit, center.z + Math.cos(mp) * fit);
+      camera.position.lerpVectors(v.walkPos, v.mapPos, e);
+      v.look.lerpVectors(v.walkLook, center, e);
+    } else {
+      camera.position.copy(v.walkPos);
+      v.look.copy(v.walkLook);
+    }
+    camera.lookAt(v.look);
+  });
+  return null;
+}
+
+/** 전체 지도에서는 안개를 걷는다 (걸을 때는 먼 곳을 안개로 덮어 가볍게 보인다) */
+function FogRig() {
+  const { input } = usePlaza();
+  const scene = useThree((s) => s.scene);
+  useFrame(() => {
+    const f = scene.fog as THREE.Fog | null;
+    if (!f) return;
+    const b = input.mapBlend;
+    f.near = 30 + b * 900;
+    f.far = 90 + b * 1800;
   });
   return null;
 }
@@ -369,7 +335,7 @@ function KeyboardInput() {
   useEffect(() => {
     const MOVE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
     const down = (e: KeyboardEvent) => {
-      if (!MOVE_KEYS.includes(e.code) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!MOVE_KEYS.includes(e.code) || e.metaKey || e.ctrlKey || e.altKey || input.view !== 'walk') return;
       e.preventDefault();
       input.keys.add(e.code);
     };
@@ -390,8 +356,8 @@ function KeyboardInput() {
 function Ground() {
   const { input } = usePlaza();
   function onClick(e: ThreeEvent<MouseEvent>) {
-    // 끌거나 두 손가락으로 확대한 직후의 클릭은 무시한다
-    if (e.delta > 10 || pinchState.recent()) return;
+    // 끌거나 두 손가락으로 확대한 직후의 클릭, 전체 지도에서의 클릭은 무시한다
+    if (e.delta > 10 || pinchState.recent() || input.view !== 'walk') return;
     input.tapTarget = { x: e.point.x, z: e.point.z };
     input.marker = { x: e.point.x, z: e.point.z, at: now() };
   }
@@ -407,10 +373,10 @@ export default function PlazaScene({ value, onFirstFrame }: { value: PlazaContex
   const firstFrame = useRef(false);
   return (
     <Canvas
-      shadows
+      shadows="percentage"
       dpr={[1, 1.5]}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
-      camera={{ fov: cameraConfig.fov, near: 0.3, far: 400 }}
+      camera={{ fov: cameraConfig.fov, near: 0.3, far: 1600 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NeutralToneMapping;
         gl.toneMappingExposure = 1;
@@ -421,8 +387,11 @@ export default function PlazaScene({ value, onFirstFrame }: { value: PlazaContex
         <Sky />
         <Clouds />
         <Lights />
+        <FogRig />
         <Ground />
         <Props />
+        <TerritoryOverlay />
+        <MapLabelSync />
         <Players />
         <TapMarker />
         <CameraRig />

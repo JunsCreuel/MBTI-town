@@ -2,6 +2,7 @@
 import 'server-only';
 import type { MbtiType } from '@/design/mbti';
 import type { Argument, Match, MatchResult, Side, Team, Topic, VoteRecord } from '@/shared/debate';
+import type { LandChange } from '@/shared/territory';
 import type { Sql } from '../db';
 
 export interface Profile {
@@ -174,6 +175,26 @@ export class DebateStore {
       [limit],
     );
     return rows.map(toMatch);
+  }
+
+  /** 끝난 경기의 땅 이동 기록 (오래된 순). 땅 지분은 이걸 처음부터 더해서 구한다. */
+  async landHistory(): Promise<{
+    matchId: string; teamA: Team; teamB: Team; winner: Side | 'draw'; decidedAt: string | null; land: LandChange | null;
+  }[]> {
+    const rows = await this.sql.query<{
+      id: string; team_a: Team; team_b: Team; winner: Side | 'draw' | null; decided_at: string | null; land: LandChange | null;
+    }>(
+      `select id, team_a, team_b, result->>'winner' as winner, result->>'decidedAt' as decided_at, result->'land' as land
+       from public.matches where status = 'done' order by seq`,
+    );
+    return rows.map((r) => ({
+      matchId: r.id,
+      teamA: r.team_a,
+      teamB: r.team_b,
+      winner: r.winner ?? 'draw',
+      decidedAt: r.decided_at,
+      land: r.land && typeof r.land === 'object' ? r.land : null,
+    }));
   }
 
   /** 결과 집계를 맡는다. 다른 요청이 이미 집계 중이면 false (오래 멈춘 집계는 다시 맡는다). */

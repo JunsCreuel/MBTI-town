@@ -56,12 +56,13 @@ export function EntryFlow() {
         <>
           <header>
             <h1 className="entry__title">
-              오늘은 어느 팀이
+              내 유형 마을로
               <br />
-              이길까요?
+              놀러 오세요
             </h1>
             <p className="entry__lead">
-              16개 유형이 팀이 되어 매일 토론으로 겨루는 광장이에요. 먼저 내 유형을 알려 주세요.
+              16개 MBTI 유형마다 마을이 있어요. 광장에서 이웃을 만나고, 토론 이벤트에서 이기면 우리 마을 땅이 넓어져요.
+              먼저 내 유형을 알려 주세요.
             </p>
           </header>
           <div className="choice-list">
@@ -126,7 +127,7 @@ export function EntryFlow() {
           ))}
           <div className="sticky-cta">
             <button className="btn-primary" disabled={!picked} onClick={() => picked && enter(picked)}>
-              {picked ? `${picked}(으)로 광장 입장` : '유형을 골라 주세요'}
+              {picked ? `${picked} 마을로 입장` : '유형을 골라 주세요'}
             </button>
           </div>
         </>
@@ -182,7 +183,7 @@ export function EntryFlow() {
           </div>
           <div className="sticky-cta">
             <button className="btn-primary" onClick={() => enter(picked)}>
-              {picked}(으)로 광장 입장
+              {picked} 마을로 입장
             </button>
           </div>
         </>

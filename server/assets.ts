@@ -14,6 +14,6 @@ function readAsset(key: string): string {
 
 let plazaMap: PlazaMap | undefined;
 export function getPlazaMap(): PlazaMap {
-  plazaMap ??= parsePlazaMap(JSON.parse(readAsset('map.plaza')));
+  plazaMap ??= parsePlazaMap(JSON.parse(readAsset('map.town')));
   return plazaMap;
 }

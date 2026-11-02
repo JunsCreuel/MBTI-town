@@ -20,7 +20,7 @@ export const tokens = {
     shadow: 'rgb(43 43 51 / 0.1)',
     scrim: 'rgb(43 43 51 / 0.72)',
   },
-  // 3D 광장 장면 색
+  // 3D 마을 장면 색
   scene: {
     skyTop: '#5DB6F2',
     skyHorizon: '#D6EEFF',
@@ -42,6 +42,11 @@ export const tokens = {
     hedge: '#5FAE5A',
     leaf: '#6FBF62',
     water: '#8ED2F2',
+    sea: '#79C9EE',
+    sand: '#F2E2B4',
+    sandSide: '#DCC690',
+    /** 전체 지도의 마을 경계선 */
+    mapBorder: '#FFFFFF',
     flowerPink: '#FF9FC0',
     flowerYellow: '#FFDA6B',
     flowerWhite: '#FFFFFF',
