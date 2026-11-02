@@ -8,8 +8,15 @@ export function authMode(): AuthMode {
   return supabaseUrl && supabaseAnonKey ? 'supabase' : 'dev';
 }
 
-/** 로그인 화면에 보여 줄 소셜 로그인 (Supabase 대시보드에서 켠 것만 둔다) */
-export const OAUTH_PROVIDERS = [
+const PROVIDERS = [
   { id: 'kakao', label: '카카오로 계속하기' },
   { id: 'google', label: 'Google로 계속하기' },
 ] as const;
+
+/**
+ * 로그인 화면에 보여 줄 소셜 로그인. Supabase 대시보드에서 켠 것만 NEXT_PUBLIC_AUTH_PROVIDERS에 적는다
+ * (예: "kakao,google"). 비우면 이메일 로그인 링크만 보여 준다.
+ */
+export const OAUTH_PROVIDERS = PROVIDERS.filter((p) =>
+  (process.env.NEXT_PUBLIC_AUTH_PROVIDERS ?? '').split(',').map((x) => x.trim()).includes(p.id),
+);

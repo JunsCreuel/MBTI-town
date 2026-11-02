@@ -47,7 +47,7 @@ export async function createPgliteSql(dataDir?: string): Promise<Sql> {
   return sql;
 }
 
-async function createPostgresSql(url: string): Promise<Sql> {
+export async function createPostgresSql(url: string): Promise<Sql> {
   const { default: postgres } = await import('postgres');
   // Supabase 트랜잭션 풀러는 이름 있는 prepared statement를 지원하지 않는다
   const pg = postgres(url, { prepare: false, max: Number(process.env.DATABASE_POOL_MAX) || 5 });

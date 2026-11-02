@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MBTI_TYPES, type MbtiType } from '@/design/mbti';
-import { createPgliteSql, ensureDevAuthUser, type Sql } from '../db';
+import { createPgliteSql, createPostgresSql, type Sql } from '../db';
 import { DebateError, DebateService, type Viewer } from './service';
 import { DebateStore } from './store';
 
@@ -15,7 +15,8 @@ let service: DebateService;
 
 async function user(mbti: MbtiType | null): Promise<Viewer> {
   const id = randomUUID();
-  await ensureDevAuthUser(sql, id);
+  // Supabase에서는 auth.users가 로그인으로 채워진다. 테스트에서는 직접 넣는다.
+  await sql.query(`insert into auth.users (id) values ($1)`, [id]);
   if (mbti) await store.setMbti(id, mbti, new Date('2026-10-01'));
   return { id };
 }
@@ -24,9 +25,12 @@ async function expectError(p: Promise<unknown>, code: string) {
   await expect(p).rejects.toSatisfy((e: unknown) => e instanceof DebateError && e.code === code);
 }
 
+// 기본은 PGlite(메모리). TEST_DATABASE_URL을 주면 운영과 같은 Postgres 드라이버(postgres.js)로 붙는다.
+// 그 DB에는 auth 스키마와 마이그레이션이 미리 적용돼 있어야 하고, 비어 있어야 한다.
 // PGlite(WebAssembly Postgres)는 처음 띄울 때 몇 초 걸린다
 beforeAll(async () => {
-  sql = await createPgliteSql();
+  const url = process.env.TEST_DATABASE_URL;
+  sql = url ? await createPostgresSql(url) : await createPgliteSql();
   store = new DebateStore(sql);
   service = new DebateService(store, () => clock);
 }, 60_000);

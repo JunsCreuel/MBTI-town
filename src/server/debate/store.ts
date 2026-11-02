@@ -46,6 +46,8 @@ interface ArgumentRow {
   recommendations: number;
 }
 
+// jsonb 값은 문자열로 넘기고 SQL에서 ::text::jsonb로 바꾼다.
+// 그냥 ::jsonb로 받으면 postgres.js가 매개변수를 jsonb로 보고 문자열을 한 번 더 JSON으로 감싼다.
 const json = (v: unknown) => JSON.stringify(v);
 
 function toMatch(r: MatchRow): Match {
@@ -149,7 +151,7 @@ export class DebateStore {
   async insertMatch(m: NewMatch): Promise<Match | null> {
     const [r] = await this.sql.query<MatchRow>(
       `insert into public.matches (key, seq, topic_id, topic, team_a, team_b, opens_at, writing_ends_at, voting_ends_at)
-       values ($1, $2, $3, $4::jsonb, $5::jsonb, $6::jsonb, $7, $8, $9)
+       values ($1, $2, $3, $4::text::jsonb, $5::text::jsonb, $6::text::jsonb, $7, $8, $9)
        on conflict (key) do nothing
        returning ${MATCH_COLS}`,
       [m.key, m.seq, m.topic.id, json(m.topic), json(m.teamA), json(m.teamB), m.opensAt, m.writingEndsAt, m.votingEndsAt],
@@ -187,7 +189,7 @@ export class DebateStore {
 
   async finishJudging(matchId: string, result: MatchResult): Promise<void> {
     await this.sql.query(
-      `update public.matches set status = 'done', result = $2::jsonb where id = $1 and status = 'judging'`,
+      `update public.matches set status = 'done', result = $2::text::jsonb where id = $1 and status = 'judging'`,
       [matchId, json(result)],
     );
   }

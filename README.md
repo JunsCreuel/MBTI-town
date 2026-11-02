@@ -26,12 +26,10 @@ curl -X POST localhost:3000/api/dev/clock -H 'content-type: application/json' -d
 curl -X POST localhost:3000/api/dev/clock -H 'content-type: application/json' -d '{"reset": true}'
 ```
 
-## 운영 설정 (Supabase)
+## 배포
 
-1. Supabase 프로젝트를 만들고 `supabase/migrations/` 의 SQL을 SQL Editor에서 실행한다 (또는 `supabase db push`).
-2. Authentication > Providers 에서 Kakao, Google, Email을 켠다. Redirect URL에 `https://<도메인>/auth/callback` 을 넣는다.
-3. 환경변수를 넣는다 (`.env.example` 참고): `DATABASE_URL`(Transaction pooler 주소), `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-4. (선택) 결과는 판정 마감 뒤 첫 방문 때 바로 집계된다. 미리 집계해 두고 싶으면 `CRON_SECRET`을 정하고 매일 21:01에 `/api/cron/debate` 를 부르도록 예약한다. 헤더: `Authorization: Bearer $CRON_SECRET`.
+웹 화면은 Vercel, 광장 실시간 서버는 Render, DB와 로그인은 Supabase에 둔다.
+순서와 설정값은 [docs/DEPLOY.md](docs/DEPLOY.md)를 따른다. 설정 파일: `render.yaml`, `vercel.json`, `.env.example`.
 
 ## 실행
 
@@ -45,6 +43,7 @@ npm run dev        # 웹 http://localhost:3000 + 실시간 서버 ws://localhost
 |---|---|
 | `npm run dev` | 웹과 실시간 서버를 함께 띄운다 |
 | `npm test` | 단위 테스트 + 실시간 서버 통합 테스트 + 토론 하루 흐름 테스트 (PGlite) |
+| `npm run test:postgres` | 토론 하루 흐름 테스트를 운영과 같은 DB 드라이버(postgres.js)로 |
 | `npm run typecheck` | 웹·서버 타입 검사 |
 | `npm run assets:ph` | 임시 에셋(GLB 등)을 다시 만든다 (`-- --map`이면 광장 맵도 새로 만든다) |
 | `npm run assets:check` | 에셋 규칙·용량·남은 `_ph` 목록 검사 |
