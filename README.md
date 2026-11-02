@@ -41,7 +41,7 @@ npm run dev        # 웹 http://localhost:3000 + 실시간 서버 ws://localhost
 
 | 명령 | 하는 일 |
 |---|---|
-| `npm run dev` | 웹과 실시간 서버를 함께 띄운다 |
+| `npm run dev` | 웹과 실시간 서버를 함께 띄운다 (시작할 때 `.next/dev` 를 비운다: 운영 빌드 뒤 남은 개발 캐시 때문에 화면이 계속 새로고침되는 문제를 막는다) |
 | `npm test` | 단위 테스트 + 실시간 서버 통합 테스트 + 토론 하루 흐름 테스트 (PGlite) |
 | `npm run test:postgres` | 토론 하루 흐름 테스트를 운영과 같은 DB 드라이버(postgres.js)로 |
 | `npm run typecheck` | 웹·서버 타입 검사 |

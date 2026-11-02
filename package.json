@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "concurrently -n web,rt -c blue,magenta \"npm:dev:web\" \"npm:dev:server\"",
-    "dev:web": "next dev",
+    "dev:web": "node -e \"require('fs').rmSync('.next/dev',{recursive:true,force:true})\" && next dev",
     "dev:server": "tsx watch --tsconfig server/tsconfig.json server/index.ts",
     "build": "npm run assets:check && next build",
     "start": "next start",
