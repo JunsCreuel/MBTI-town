@@ -136,6 +136,35 @@ function genIcons() {
   }
 }
 
+// ───────────────────────── 결과 카드 배경 (1080×1350) ─────────────────────────
+// 글자는 코드가 올린다. 배경에는 하늘·구름·언덕만 그린다.
+
+function genCardBackground() {
+  const W = 1080;
+  const H = 1350;
+  const b = new Bitmap(W, H);
+  const top = hex(tokens.scene.skyTop);
+  const mid = hex(tokens.scene.skyHorizon);
+  const lerp = (x: number, y: number, t: number) => Math.round(x + (y - x) * t);
+  for (let y = 0; y < H; y++) {
+    const t = Math.min(1, y / (H * 0.75));
+    const c: [number, number, number, number] = [lerp(top[0], mid[0], t), lerp(top[1], mid[1], t), lerp(top[2], mid[2], t), 255];
+    b.fillRect(0, y, W, 1, c);
+  }
+  const cloud = hex(tokens.scene.cloud, 235);
+  for (const [cx, cy, s] of [[170, 120, 1], [880, 210, 1.3], [520, 70, 0.8], [120, 1180, 0.9], [960, 1230, 1.1]]) {
+    b.fillEllipse(cx, cy, 90 * s, 46 * s, cloud);
+    b.fillEllipse(cx - 70 * s, cy + 14 * s, 60 * s, 34 * s, cloud);
+    b.fillEllipse(cx + 75 * s, cy + 12 * s, 64 * s, 36 * s, cloud);
+  }
+  b.fillEllipse(260, H + 120, 620, 300, hex(tokens.scene.grassDark));
+  b.fillEllipse(860, H + 160, 640, 330, hex(tokens.scene.grass));
+  const file = 'cards/card_bg_default_ph.png';
+  save(file, b.toPngUpFilter());
+  register('card.bg.default', { file, size: [W, H] });
+  record(file);
+}
+
 function genMap() {
   const file = 'maps/plaza.json';
   if (FORCE_MAP || !existsSync(join(ROOT, file))) {
@@ -173,6 +202,7 @@ await genCharacters();
 await genProps();
 genTileset();
 genIcons();
+genCardBackground();
 genMap();
 register('font.pretendard', { file: 'fonts/pretendard/pretendard.css' });
 save('manifest.json', JSON.stringify(manifest, null, 2) + '\n');

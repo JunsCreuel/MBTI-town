@@ -1,6 +1,7 @@
 'use client';
 
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -16,6 +17,9 @@ const S = tokens.scene;
 /** 저가폰을 고려해 휴대폰에서는 그림자 해상도를 낮춘다 */
 const isSmallScreen = () => typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 700;
 
+/** 누르면 오늘의 토론으로 가는 소품 */
+const DEBATE_BOARD_KEY = 'prop.plaza.board';
+
 /** 이보다 키가 큰 소품은 카메라와 내 캐릭터 사이에 오면 반투명해진다 */
 const FADE_MIN_HEIGHT = 1.4;
 const FADE_OPACITY = 0.3;
@@ -23,6 +27,7 @@ const FADE_OPACITY = 0.3;
 /** 소품 모델을 맵에 적힌 자리와 방향으로 세운다 */
 function Props() {
   const { map, assets, input } = usePlaza();
+  const router = useRouter();
   const objects = useMemo(
     () =>
       map.props.flatMap((p) => {
@@ -45,7 +50,7 @@ function Props() {
             materials.push(mesh.material);
           }
         });
-        return [{ o, materials, halfWidth: (box.max.x - box.min.x) / 2, opacity: 1 }];
+        return [{ o, key: p.key, materials, halfWidth: (box.max.x - box.min.x) / 2, opacity: 1 }];
       }),
     [map, assets],
   );
@@ -69,9 +74,23 @@ function Props() {
 
   return (
     <>
-      {objects.map((it, i) => (
-        <primitive key={i} object={it.o} />
-      ))}
+      {objects.map((it, i) =>
+        it.key === DEBATE_BOARD_KEY ? (
+          <primitive
+            key={i}
+            object={it.o}
+            onClick={(e: ThreeEvent<MouseEvent>) => {
+              // 게시판 뒤 바닥으로 걸어가지 않게 막는다
+              e.stopPropagation();
+              if (e.delta <= 10) router.push('/debate');
+            }}
+            onPointerOver={() => (document.body.style.cursor = 'pointer')}
+            onPointerOut={() => (document.body.style.cursor = '')}
+          />
+        ) : (
+          <primitive key={i} object={it.o} />
+        ),
+      )}
     </>
   );
 }

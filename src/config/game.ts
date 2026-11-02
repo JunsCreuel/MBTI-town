@@ -41,14 +41,35 @@ export const cameraConfig = {
 /** 대진 방식. 초기 인원이 적으면 축 대전이나 기질 그룹 대전으로 바꾼다. */
 export type MatchupMode = 'type' | 'axis' | 'temperament';
 
-// 토론 매치 규칙 (PROJECT_GUIDE.md 7장). 토론 기능 구현 단계에서 사용한다.
+// 토론 매치 규칙 (PROJECT_GUIDE.md 7장). 시간과 숫자는 모두 가안이다.
 export const debateConfig = {
-  matchesPerDay: 1,
+  /** 하루 경기 시간표 (한국 시간). 칸 하나가 한 경기다. 하루 1~2경기. */
+  slots: [{ opensAt: '00:00', writingEndsAt: '18:00', votingEndsAt: '21:00' }],
+  /** 시간표 기준 시간대 (UTC 기준 분). 한국은 +9시간, 서머타임 없음. */
+  utcOffsetMinutes: 540,
   matchupMode: 'type' as MatchupMode,
+  /** 논거 한 개 최대 글자 수 */
+  argumentMaxLength: 300,
+  argumentMinLength: 10,
+  /** 한 사람이 한 경기에 낼 수 있는 논거 수 */
+  argumentsPerUser: 1,
   /** 팀 대표 논거 수 (팀 안 추천 상위 N개) */
   representativeArgs: 3,
   /** 최종 점수 = AI 점수 × ai + 관전 투표 점수 × vote (가안 7:3) */
   scoreWeights: { ai: 0.7, vote: 0.3 },
+  /**
+   * 관전 투표 집계 방식.
+   * byType: 유형마다 같은 무게로 센다 (사람이 많은 유형이 투표를 좌우하지 않게).
+   * none: 표 수 그대로 센다.
+   */
+  voteNormalization: 'byType' as 'byType' | 'none',
   /** AI Judge 채점 기준 (합계 100) */
   judgeCriteria: { logic: 25, factuality: 25, evidence: 20, rebuttal: 15, relevance: 15 },
+  /** MBTI를 바꾼 뒤 다시 바꿀 수 있을 때까지 (일). 팀을 옮겨 다니며 참여하는 걸 막는다. */
+  mbtiChangeCooldownDays: 7,
+  /** 채점이 이 시간(분) 넘게 끝나지 않으면 멈춘 것으로 보고 다시 채점한다 */
+  judgingStaleMinutes: 10,
+  /** AI 모델. 필터는 논거마다 호출되므로 비용을 줄이려면 더 가벼운 모델로 바꿀 수 있다. */
+  judgeModel: 'claude-opus-5-5',
+  moderationModel: 'claude-opus-5-5',
 } as const;

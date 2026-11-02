@@ -113,9 +113,14 @@ function Plaza({ mbti }: { mbti: MbtiType }) {
       {value && rendered && (
         <div className="hud">
           <div className="hud__top">
-            <div className="pill" aria-live="polite">
-              광장 {snap.channel}번 채널
-              <span className="pill__sub">{snap.playerIds.length}명</span>
+            <div className="hud__left">
+              <div className="pill" aria-live="polite">
+                광장 {snap.channel}번 채널
+                <span className="pill__sub">{snap.playerIds.length}명</span>
+              </div>
+              <Link className="pill debate-link" href="/debate">
+                <span className="debate-link__label">오늘의 토론</span> 보러 가기 ›
+              </Link>
             </div>
             <div className="hud__right">
               <div className="pill" style={{ '--chip-color': mbtiColor(mbti) } as CSSProperties}>

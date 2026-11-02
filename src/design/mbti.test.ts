@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MBTI, MBTI_TYPES, groupOf, isMbtiType, mbtiColor } from './mbti';
+import { MBTI, MBTI_TYPES, groupOf, isMbtiType, mbtiColor, withMaxLightness } from './mbti';
 
 describe('mbti', () => {
   it('16개 유형을 기질 그룹으로 나눈다', () => {
@@ -28,5 +28,10 @@ describe('mbti', () => {
     expect(isMbtiType('infp')).toBe(false);
     expect(isMbtiType('ABCD')).toBe(false);
     expect(isMbtiType(3)).toBe(false);
+  });
+
+  it('글자용 색은 너무 밝지 않게 낮춘다', () => {
+    expect(withMaxLightness('#B3AEF7', 0.48)).not.toBe('#B3AEF7');
+    expect(withMaxLightness('#2B2B33', 0.48)).toBe('#2B2B33');
   });
 });

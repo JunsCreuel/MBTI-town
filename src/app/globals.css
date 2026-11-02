@@ -557,3 +557,672 @@ button:focus-visible {
     animation-duration: 0s !important;
   }
 }
+
+/* ───────── 공통 ───────── */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-textSub);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.notice {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-textSub);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.btn-primary--inline {
+  width: auto;
+  min-height: 48px;
+  justify-self: start;
+  display: inline-grid;
+  place-items: center;
+  text-decoration: none;
+  font-size: 16px;
+}
+
+a.btn-secondary {
+  display: inline-grid;
+  place-items: center;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+a.btn-secondary[aria-disabled='true'] {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--color-accent);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.badge {
+  display: inline-block;
+  justify-self: start;
+  align-self: flex-start;
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-accentText);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ───────── 오늘의 토론 ───────── */
+
+.debate {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 0 var(--space-4) var(--space-7);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 calc(var(--space-4) * -1);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-bg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.topbar__back {
+  color: var(--color-textSub);
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.topbar__title {
+  font-weight: 800;
+  font-size: 16px;
+}
+
+.topbar__me {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.panel--loading {
+  place-items: center;
+  min-height: 200px;
+}
+
+.section-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.hero-card {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-6) var(--space-5) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+
+.versus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+
+.versus__vs {
+  color: var(--color-textSub);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.team-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--team-ink, var(--team-color));
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.team-name__dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--team-color);
+}
+
+.team-name__mine {
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  background: var(--team-color);
+  color: var(--color-accentText);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.topic-title {
+  margin: 0;
+  font-size: clamp(22px, 5.6vw, 28px);
+  line-height: 1.35;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+}
+
+.stances {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.stance {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  border: 2px solid var(--team-color);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.stance__team {
+  color: var(--team-ink, var(--team-color));
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.timeline {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline__step {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: var(--space-2) 0;
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-textSub);
+  font-size: 12px;
+}
+
+.timeline__dot {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-border);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.timeline__label {
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.timeline__step--now {
+  background: var(--color-accent);
+  color: var(--color-accentText);
+}
+
+.timeline__step--now .timeline__dot {
+  background: var(--color-accentText);
+  color: var(--color-accent);
+}
+
+.timeline__step--done .timeline__dot {
+  background: var(--color-win);
+  color: var(--color-accentText);
+}
+
+.countdown {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.action-panel__lead {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.action-panel--center {
+  justify-items: center;
+  text-align: center;
+}
+
+.compose {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+.compose:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.compose__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.compose__count {
+  color: var(--color-textSub);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.compose__count--over {
+  color: var(--color-danger);
+}
+
+.vote-buttons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.vote-btn {
+  display: grid;
+  gap: var(--space-1);
+  min-height: 88px;
+  padding: var(--space-3);
+  border: 2px solid var(--team-color);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  text-align: left;
+  transition: transform 0.12s ease, background-color 0.12s ease;
+}
+
+.vote-btn:hover:not(:disabled) {
+  background: var(--color-bg);
+}
+
+.vote-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.vote-btn__team {
+  color: var(--team-ink, var(--team-color));
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.vote-btn__stance {
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.type-grid--compact {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+
+.tab {
+  min-height: 40px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-textSub);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.tab[aria-selected='true'] {
+  background: var(--color-surface);
+  color: var(--team-ink, var(--team-color));
+  box-shadow: 0 1px 4px var(--color-shadow);
+}
+
+.tab__count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.empty {
+  padding: var(--space-5) 0;
+  text-align: center;
+}
+
+.arguments {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.argument {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.argument--rep {
+  border: 2px solid var(--color-accent);
+}
+
+.argument__body {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+.argument__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.argument__author {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--color-textSub);
+  font-size: 13px;
+}
+
+.argument__author .pill__dot {
+  width: 8px;
+  height: 8px;
+}
+
+.recommend {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-textSub);
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.recommend[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accentText);
+}
+
+.recommend--static {
+  display: inline-grid;
+  place-items: center;
+  border-color: transparent;
+}
+
+.recent {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent a {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.recent__date,
+.recent__winner {
+  color: var(--color-textSub);
+  font-variant-numeric: tabular-nums;
+}
+
+.recent__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 결과 */
+
+.result-panel {
+  justify-items: stretch;
+}
+
+.winner {
+  margin: 0;
+  font-size: clamp(30px, 8vw, 40px);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.final-score {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.final-score__sep {
+  color: var(--color-textSub);
+}
+
+.decisive {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: var(--space-4);
+  border-left: 4px solid var(--team-color);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.decisive__label {
+  color: var(--team-ink, var(--team-color));
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.score-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-table th,
+.score-table td {
+  padding: var(--space-2) var(--space-1);
+  border-bottom: 1px solid var(--color-border);
+  text-align: right;
+}
+
+.score-table th:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+.score-table thead th {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.score-table__sum th,
+.score-table__sum td {
+  background: var(--color-bg);
+}
+
+.score-table__final th,
+.score-table__final td {
+  font-size: 16px;
+  font-weight: 800;
+  border-bottom: 0;
+}
+
+.judge-comments {
+  display: grid;
+  gap: var(--space-2);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.judge-comments p {
+  margin: 0;
+}
+
+.share-card {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+}
+
+.share-card img,
+.share-card__placeholder {
+  width: min(100%, 360px);
+  height: auto;
+  aspect-ratio: 4 / 5;
+  border-radius: var(--radius-md);
+  box-shadow: 0 6px 24px var(--color-shadow);
+}
+
+.share-card__placeholder {
+  background: var(--color-bg);
+}
+
+.share-card__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* 로그인 */
+
+.email-form {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.email-form__row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.email-form input {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 var(--space-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font: inherit;
+  font-size: 16px;
+}
+
+/* 광장 → 오늘의 토론 */
+
+.hud__left {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.debate-link {
+  text-decoration: none;
+  color: var(--color-text);
+}
+
+.debate-link__label {
+  color: var(--color-accent);
+  font-weight: 800;
+}

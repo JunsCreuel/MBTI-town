@@ -94,6 +94,11 @@ export class Bitmap {
   toPng(): Buffer {
     return encodePng(this.width, this.height, this.data);
   }
+
+  /** 위아래로 부드럽게 바뀌는 큰 그림은 Up 필터가 훨씬 잘 압축된다 */
+  toPngUpFilter(): Buffer {
+    return encodePng(this.width, this.height, this.data, true);
+  }
 }
 
 function pointInPolygon(x: number, y: number, pts: [number, number][]): boolean {
@@ -131,16 +136,25 @@ function chunk(type: string, data: Uint8Array): Buffer {
   return Buffer.concat([len, body, crc]);
 }
 
-export function encodePng(width: number, height: number, rgba: Uint8Array): Buffer {
+export function encodePng(width: number, height: number, rgba: Uint8Array, upFilter = false): Buffer {
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8; // bit depth
   ihdr[9] = 6; // RGBA
   const raw = Buffer.alloc((width * 4 + 1) * height);
+  const stride = width * 4;
   for (let y = 0; y < height; y++) {
-    raw[y * (width * 4 + 1)] = 0; // filter: none
-    raw.set(rgba.subarray(y * width * 4, (y + 1) * width * 4), y * (width * 4 + 1) + 1);
+    const row = y * (stride + 1);
+    const cur = rgba.subarray(y * stride, (y + 1) * stride);
+    if (upFilter && y > 0) {
+      raw[row] = 2; // filter: Up (윗줄과의 차이)
+      const prev = rgba.subarray((y - 1) * stride, y * stride);
+      for (let i = 0; i < stride; i++) raw[row + 1 + i] = (cur[i] - prev[i]) & 255;
+    } else {
+      raw[row] = 0; // filter: none
+      raw.set(cur, row + 1);
+    }
   }
   return Buffer.concat([
     Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),

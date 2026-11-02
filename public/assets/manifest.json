@@ -100,5 +100,12 @@
   },
   "font.pretendard": {
     "file": "fonts/pretendard/pretendard.css"
+  },
+  "card.bg.default": {
+    "file": "cards/card_bg_default_ph.png",
+    "size": [
+      1080,
+      1350
+    ]
   }
 }

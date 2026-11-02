@@ -80,6 +80,12 @@ export function shiftLightness(hex: string, delta: number): string {
   return hslToHex(h, s, Math.min(0.95, Math.max(0.05, l + delta)));
 }
 
+/** 글자로 쓰기에 너무 밝은 색은 명도를 max까지 낮춘다 (흰 바탕 대비) */
+export function withMaxLightness(hex: string, max: number): string {
+  const [h, sat, l] = hexToHsl(hex);
+  return l > max ? hslToHex(h, sat, max) : hex.toUpperCase();
+}
+
 function hexToHsl(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
   const r = ((n >> 16) & 255) / 255;
