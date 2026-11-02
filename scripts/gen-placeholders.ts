@@ -13,11 +13,18 @@ import { FURNITURE } from '../src/shared/room';
 import { encodeTrack, TRACKS } from './lib/bgm';
 import { Bitmap, hex, type RGBA } from './lib/bitmap';
 import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
-import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts } from './lib/models';
+import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
+import { TOWN_TILES, buildTownMap } from './lib/town-map';
+import {
+  PROP_MATERIALS, benchParts, boardParts, flagParts, fountainParts, greenhouseParts, houseParts, lampParts, lotParts,
+  pierParts, shopParts, stageParts, treeParts, workshopParts,
+} from './lib/town-props';
+import { TILE_PX } from '../src/shared/townMap';
 
 const ROOT = join(import.meta.dirname, '..', 'public', 'assets');
 const TODAY = new Date().toISOString().slice(0, 10);
 const SKIP_AUDIO = process.argv.includes('--no-audio');
+const FORCE_MAP = process.argv.includes('--map');
 const SELF = '자체 제작 임시 에셋 (scripts/gen-placeholders.ts)';
 const SELF_LICENSE = '프로젝트 소유';
 
@@ -103,6 +110,67 @@ async function genFurniture() {
     register(def.key, { file });
     record(file);
   }
+}
+
+// ───────────────────────── 마을 소품 (GLB) ─────────────────────────
+
+async function genTownProps() {
+  const props: [string, string, Part[]][] = [
+    ['prop.plaza.fountain', 'prop_plaza_fountain', fountainParts()],
+    ['prop.plaza.bench', 'prop_plaza_bench', benchParts()],
+    ['prop.plaza.board', 'prop_plaza_board', boardParts()],
+    ['prop.plaza.flag', 'prop_plaza_flag', flagParts(tokens.color.accent)],
+    ['prop.plaza.tree', 'prop_plaza_tree', treeParts()],
+    ['prop.plaza.lamp', 'prop_plaza_lamp', lampParts()],
+    ['prop.town.house', 'prop_town_house', houseParts()],
+    ['prop.town.lot', 'prop_town_lot', lotParts()],
+    ['prop.district.greenhouse', 'prop_district_greenhouse', greenhouseParts()],
+    ['prop.district.stage', 'prop_district_stage', stageParts()],
+    ['prop.district.shop', 'prop_district_shop', shopParts()],
+    ['prop.district.workshop', 'prop_district_workshop', workshopParts()],
+    ['prop.district.pier', 'prop_district_pier', pierParts()],
+  ];
+  for (const [key, name, parts] of props) {
+    const file = `props/${name}_ph.glb`;
+    save(file, await buildStatic(name, parts, PROP_MATERIALS));
+    register(key, { file });
+    record(file);
+  }
+}
+
+// ───────────────────────── 마을 맵 (Tiled) ─────────────────────────
+// Tiled에서 땅을 칠할 때 보는 견본 그림. 마을 화면은 타일 속성 terrain으로 3D 땅을 따로 만든다.
+const SWATCH: Record<(typeof TOWN_TILES)[number], string> = {
+  grass: '#9ED67F',
+  grass2: '#90CC70',
+  stone: '#EFE3D2',
+  path: '#E8D2AE',
+  water: '#8ED2F2',
+  flowerbed: '#C98FA0',
+  hedge: '#5FAE5A',
+  stoneEdge: '#D9C8B0',
+  sand: '#F3E2B3',
+};
+
+function genTownMap() {
+  const cols = 4;
+  const b = new Bitmap(cols * TILE_PX, Math.ceil(TOWN_TILES.length / cols) * TILE_PX);
+  TOWN_TILES.forEach((name, i) => {
+    const ox = (i % cols) * TILE_PX;
+    const oy = Math.floor(i / cols) * TILE_PX;
+    b.fillRect(ox, oy, TILE_PX, TILE_PX, hex(SWATCH[name]));
+    b.fillRect(ox, oy, TILE_PX, 1, hex('#FFFFFF', 90));
+    b.fillRect(ox, oy, 1, TILE_PX, hex('#FFFFFF', 90));
+  });
+  const tiles = 'tiles/tile_town_ph.png';
+  save(tiles, b.toPng());
+  register('tile.town', { file: tiles, tile: [TILE_PX, TILE_PX], columns: cols, count: TOWN_TILES.length });
+  record(tiles);
+  // 맵은 없을 때만 만든다 (Tiled에서 고친 맵을 덮어쓰지 않게). 다시 만들려면 --map
+  const file = 'maps/town.json';
+  if (FORCE_MAP || !existsSync(join(ROOT, file))) save(file, JSON.stringify(buildTownMap(tiles)) + '\n');
+  register('map.town', { file });
+  record(file, '자체 제작 (scripts/lib/town-map.ts, Tiled JSON)');
 }
 
 // ───────────────────────── 창밖 풍경 (지역마다 512×512) ─────────────────────────
@@ -222,6 +290,15 @@ function genViews() {
 
 const S = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const ICONS: Record<string, string> = {
+  // 마을 몸짓·이모티콘 (머리 위 말풍선도 이 아이콘으로 그린다)
+  cheer:
+    '<path d="M12 7.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"/><path d="M4.5 4.5 9 10h6l4.5-5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 10v5l-1.5 6.5M15 10v5l1.5 6.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
+  clap:
+    '<path d="M7.5 20.5 4 13.5a1.6 1.6 0 0 1 2.8-1.5L9 15.5V6.5a1.5 1.5 0 0 1 3 0v6h.5V4.5a1.5 1.5 0 0 1 3 0v8h.5V6.5a1.5 1.5 0 0 1 3 0V15c0 3-2 5.5-5 5.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 5l1.5 1.5M6 2.5l.5 2M20.5 3l-1.5 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  heart: '<path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2Z"/>',
+  question:
+    '<path d="M8.5 9a3.5 3.5 0 1 1 5 3.2c-1 .5-1.5 1.2-1.5 2.3v.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="19" r="1.4"/>',
+  wow: '<path d="M12 4v10.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="19.2" r="1.6"/>',
   home: `<path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1Z" ${S}/>`,
   map: `<path d="M3.5 6.2 9 4l6 2.2 5.5-2.2v13.8L15 20l-6-2.2-5.5 2.2Z" ${S}/><path d="M9 4v13.8M15 6.2V20" ${S}/>`,
   archive: `<path d="M5 4.5h10.5A2.5 2.5 0 0 1 18 7v13H7.5A2.5 2.5 0 0 1 5 17.5Z" ${S}/><path d="M5 17.5A2.5 2.5 0 0 1 7.5 15H18M9 8.5h5" ${S}/>`,
@@ -352,6 +429,8 @@ cleanManifest();
 await genAvatar();
 genGuides();
 await genFurniture();
+await genTownProps();
+genTownMap();
 genViews();
 genIcons();
 genBgm();

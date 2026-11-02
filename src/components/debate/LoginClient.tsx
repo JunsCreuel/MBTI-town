@@ -84,7 +84,7 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
         <p className="notice">로그인이 아직 설정되지 않았어요.</p>
       )}
       {error && <p className="form-error" role="alert">{error}</p>}
-      <Link className="back-link" href="/explore">‹ 마을 먼저 구경하기</Link>
+      <Link className="back-link" href="/village">‹ 마을 먼저 구경하기</Link>
     </main>
   );
 }

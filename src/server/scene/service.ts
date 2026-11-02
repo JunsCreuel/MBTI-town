@@ -2,9 +2,9 @@
 // 공개 범위와 차단은 여기서 검사한다. 화면에서 숨기는 것만으로 끝내지 않는다 (PROJECT_GUIDE.md 3부 9번).
 import 'server-only';
 import { randomBytes } from 'node:crypto';
-import { recordConfig, socialConfig } from '@/config/game';
+import { recordConfig, socialConfig, townConfig } from '@/config/game';
 import { isMbtiType, type MbtiType } from '@/design/mbti';
-import { cleanAvatar, type Avatar } from '@/shared/avatar';
+import { AVATAR_COLORS, cleanAvatar, type Avatar } from '@/shared/avatar';
 import { bgmTrack } from '@/shared/bgm';
 import { cleanTaste, isDistrict, type District, type Taste } from '@/shared/districts';
 import { moderate } from '@/shared/moderation';
@@ -13,6 +13,7 @@ import {
   type Emotion, type RecordKind, type Relation, type Visibility,
 } from '@/shared/records';
 import { framedPhotoIds, starterLayout, validateLayout, type RoomLayout } from '@/shared/room';
+import { guestPid, signTownPass, townPid, type TownPass } from '@/shared/townToken';
 import type { ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
 
 export type SceneErrorCode =
@@ -60,6 +61,33 @@ export interface MyProfile extends PublicProfile {
   roomVisibility: Visibility;
   showVisits: boolean;
   discoverable: boolean;
+  /** 마을 집터 번호. 지역 집터가 다 찼으면 null (방은 그대로 쓴다) */
+  houseLot: number | null;
+}
+
+/** 마을에 서 있는 집 하나. 이름은 볼 수 있는 사람에게만 붙는다. */
+export interface HouseView {
+  district: District;
+  lot: number;
+  /** 이름표 (내 집, 친구 집, 공개·발견 켠 집만. 나머지는 null = 이름 없는 집) */
+  name: string | null;
+  /** 들어가 볼 수 있는 방 주소 (이름이 붙은 집만) */
+  handle: string | null;
+  mine: boolean;
+  friend: boolean;
+}
+
+export interface TownView {
+  houses: HouseView[];
+  /** 화면에서 숨길 마을 사람 번호 (차단 관계) */
+  hidden: string[];
+}
+
+/** 입장 토큰과, 토큰에 담은 내 정보 */
+export interface TownTicket {
+  token: string;
+  pass: TownPass;
+  guest: boolean;
 }
 
 export interface RecordView {
@@ -210,6 +238,7 @@ export class SceneService {
       roomVisibility: p.room_visibility,
       showVisits: p.show_visits,
       discoverable: p.discoverable,
+      houseLot: p.house_lot,
     };
   }
 
@@ -244,12 +273,15 @@ export class SceneService {
       handle: p.handle ?? (await this.newHandle(viewer.id)),
       display_name: displayName,
       bio,
-      district: input.district,
       birth_date: cleanBirthDate(input.birthDate, now),
       taste: cleanTaste(input.taste),
       avatar: cleanAvatar(input.avatar),
       onboarded_at: p.onboarded_at ?? now,
     });
+    // 고른 지역의 빈 집터에 집이 선다
+    if (p.district !== input.district || p.house_lot === null) {
+      await this.store.moveHouse(viewer.id, input.district, townConfig.lotsPerDistrict);
+    }
     // MBTI는 선택 입력. 처음 정할 때만 여기서 저장한다 (바꾸기는 7일에 한 번, 설정 화면에서)
     if (input.mbti && isMbtiType(input.mbti) && !p.mbti) await this.store.setMbti(viewer.id, input.mbti, now);
     if (!(await this.store.getRoom(viewer.id))) await this.store.saveRoom(viewer.id, layout, bgm.key, now);
@@ -269,9 +301,12 @@ export class SceneService {
       if (await this.store.handleTaken(h, id)) throw new SceneError('conflict', '이미 쓰는 주소예요.');
       next.handle = h;
     }
+    // 이사: 새 지역의 빈 집터로 옮긴다
     if ('district' in patch) {
       if (!isDistrict(patch.district)) throw new SceneError('bad_request', '거주 지역이 올바르지 않아요.');
-      next.district = patch.district;
+      if (patch.district !== p.district || p.house_lot === null) {
+        await this.store.moveHouse(id, patch.district, townConfig.lotsPerDistrict);
+      }
     }
     if ('avatar' in patch) next.avatar = cleanAvatar(patch.avatar);
     if ('taste' in patch) next.taste = cleanTaste(patch.taste);
@@ -583,6 +618,67 @@ export class SceneService {
       this.store.districtCounts(),
     ]);
     return { rooms: rooms.map(toCard), newcomers: newcomers.map(toCard), counts };
+  }
+
+  // ───────────────────────── 마을 ─────────────────────────
+
+  /** 마을에 서 있는 집들. 이름은 내 집·친구 집·공개 방만, 차단 관계인 사람 집은 이름 없이 둔다. */
+  async town(viewer: Viewer | null): Promise<TownView> {
+    const [houses, friends, blocks] = await Promise.all([
+      this.store.houses(),
+      viewer ? this.store.friendIds(viewer.id) : Promise.resolve([]),
+      viewer ? this.store.blockRelations(viewer.id) : Promise.resolve([]),
+    ]);
+    const friendSet = new Set(friends);
+    const blockSet = new Set(blocks);
+    return {
+      houses: houses.map((h) => {
+        const mine = h.id === viewer?.id;
+        const friend = friendSet.has(h.id) && !blockSet.has(h.id);
+        const named =
+          !!h.handle && !blockSet.has(h.id) &&
+          (mine || (friend && h.room_visibility !== 'private') || (h.room_visibility === 'public' && h.discoverable));
+        return {
+          district: h.district,
+          lot: h.house_lot,
+          name: named ? displayNameOf(h) : null,
+          handle: named ? h.handle : null,
+          mine,
+          friend,
+        };
+      }),
+      hidden: blocks.map((id) => townPid(id)),
+    };
+  }
+
+  /**
+   * 실시간 마을 입장 토큰. 가입을 마친 사람은 이름·지역·집터·모습을, 아니면 손님으로 담는다.
+   * 방 주소는 방을 찾아갈 수 있게 한 사람(공개 + 발견 켜기)만 담는다.
+   */
+  async townTicket(viewer: Viewer | null): Promise<TownTicket> {
+    const p = viewer ? await this.store.getProfile(viewer.id) : null;
+    // 만료는 실시간 서버 시계와 맞춰야 하므로 개발용 시계가 아니라 실제 시각으로 정한다
+    const exp = Math.floor(Date.now() / 1000) + townConfig.tokenTtlSeconds;
+    let pass: TownPass;
+    if (p?.onboarded_at && p.district) {
+      const avatar = cleanAvatar(p.avatar);
+      pass = {
+        pid: townPid(p.id),
+        name: displayNameOf(p),
+        handle: p.handle && p.room_visibility === 'public' && p.discoverable ? p.handle : '',
+        district: p.district,
+        lot: p.house_lot ?? -1,
+        color: avatar.color,
+        acc: avatar.accessory,
+        exp,
+      };
+    } else {
+      pass = {
+        pid: guestPid(), name: '손님', handle: '', district: '', lot: -1,
+        color: AVATAR_COLORS[randomBytes(1)[0] % AVATAR_COLORS.length], acc: 'none', exp,
+      };
+    }
+    return { token: signTownPass(pass), pass, guest: pass.district === '' };
   }
 
   // ───────────────────────── 내보내기·삭제 ─────────────────────────

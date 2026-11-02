@@ -136,8 +136,8 @@ export function ExploreClient() {
   return (
     <main className="page page--tabs">
       <header className="page__head">
-        <h1>마을</h1>
-        <p className="muted">지역을 눌러 이웃의 방을 구경해요.</p>
+        <h1>둘러보기</h1>
+        <p className="muted">지역을 눌러 이웃의 방을 구경해요. <Link href="/village">마을 걷기 ›</Link></p>
       </header>
       <VillageMap selected={selected} counts={data?.counts ?? {}} onSelect={setSelected} />
 

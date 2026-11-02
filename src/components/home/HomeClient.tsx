@@ -1,10 +1,11 @@
 'use client';
 
-// HOME: 나의 방 (PROJECT_GUIDE.md 4, 6장). 로그인하면 가장 먼저 보는 화면.
+// HOME: 나의 방 = 마을 속 내 집 안 (PROJECT_GUIDE.md 4, 6장). 마을에서 내 집 문으로 들어온다.
 // 보기: 바닥을 누르면 걷고, 턴테이블·책상·우편함·옷장·액자를 누르면 그 기능이 열린다.
 // 꾸미기: 소품 추가·옮기기·돌리기·빼기, 벽지·바닥·BGM 바꾸기, 저장.
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { recordConfig, roomConfig } from '@/config/game';
 import { tokens } from '@/design/tokens';
@@ -249,6 +250,10 @@ export function HomeClient() {
               <span className="district-chip">{DISTRICT[district].name}</span>
             </div>
             <div className="room-top__actions">
+              {/* 문을 나서면 마을의 내 집 앞이다 */}
+              <Link className="icon-btn" href="/village" aria-label="마을로 나가기">
+                <Icon name="exit" size={20} />
+              </Link>
               <button
                 className="icon-btn"
                 aria-label="방 주소 복사"

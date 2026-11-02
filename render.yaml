@@ -1,0 +1,29 @@
+# Render 블루프린트: 마을 실시간 서버 (Colyseus, 웹소켓)
+# Render 대시보드 > New > Blueprint 에서 이 저장소를 고르면 아래 서비스가 만들어진다.
+# 웹 화면과 API(Next.js)는 Vercel에 따로 올린다. docs/DEPLOY.md 참고.
+services:
+  - type: web
+    name: scene-town-realtime
+    runtime: node
+    # 한국과 가장 가까운 Render 지역
+    region: singapore
+    # free는 15분 동안 접속이 없으면 잠들고, 다음 접속 때 깨어나는 데 1분 가까이 걸린다.
+    # 실제 운영에서는 starter 이상으로 바꾼다.
+    plan: free
+    branch: main
+    buildCommand: npm ci --omit=dev
+    startCommand: npm run start:server
+    healthCheckPath: /__healthcheck
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # 운영 모드: 입장 토큰 비밀값이 없으면 서버가 토큰을 하나도 받지 않는다
+      - key: NODE_ENV
+        value: production
+      # 마을 입장 토큰 비밀값. Vercel의 TOWN_TOKEN_SECRET과 똑같은 값을 넣는다 (만들 때 대시보드가 물어본다)
+      - key: TOWN_TOKEN_SECRET
+        sync: false
+      # 방(채널)당 정원. 비우면 src/config/game.ts 기본값(100)
+      - key: TOWN_ROOM_CAPACITY
+        value: "100"

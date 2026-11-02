@@ -1,6 +1,8 @@
 // 미니홈피 규칙을 실제 Postgres(PGlite, 메모리)로 확인한다. 공개 범위·차단은 서버 규칙이라 여기서 꼼꼼히 본다.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { townConfig } from '@/config/game';
+import { verifyTownPass } from '@/shared/townToken';
 import { createPgliteSql, createPostgresSql, type Sql } from '../db';
 import { SceneError, SceneService, type Viewer } from './service';
 import { SceneStore } from './store';
@@ -214,5 +216,82 @@ describe('미니홈피', () => {
     await service.deleteArchive(a);
     expect(await service.myRecords(a)).toEqual([]);
     expect((await service.me(a)).room?.layout.items.some((i) => i.photoId)).toBe(false);
+  });
+});
+
+describe('마을 집터', () => {
+  let p: Viewer, q: Viewer, r: Viewer;
+
+  it('가입하면 고른 지역의 빈 집터 가운데 가장 작은 번호에 집이 선다', async () => {
+    p = await user();
+    q = await user();
+    r = await user();
+    expect((await onboard(p, '파랑', { district: 'fire' })).houseLot).toBe(0);
+    expect((await onboard(q, '큐', { district: 'fire' })).houseLot).toBe(1);
+    expect((await onboard(r, '알', { district: 'metal' })).houseLot).toBe(0);
+  });
+
+  it('이사하면 새 지역 집터로 옮기고, 비운 집터는 다음 사람이 쓴다', async () => {
+    expect((await service.updateProfile(p, { district: 'metal' })).houseLot).toBe(1);
+    // 같은 지역으로 다시 저장해도 집터는 그대로
+    expect((await service.updateProfile(p, { district: 'metal', bio: '이사 왔어요' })).houseLot).toBe(1);
+    const s = await user();
+    expect((await onboard(s, '에스', { district: 'fire' })).houseLot).toBe(0);
+  });
+
+  it('지역 집터가 다 차면 집 없이 이사한다 (방은 그대로)', async () => {
+    const full = Array.from({ length: townConfig.lotsPerDistrict }, () => user());
+    const people = await Promise.all(full);
+    for (const [i, v] of people.entries()) await onboard(v, `주민${i}`, { district: 'earth' });
+    const late = await user();
+    const mine = await onboard(late, '늦은 주민', { district: 'earth' });
+    expect(mine.houseLot).toBeNull();
+    expect(mine.district).toBe('earth');
+    // 한 집이 나가면 빈 집터가 생기고, 이사(같은 지역 다시 고르기)로 들어갈 수 있다
+    await service.updateProfile(people[4], { district: 'wood' });
+    expect((await service.updateProfile(late, { district: 'earth' })).houseLot).toBe(4);
+    const [{ n }] = await sql.query<{ n: number }>(
+      `select count(*)::int as n from (select district, house_lot from public.profiles where house_lot is not null group by 1, 2 having count(*) > 1) d`,
+    );
+    expect(Number(n)).toBe(0);
+  });
+
+  it('마을 집 이름표: 내 집·친구 집·공개 방만 이름이 붙고, 차단하면 이름이 지워진다', async () => {
+    const hp = (await service.me(p)).profile.handle;
+    const hq = (await service.me(q)).profile.handle;
+    await service.updateProfile(q, { discoverable: false });
+    const named = (v: Viewer | null) =>
+      service.town(v).then((t) => Object.fromEntries(t.houses.filter((h) => h.district !== 'earth').map((h) => [`${h.district}.${h.lot}`, h.name])));
+
+    // 손님: 발견을 끈 큐의 집은 이름이 없다
+    expect(await named(null)).toMatchObject({ 'metal.1': '파랑', 'fire.1': null });
+    // 친구가 되면 큐의 집 이름이 보인다
+    await service.requestFriend(p, hq);
+    await service.acceptFriend(q, hp);
+    const forP = await service.town(p);
+    expect(forP.houses.find((h) => h.district === 'fire' && h.lot === 1)).toMatchObject({ name: '큐', friend: true, handle: hq });
+    expect(forP.houses.find((h) => h.district === 'metal' && h.lot === 1)).toMatchObject({ name: '파랑', mine: true });
+    // 차단하면 서로 이름이 지워지고, 마을에서 숨길 사람 번호가 내려간다
+    await service.block(q, hp);
+    const afterBlock = await service.town(p);
+    expect(afterBlock.houses.find((h) => h.district === 'fire' && h.lot === 1)).toMatchObject({ name: null, handle: null, friend: false });
+    expect(afterBlock.hidden).toHaveLength(1);
+    const tq = await service.townTicket(q);
+    expect(afterBlock.hidden).toEqual([tq.pass.pid]);
+  });
+
+  it('입장 토큰: 가입한 사람은 이름·집터를, 아니면 손님으로 담는다', async () => {
+    const tp = await service.townTicket(p);
+    expect(tp.guest).toBe(false);
+    expect(verifyTownPass(tp.token)).toMatchObject({ name: '파랑', district: 'metal', lot: 1, color: 'sky', acc: 'cap' });
+    expect(tp.pass.handle).not.toBe('');
+    // 발견을 끈 사람은 방 주소를 담지 않는다
+    expect((await service.townTicket(q)).pass.handle).toBe('');
+    const guest = await service.townTicket(null);
+    expect(guest.guest).toBe(true);
+    expect(guest.pass).toMatchObject({ name: '손님', district: '', lot: -1 });
+    expect(guest.pass.pid).not.toBe((await service.townTicket(null)).pass.pid);
+    const fresh = await user();
+    expect((await service.townTicket(fresh)).guest).toBe(true);
   });
 });

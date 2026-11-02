@@ -95,7 +95,7 @@ export function VisitClient({ handle }: { handle: string }) {
     return (
       <main className="page page--center">
         <Guide who="monnyang">방을 찾을 수 없어요. 주소가 바뀌었거나 볼 수 없는 방이에요.</Guide>
-        <Link className="btn-secondary" href="/explore">마을로 가기</Link>
+        <Link className="btn-secondary" href="/village">마을로 가기</Link>
         <TabBar />
       </main>
     );
@@ -150,6 +150,10 @@ export function VisitClient({ handle }: { handle: string }) {
           <span className="district-chip">{DISTRICT[district].name}</span>
         </div>
         <div className="room-top__actions">
+          {/* 문을 나서면 이 집이 있는 지역으로 돌아간다 */}
+          <Link className="icon-btn" href={`/village?at=${district}`} aria-label="마을로 나가기">
+            <Icon name="exit" size={20} />
+          </Link>
           {view.friend === 'none' && (
             <button className="pill-btn" onClick={() => friend('request')}>
               <Icon name="plus" size={16} /> 친구 신청

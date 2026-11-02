@@ -78,7 +78,7 @@ export function OnboardingClient() {
   const chosenDistrict = district ?? rec.district;
 
   useEffect(() => {
-    if (me?.profile?.onboarded) router.replace('/home');
+    if (me?.profile?.onboarded) router.replace('/village');
   }, [me, router]);
 
   // 3D 모델은 캐릭터 단계 전에 미리 받아 둔다
@@ -111,7 +111,8 @@ export function OnboardingClient() {
         displayName: name,
         bio,
       });
-      router.replace('/home?welcome=1');
+      // 첫 화면은 마을의 내 집 문 앞이다
+      router.replace('/village?welcome=1');
     } catch (e) {
       setError(errorMessage(e));
       setBusy(false);

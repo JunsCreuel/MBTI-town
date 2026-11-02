@@ -21,6 +21,18 @@ export interface ProfileRow {
   show_visits: boolean;
   discoverable: boolean;
   onboarded_at: Date | null;
+  /** 지역 집터 번호 (집터가 다 찬 지역이면 null) */
+  house_lot: number | null;
+}
+
+export interface HouseRow {
+  id: string;
+  handle: string | null;
+  display_name: string | null;
+  district: District;
+  house_lot: number;
+  room_visibility: Visibility;
+  discoverable: boolean;
 }
 
 export interface RecordRow {
@@ -64,7 +76,7 @@ export interface RoomCardRow {
 }
 
 const PROFILE_COLS = `id, handle, display_name, bio, district, to_char(birth_date, 'YYYY-MM-DD') as birth_date, taste, avatar, mbti,
-  room_visibility, show_visits, discoverable, onboarded_at`;
+  room_visibility, show_visits, discoverable, onboarded_at, house_lot`;
 const RECORD_COLS = `id, owner_id, kind, emotion, body, photo_id, visibility, created_at`;
 const CARD_COLS = `p.id, p.handle, p.display_name, p.bio, p.district, p.avatar, r.bgm`;
 
@@ -122,6 +134,58 @@ export class SceneStore {
       `update public.profiles set ${sets.join(', ')} where id = $1`,
       [id, ...entries.map(([k, v]) => (JSON_COLS.has(k) ? json(v) : v))],
     );
+  }
+
+  /**
+   * 그 지역의 비어 있는 가장 작은 집터로 이사한다. 다 찼으면 집 없이 지역만 옮긴다 (house_lot = null).
+   * 두 사람이 동시에 같은 집터를 잡으면 유일 색인이 막으므로 다시 고른다.
+   */
+  async moveHouse(id: string, district: District, lotCount: number): Promise<number | null> {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const [r] = await this.sql.query<{ house_lot: number | null }>(
+          `update public.profiles set district = $2, house_lot = (
+             select n from generate_series(0, $3::int - 1) as n
+             where not exists (select 1 from public.profiles q where q.district = $2 and q.house_lot = n and q.id <> $1)
+             order by n limit 1)
+           where id = $1
+           returning house_lot`,
+          [id, district, lotCount],
+        );
+        return r?.house_lot ?? null;
+      } catch (e) {
+        if ((e as { code?: string }).code !== '23505' || attempt >= 4) throw e;
+      }
+    }
+  }
+
+  /** 마을에 서 있는 집 (가입을 마친 사람만) */
+  async houses(): Promise<HouseRow[]> {
+    return this.sql.query<HouseRow>(
+      `select id, handle, display_name, district, house_lot, room_visibility, discoverable
+       from public.profiles
+       where onboarded_at is not null and district is not null and house_lot is not null
+       order by district, house_lot`,
+    );
+  }
+
+  /** 친구 (수락한 것만) */
+  async friendIds(userId: string): Promise<string[]> {
+    const rows = await this.sql.query<{ id: string }>(
+      `select case when requester = $1 then addressee else requester end as id
+       from public.friendships where status = 'accepted' and (requester = $1 or addressee = $1)`,
+      [userId],
+    );
+    return rows.map((r) => r.id);
+  }
+
+  /** 내가 차단했거나 나를 차단한 사람 */
+  async blockRelations(userId: string): Promise<string[]> {
+    const rows = await this.sql.query<{ id: string }>(
+      `select case when blocker = $1 then blocked else blocker end as id from public.blocks where blocker = $1 or blocked = $1`,
+      [userId],
+    );
+    return rows.map((r) => r.id);
   }
 
   async touch(id: string, at: Date): Promise<void> {

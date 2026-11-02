@@ -250,5 +250,71 @@
     "title": "비 오는 창가",
     "mood": "빗소리와 피아노",
     "seconds": 26.7
+  },
+  "prop.plaza.fountain": {
+    "file": "props/prop_plaza_fountain_ph.glb"
+  },
+  "prop.plaza.bench": {
+    "file": "props/prop_plaza_bench_ph.glb"
+  },
+  "prop.plaza.board": {
+    "file": "props/prop_plaza_board_ph.glb"
+  },
+  "prop.plaza.flag": {
+    "file": "props/prop_plaza_flag_ph.glb"
+  },
+  "prop.plaza.tree": {
+    "file": "props/prop_plaza_tree_ph.glb"
+  },
+  "prop.plaza.lamp": {
+    "file": "props/prop_plaza_lamp_ph.glb"
+  },
+  "prop.town.house": {
+    "file": "props/prop_town_house_ph.glb"
+  },
+  "prop.town.lot": {
+    "file": "props/prop_town_lot_ph.glb"
+  },
+  "prop.district.greenhouse": {
+    "file": "props/prop_district_greenhouse_ph.glb"
+  },
+  "prop.district.stage": {
+    "file": "props/prop_district_stage_ph.glb"
+  },
+  "prop.district.shop": {
+    "file": "props/prop_district_shop_ph.glb"
+  },
+  "prop.district.workshop": {
+    "file": "props/prop_district_workshop_ph.glb"
+  },
+  "prop.district.pier": {
+    "file": "props/prop_district_pier_ph.glb"
+  },
+  "tile.town": {
+    "file": "tiles/tile_town_ph.png",
+    "tile": [
+      32,
+      32
+    ],
+    "columns": 4,
+    "count": 9
+  },
+  "map.town": {
+    "file": "maps/town.json"
+  },
+  "ui.icon.cheer": {
+    "file": "ui/ui_icon_cheer_ph.svg"
+  },
+  "ui.icon.clap": {
+    "file": "ui/ui_icon_clap_ph.svg"
+  },
+  "ui.icon.heart": {
+    "file": "ui/ui_icon_heart_ph.svg"
+  },
+  "ui.icon.question": {
+    "file": "ui/ui_icon_question_ph.svg"
+  },
+  "ui.icon.wow": {
+    "file": "ui/ui_icon_wow_ph.svg"
   }
 }

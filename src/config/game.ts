@@ -1,6 +1,61 @@
 // 운영 중 바꿀 수 있어야 하는 값은 코드에 박지 않고 여기에 둔다 (PROJECT_GUIDE.md 3부 2번).
 
-// 나의 방 (PROJECT_GUIDE.md 6장)
+// 마을 (PROJECT_GUIDE.md 3장): 걸어 다니는 3D 마을. 가운데 중앙광장 + 둘레 다섯 지역(오행), 지역마다 주민의 집.
+export const townConfig = {
+  /** Colyseus 방 이름 */
+  roomName: 'town',
+  /** 방(채널)당 정원. 실시간 서버에서는 TOWN_ROOM_CAPACITY 환경변수가 있으면 그 값을 쓴다. */
+  roomCapacity: 100,
+  /** 클라이언트가 위치를 보내는 최대 빈도 (초당) */
+  moveSendHz: 10,
+  /** 서버가 상태를 내려보내는 주기 (ms) */
+  patchRateMs: 100,
+  /** 걷는 속도 (칸/초) */
+  walkSpeed: 3.5,
+  /** 서버 속도 검사 여유 배수. 네트워크 지연으로 몰려 도착하는 경우를 감안한다. */
+  speedTolerance: 1.6,
+  /** 클라이언트 한 명이 1초에 보낼 수 있는 메시지 수. 넘으면 연결을 끊는다. */
+  maxMessagesPerSecond: 30,
+  /** 응원·박수 동작 길이 (ms) */
+  actionDurationMs: 1600,
+  /** 동작·이모티콘 재사용 대기 (ms) */
+  emoteCooldownMs: 1200,
+  /** 머리 위 이모티콘 표시 시간 (ms) */
+  emoteDurationMs: 1800,
+  /** 한 화면에 그리는 다른 사람 수 상한 (가까운 순). 저가폰 성능을 위한 값이다. */
+  maxVisiblePlayers: 40,
+  /** 지도에서 고른 곳으로 바로 가기 재사용 대기 (ms) */
+  warpCooldownMs: 1500,
+  /** 지역마다 집터 수. 마을 맵 생성기와 집터 배정이 같이 쓴다. 다 차면 새 동네 확장은 [결정 필요] */
+  lotsPerDistrict: 20,
+  /** 실시간 서버 입장 토큰 유효 시간 (초) */
+  tokenTtlSeconds: 600,
+  /** 집 이름표가 보이는 거리 (칸) */
+  nameplateDistance: 10,
+  /** 지역 잔디에 지역 색을 섞는 정도 (0~1) */
+  groundTint: 0.16,
+  /** 마을 집 목록(이름표)을 다시 받는 주기 (ms) */
+  refreshMs: 60_000,
+  /** 집 문 앞에서 "들어가기"가 뜨는 거리 (칸) */
+  doorDistance: 1.6,
+} as const;
+
+export const cameraConfig = {
+  /** 내려다보는 각도 (도). 가까이 당기면 낮아져 하늘이 보이고, 멀리 빼면 높아진다. */
+  pitchNearDeg: 16,
+  pitchFarDeg: 46,
+  /** 화각이 넓으면 화면 가장자리 물체가 기울어 보여서 좁게 둔다 */
+  fov: 30,
+  distance: 15,
+  /** 세로 화면(휴대폰)은 좌우가 좁아서 조금 더 멀리서 본다 */
+  portraitDistance: 19,
+  minDistance: 8,
+  maxDistance: 26,
+  /** 전체 지도: 위에서 내려다보는 각도 (도, 90이면 바로 위) */
+  mapPitchDeg: 72,
+} as const;
+
+// 나의 방 = 마을 속 내 집의 안 (PROJECT_GUIDE.md 6장)
 export const roomConfig = {
   /** 바닥 칸 수 (가로 x, 세로 z). 방 크기 확장은 2차 */
   width: 6,
