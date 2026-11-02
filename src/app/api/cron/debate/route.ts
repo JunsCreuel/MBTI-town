@@ -3,8 +3,8 @@ import { getDebateService } from '@/server/debate';
 import { handle } from '@/server/http';
 
 /**
- * 예약 작업용: 오늘 경기를 만들고, 투표가 끝난 경기를 채점한다.
- * 채점 시각(투표 마감) 직후에 부르도록 예약한다. Authorization: Bearer $CRON_SECRET
+ * 예약 작업용(선택): 오늘 경기를 미리 만들고, 판정이 끝난 경기를 집계한다.
+ * 예약하지 않아도 첫 방문 때 같은 일이 일어난다. Authorization: Bearer $CRON_SECRET
  */
 async function run(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -14,8 +14,8 @@ async function run(request: Request) {
   return handle(async () => {
     const service = await getDebateService();
     const current = await service.currentMatch();
-    const judged = await service.judgeDue();
-    return { current: current.key, judged: judged.map((m) => m.key) };
+    const finalized = await service.finalizeDue();
+    return { current: current.key, finalized: finalized.map((m) => m.key) };
   });
 }
 

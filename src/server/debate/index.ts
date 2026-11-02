@@ -1,7 +1,6 @@
 // 서버에서 하나만 만드는 토론 서비스. 개발 모드에서는 시계를 앞으로 돌려 하루 흐름을 확인할 수 있다.
 import 'server-only';
 import { getSql } from '../db';
-import { createDebateAi } from './ai';
 import { DebateService } from './service';
 import { DebateStore } from './store';
 
@@ -20,7 +19,7 @@ export function setClockOffsetMs(ms: number): void {
 export function getDebateService(): Promise<DebateService> {
   g.__mbtiDebate ??= (async () => {
     const sql = await getSql();
-    return new DebateService(new DebateStore(sql), createDebateAi(), () => new Date(Date.now() + clockOffsetMs()));
+    return new DebateService(new DebateStore(sql), () => new Date(Date.now() + clockOffsetMs()));
   })();
   g.__mbtiDebate.catch(() => {
     g.__mbtiDebate = undefined;

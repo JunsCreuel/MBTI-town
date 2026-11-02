@@ -1,14 +1,11 @@
-import { after } from 'next/server';
 import { currentUser } from '@/server/auth';
 import { getDebateService } from '@/server/debate';
 import { handle } from '@/server/http';
 
-/** 오늘의 경기. 투표가 끝난 경기가 있으면 응답을 보낸 뒤 채점한다. */
+/** 오늘의 경기. 판정 시간이 끝났으면 바로 집계한 결과를 돌려준다. */
 export async function GET() {
   return handle(async () => {
     const service = await getDebateService();
-    const view = await service.view(await service.currentMatch(), await currentUser());
-    if (view.phase === 'judging') after(() => service.judgeDue());
-    return view;
+    return service.view(await service.withResult(await service.currentMatch()), await currentUser());
   });
 }

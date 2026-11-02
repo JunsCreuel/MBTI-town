@@ -174,7 +174,7 @@ export class DebateStore {
     return rows.map(toMatch);
   }
 
-  /** 채점을 맡는다. 다른 요청이 이미 채점 중이면 false (오래 멈춘 채점은 다시 맡는다). */
+  /** 결과 집계를 맡는다. 다른 요청이 이미 집계 중이면 false (오래 멈춘 집계는 다시 맡는다). */
   async tryStartJudging(matchId: string, staleMinutes: number): Promise<boolean> {
     const rows = await this.sql.query(
       `update public.matches set status = 'judging', judging_started_at = now()
@@ -224,13 +224,13 @@ export class DebateStore {
   }
 
   async insertArgument(a: {
-    matchId: string; authorId: string; authorMbti: MbtiType; side: Side; body: string; moderation: unknown; at: Date;
+    matchId: string; authorId: string; authorMbti: MbtiType; side: Side; body: string; at: Date;
   }): Promise<Argument> {
     const [r] = await this.sql.query<ArgumentRow>(
-      `insert into public.arguments (match_id, author_id, author_mbti, side, body, moderation, created_at)
-       values ($1, $2, $3, $4, $5, $6::jsonb, $7)
+      `insert into public.arguments (match_id, author_id, author_mbti, side, body, created_at)
+       values ($1, $2, $3, $4, $5, $6)
        returning id, match_id, author_id, author_mbti, side, body, created_at, 0 as recommendations`,
-      [a.matchId, a.authorId, a.authorMbti, a.side, a.body, json(a.moderation), a.at],
+      [a.matchId, a.authorId, a.authorMbti, a.side, a.body, a.at],
     );
     return toArgument(r);
   }
@@ -266,29 +266,29 @@ export class DebateStore {
 
   // ───────── 투표 ─────────
 
-  async getVote(matchId: string, userId: string): Promise<Side | null> {
-    const [r] = await this.sql.query<{ side: Side }>(
-      `select side from public.votes where match_id = $1 and user_id = $2`,
+  async getVote(matchId: string, userId: string): Promise<{ side: Side; argumentId: string | null } | null> {
+    const [r] = await this.sql.query<{ side: Side; argument_id: string | null }>(
+      `select side, argument_id from public.votes where match_id = $1 and user_id = $2`,
       [matchId, userId],
     );
-    return r?.side ?? null;
+    return r ? { side: r.side, argumentId: r.argument_id } : null;
   }
 
-  /** 이미 투표했으면 false */
-  async insertVote(matchId: string, userId: string, voterMbti: MbtiType, side: Side): Promise<boolean> {
+  /** 이미 판정했으면 false */
+  async insertVote(v: { matchId: string; userId: string; voterMbti: MbtiType; side: Side; argumentId: string }): Promise<boolean> {
     const rows = await this.sql.query(
-      `insert into public.votes (match_id, user_id, voter_mbti, side) values ($1, $2, $3, $4)
+      `insert into public.votes (match_id, user_id, voter_mbti, side, argument_id) values ($1, $2, $3, $4, $5)
        on conflict do nothing returning match_id`,
-      [matchId, userId, voterMbti, side],
+      [v.matchId, v.userId, v.voterMbti, v.side, v.argumentId],
     );
     return rows.length > 0;
   }
 
   async listVotes(matchId: string): Promise<VoteRecord[]> {
-    const rows = await this.sql.query<{ voter_mbti: MbtiType; side: Side }>(
-      `select voter_mbti, side from public.votes where match_id = $1`,
+    const rows = await this.sql.query<{ voter_mbti: MbtiType; side: Side; argument_id: string | null }>(
+      `select voter_mbti, side, argument_id from public.votes where match_id = $1`,
       [matchId],
     );
-    return rows.map((r) => ({ voterMbti: r.voter_mbti, side: r.side }));
+    return rows.map((r) => ({ voterMbti: r.voter_mbti, side: r.side, argumentId: r.argument_id }));
   }
 }

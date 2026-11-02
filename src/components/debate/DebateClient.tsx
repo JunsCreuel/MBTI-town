@@ -163,17 +163,17 @@ function MatchHero({ view, now }: { view: DebateView; now: number }) {
   const m = view.match;
   const steps = [
     { label: '논거 작성', at: `~${hm(m.writingEndsAt)}` },
-    { label: '관전 투표', at: `~${hm(m.votingEndsAt)}` },
+    { label: '관전 판정', at: `~${hm(m.votingEndsAt)}` },
     { label: '결과 발표', at: hm(m.votingEndsAt) },
   ];
   const current = view.phase === 'writing' ? 0 : view.phase === 'voting' ? 1 : 2;
   const countdown =
     view.phase === 'writing'
-      ? `관전 투표 시작까지 ${remaining(m.writingEndsAt, now)}`
+      ? `관전 판정 시작까지 ${remaining(m.writingEndsAt, now)}`
       : view.phase === 'voting'
         ? `결과 발표까지 ${remaining(m.votingEndsAt, now)}`
         : view.phase === 'judging'
-          ? 'AI 심판이 채점하고 있어요'
+          ? '결과를 집계하고 있어요'
           : '결과가 나왔어요';
 
   return (
@@ -226,9 +226,9 @@ function ActionPanel({ view, me, onChanged }: { view: DebateView; me: MeResponse
     return (
       <section className="panel action-panel">
         <p className="action-panel__lead">
-          {view.phase === 'voting' ? '관전 투표가 열렸어요.' : `오늘은 ${m.teamA.label}과 ${m.teamB.label}의 대결이에요.`}
+          {view.phase === 'voting' ? '관전 판정이 열렸어요.' : `오늘은 ${m.teamA.label}과 ${m.teamB.label}의 대결이에요.`}
         </p>
-        <p className="muted">로그인하면 우리 팀 논거를 쓰거나, 관전자로 투표할 수 있어요.</p>
+        <p className="muted">로그인하면 우리 팀 논거를 쓰거나, 관전자로 승패를 판정할 수 있어요.</p>
         <Link className="btn-primary btn-primary--inline" href="/login?next=/debate">로그인하고 참여하기</Link>
       </section>
     );
@@ -239,7 +239,7 @@ function ActionPanel({ view, me, onChanged }: { view: DebateView; me: MeResponse
     return (
       <section className="panel action-panel action-panel--center">
         <div className="loader" aria-hidden />
-        <p className="action-panel__lead">AI 심판이 채점하고 있어요</p>
+        <p className="action-panel__lead">결과를 집계하고 있어요</p>
         <p className="muted">잠시 후 결과가 나와요.</p>
       </section>
     );
@@ -250,7 +250,7 @@ function ActionPanel({ view, me, onChanged }: { view: DebateView; me: MeResponse
       return (
         <section className="panel action-panel">
           <p className="action-panel__lead">오늘 {view.me.mbti}는 관전자예요.</p>
-          <p className="muted">{hm(m.writingEndsAt)}부터 관전 투표가 열려요. 지금은 양 팀 논거를 구경할 수 있어요.</p>
+          <p className="muted">{hm(m.writingEndsAt)}부터 관전 판정이 열려요. 그때 양 팀 대표 논거 중 가장 설득력 있는 하나를 고르면, 그 팀에 한 표가 가요.</p>
         </section>
       );
     }
@@ -263,24 +263,16 @@ function ActionPanel({ view, me, onChanged }: { view: DebateView; me: MeResponse
     );
   }
 
-  // 투표 시간
-  if (view.me.vote) {
-    return (
-      <section className="panel action-panel">
-        <p className="action-panel__lead">{teamLabel(view.me.vote)}에 투표했어요.</p>
-        <p className="muted">{hm(m.votingEndsAt)}에 결과가 발표돼요.</p>
-      </section>
-    );
-  }
+  // 판정 시간
   if (!view.me.canVote) {
     return (
       <section className="panel action-panel">
         <p className="action-panel__lead">우리 팀 대표 논거가 정해졌어요.</p>
-        <p className="muted">관전 투표는 다른 유형 주민들이 해요. {hm(m.votingEndsAt)}에 결과가 발표돼요.</p>
+        <p className="muted">다른 유형 주민들이 대표 논거를 읽고 판정하고 있어요. {hm(m.votingEndsAt)}에 결과가 발표돼요.</p>
       </section>
     );
   }
-  return <VotePanel view={view} onChanged={onChanged} />;
+  return <JudgePanel view={view} onChanged={onChanged} teamLabel={teamLabel} />;
 }
 
 function Compose({ view, onChanged }: { view: DebateView; onChanged: () => void }) {
@@ -323,7 +315,7 @@ function Compose({ view, onChanged }: { view: DebateView; onChanged: () => void 
       <div className="compose__footer">
         <span className={len > max ? 'compose__count compose__count--over' : 'compose__count'}>{len}/{max}</span>
         <button className="btn-primary btn-primary--inline" disabled={busy || len < debateConfig.argumentMinLength} onClick={submit}>
-          {busy ? '검사하는 중…' : '논거 내기'}
+          {busy ? '등록하는 중…' : '논거 내기'}
         </button>
       </div>
       {error && <p className="form-error" role="alert">{error}</p>}
@@ -331,43 +323,72 @@ function Compose({ view, onChanged }: { view: DebateView; onChanged: () => void 
   );
 }
 
-function VotePanel({ view, onChanged }: { view: DebateView; onChanged: () => void }) {
-  const [busy, setBusy] = useState(false);
+/** 관전 판정: 양 팀 대표 논거를 함께 보여 주고, 가장 설득력 있는 하나를 고른다 */
+function JudgePanel({ view, onChanged, teamLabel }: { view: DebateView; onChanged: () => void; teamLabel: (s: Side) => string }) {
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const m = view.match;
-  async function vote(side: Side) {
-    setBusy(true);
+  const picked = view.me.vote;
+  const reps = view.arguments.filter((a) => a.representative);
+
+  async function pick(argumentId: string) {
+    setBusy(argumentId);
     setError(null);
     try {
-      await api('/api/debate/votes', { side });
+      await api('/api/debate/votes', { argumentId });
       onChanged();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : '투표하지 못했어요.');
+      setError(e instanceof ApiError ? e.message : '판정하지 못했어요.');
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
+
   return (
-    <section className="panel action-panel" aria-label="관전 투표">
-      <p className="action-panel__lead">어느 팀 대표 논거가 더 설득력 있나요?</p>
-      <p className="muted">아래 대표 논거를 읽고 한 번만 투표할 수 있어요. 결과에 {Math.round(debateConfig.scoreWeights.vote * 100)}% 반영돼요.</p>
-      <div className="vote-buttons">
-        {(['a', 'b'] as const).map((s) => {
+    <section className="panel action-panel" aria-label="관전 판정">
+      {picked ? (
+        <>
+          <p className="action-panel__lead">{teamLabel(picked.side)} 논거를 골랐어요.</p>
+          <p className="muted">{hm(m.votingEndsAt)}에 결과가 발표돼요. 가장 많이 뽑힌 논거는 결정타 논거가 돼요.</p>
+        </>
+      ) : (
+        <>
+          <p className="action-panel__lead">가장 설득력 있는 논거 하나를 골라 주세요</p>
+          <p className="muted">팀 이름보다 내용을 보고 골라 주세요. 고른 논거의 팀에 한 표가 가고, 한 번만 고를 수 있어요.</p>
+        </>
+      )}
+      {reps.length === 0 ? (
+        <p className="muted empty">대표 논거가 없어요.</p>
+      ) : (
+        (['a', 'b'] as const).map((s) => {
           const team = s === 'a' ? m.teamA : m.teamB;
+          const list = reps.filter((a) => a.side === s);
+          if (!list.length) return null;
           return (
-            <button
-              key={s}
-              className="vote-btn"
-              style={teamVars(team, s) as CSSProperties}
-              disabled={busy}
-              onClick={() => vote(s)}
-            >
-              <span className="vote-btn__team">{team.label}</span>
-              <span className="vote-btn__stance">{s === 'a' ? m.topic.sideA : m.topic.sideB}</span>
-            </button>
+            <div key={s} className="judge-group" style={teamVars(team, s) as CSSProperties}>
+              <p className="judge-group__head">
+                {team.label} · {s === 'a' ? m.topic.sideA : m.topic.sideB}
+              </p>
+              <ul className="arguments">
+                {list.map((a) => {
+                  const mine = picked?.argumentId === a.id;
+                  return (
+                    <li key={a.id} className={mine ? 'argument argument--picked' : 'argument'}>
+                      <p className="argument__body">{a.body}</p>
+                      {!picked && (
+                        <button className="pick-btn" disabled={busy !== null} onClick={() => pick(a.id)}>
+                          {busy === a.id ? '고르는 중…' : '이 논거가 제일 설득력 있어요'}
+                        </button>
+                      )}
+                      {mine && <span className="badge badge--team">내가 고른 논거</span>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           );
-        })}
-      </div>
+        })
+      )}
       {error && <p className="form-error" role="alert">{error}</p>}
     </section>
   );
@@ -487,7 +508,9 @@ function Arguments({ view, onChanged }: { view: DebateView; onChanged: () => voi
                     추천 {a.recommendations}
                   </button>
                 ) : (
-                  <span className="recommend recommend--static">추천 {a.recommendations}</span>
+                  <span className="recommend recommend--static">
+                    {a.picks !== null && <strong className="picks">판정 {a.picks}표 · </strong>}추천 {a.recommendations}
+                  </span>
                 )}
               </div>
             </li>

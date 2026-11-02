@@ -105,7 +105,7 @@ export async function drawResultCard(view: DebateView, siteAddress: string): Pro
   }
   ctx.font = font(700, 52);
   ctx.fillStyle = tokens.color.textSub;
-  ctx.fillText(`${r.final.a.toFixed(1)} : ${r.final.b.toFixed(1)}`, cx, py + 580);
+  ctx.fillText(`${Math.round(r.vote.a)}% : ${Math.round(r.vote.b)}%`, cx, py + 580);
 
   // 결정타 논거
   if (r.decisive) {
@@ -115,7 +115,7 @@ export async function drawResultCard(view: DebateView, siteAddress: string): Pro
     ctx.fill();
     ctx.fillStyle = colorOf(r.decisive.side);
     ctx.font = font(700, 32);
-    ctx.fillText('결정타 논거', cx, py + 715);
+    ctx.fillText(`결정타 논거 · ${r.decisive.picks}명이 골랐어요`, cx, py + 715);
     ctx.fillStyle = tokens.color.text;
     ctx.font = font(600, 42);
     wrap(ctx, `“${clip(r.decisive.body)}”`, pw - 200, 2).forEach((l, i) => ctx.fillText(l, cx, py + 790 + i * 58));
@@ -123,7 +123,8 @@ export async function drawResultCard(view: DebateView, siteAddress: string): Pro
 
   ctx.fillStyle = tokens.color.textSub;
   ctx.font = font(500, 32);
-  ctx.fillText(`AI 심판 ${Math.round(r.aiTotal.a)} : ${Math.round(r.aiTotal.b)} · 관전 투표 ${Math.round(r.vote.a)}% : ${Math.round(r.vote.b)}%`, cx, py + 975);
+  const typeCount = Object.keys(r.byType).length;
+  ctx.fillText(`관전 유형 ${typeCount}개 · ${r.voters}명이 판정했어요`, cx, py + 975);
 
   // 서비스 주소
   ctx.fillStyle = tokens.color.text;

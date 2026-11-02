@@ -64,7 +64,7 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
       </div>
       <header>
         <h1 className="entry__title">로그인</h1>
-        <p className="entry__lead">로그인하면 내 MBTI로 오늘의 토론에 참여할 수 있어요. 출전 팀이면 논거를 쓰고, 관전자면 투표해요.</p>
+        <p className="entry__lead">로그인하면 내 MBTI로 오늘의 토론에 참여할 수 있어요. 출전 팀이면 논거를 쓰고, 관전자면 승패를 판정해요.</p>
       </header>
 
       {mode === 'supabase' ? (

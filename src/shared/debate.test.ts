@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { MBTI_TYPES } from '../design/mbti';
 import {
-  canVote, clampCriteria, clip, currentSlot, finalScores, localDate, matchupCycle, matchupFor, phaseOf, pickTopic,
-  representatives, sideOf, voteScore, voterTypes, type Argument, type VoteRecord,
+  canVote, clip, currentSlot, decideWinner, decisiveArgument, localDate, matchupCycle, matchupFor, phaseOf, pickTopic,
+  representatives, sideOf, tallyByType, voteScore, voterTypes, type Argument, type VoteRecord,
 } from './debate';
 import { TOPICS } from './topics';
 
@@ -98,10 +98,11 @@ describe('집계', () => {
   });
 
   it('사람이 많은 유형이 투표를 좌우하지 않는다', () => {
+    const v = (voterMbti: VoteRecord['voterMbti'], side: VoteRecord['side']): VoteRecord => ({ voterMbti, side, argumentId: null });
     const votes: VoteRecord[] = [
-      ...Array.from({ length: 30 }, () => ({ voterMbti: 'ISFJ' as const, side: 'a' as const })),
-      ...Array.from({ length: 3 }, () => ({ voterMbti: 'INTJ' as const, side: 'b' as const })),
-      ...Array.from({ length: 3 }, () => ({ voterMbti: 'ESTP' as const, side: 'b' as const })),
+      ...Array.from({ length: 30 }, () => v('ISFJ', 'a')),
+      ...Array.from({ length: 3 }, () => v('INTJ', 'b')),
+      ...Array.from({ length: 3 }, () => v('ESTP', 'b')),
     ];
     const byType = voteScore(votes, 'byType');
     const raw = voteScore(votes, 'none');
@@ -111,17 +112,19 @@ describe('집계', () => {
     expect(voteScore([])).toEqual({ a: 50, b: 50 });
   });
 
-  it('AI 7 : 투표 3으로 합치고, 같으면 AI 점수로 가린다', () => {
-    const r = finalScores({ a: 80, b: 70 }, { a: 40, b: 60 });
-    expect(r.final).toEqual({ a: 68, b: 67 });
-    expect(r.winner).toBe('a');
-    expect(finalScores({ a: 70, b: 70 }, { a: 50, b: 50 }).winner).toBe('draw');
+  it('판정 점수가 높은 팀이 이기고, 같으면 표 수로, 그래도 같으면 무승부', () => {
+    const v = (voterMbti: VoteRecord['voterMbti'], side: VoteRecord['side']): VoteRecord => ({ voterMbti, side, argumentId: null });
+    expect(decideWinner([])).toBe('draw');
+    expect(decideWinner([v('INTJ', 'a'), v('ISFP', 'b'), v('ISFP', 'b')])).toBe('b');
+    expect(decideWinner([v('INTJ', 'a'), v('ISFP', 'b')])).toBe('draw');
+    expect(tallyByType([v('INTJ', 'a'), v('INTJ', 'b'), v('INTJ', 'a')])).toEqual({ INTJ: { a: 2, b: 1 } });
   });
 
-  it('기준 점수는 상한을 넘지 않는다', () => {
-    expect(clampCriteria({ logic: 40, factuality: -3, evidence: 12.6, rebuttal: NaN, relevance: 15 })).toEqual({
-      logic: 25, factuality: 0, evidence: 13, rebuttal: 0, relevance: 15,
-    });
+  it('결정타 논거는 가장 많이 뽑힌 것, 같으면 추천 많은 것', () => {
+    const reps = [arg('1', 'a', 1, 1), arg('2', 'a', 5, 2), arg('3', 'a', 0, 3)];
+    expect(decisiveArgument(reps, { 1: 4, 2: 1 })?.id).toBe('1');
+    expect(decisiveArgument(reps, { 1: 2, 2: 2 })?.id).toBe('2');
+    expect(decisiveArgument(reps, {})).toBeNull();
   });
 
   it('결과 카드 논거는 40자로 자른다', () => {

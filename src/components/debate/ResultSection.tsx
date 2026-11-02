@@ -1,92 +1,74 @@
 'use client';
 
 import { useEffect, useState, type CSSProperties } from 'react';
-import { debateConfig } from '@/config/game';
+import { MBTI_TYPES, mbtiColor } from '@/design/mbti';
 import type { Side } from '@/shared/debate';
 import type { DebateView } from './api';
 import { canvasToBlob, drawResultCard } from './resultCard';
 import { teamInk, teamVars } from './teamColor';
 
-const CRITERIA: { key: keyof typeof debateConfig.judgeCriteria; label: string }[] = [
-  { key: 'logic', label: '논리성' },
-  { key: 'factuality', label: '사실성' },
-  { key: 'evidence', label: '근거' },
-  { key: 'rebuttal', label: '반박' },
-  { key: 'relevance', label: '적합성' },
-];
-
 export function ResultSection({ view }: { view: DebateView }) {
   const r = view.result!;
   const m = view.match;
-  const color = (s: Side) => teamInk(s === 'a' ? m.teamA : m.teamB, s);
-  const label = (s: Side) => (s === 'a' ? m.teamA.label : m.teamB.label);
-  const w = debateConfig.scoreWeights;
+  const team = (s: Side) => (s === 'a' ? m.teamA : m.teamB);
+  const color = (s: Side) => teamInk(team(s), s);
+  const label = (s: Side) => team(s).label;
+  const types = MBTI_TYPES.filter((t) => r.byType[t]);
 
   return (
     <section className="panel result-panel" aria-label="결과 발표">
-      <p className="eyebrow">결과 발표</p>
+      <p className="eyebrow">결과 발표 · 관전 판정</p>
       <h2 className="winner" style={r.winner === 'draw' ? undefined : ({ color: color(r.winner) } as CSSProperties)}>
         {r.winner === 'draw' ? '무승부' : `${label(r.winner)} 승리!`}
       </h2>
+      <div className="share-bar" aria-label={`판정 점수 ${label('a')} ${r.vote.a}%, ${label('b')} ${r.vote.b}%`}>
+        <span style={{ ...teamVars(m.teamA, 'a'), width: `${r.vote.a}%` } as CSSProperties} />
+        <span style={{ ...teamVars(m.teamB, 'b'), width: `${r.vote.b}%` } as CSSProperties} />
+      </div>
       <p className="final-score">
-        <span style={{ color: color('a') }}>{r.final.a.toFixed(1)}</span>
+        <span style={{ color: color('a') }}>{label('a')} {Math.round(r.vote.a)}%</span>
         <span className="final-score__sep">:</span>
-        <span style={{ color: color('b') }}>{r.final.b.toFixed(1)}</span>
+        <span style={{ color: color('b') }}>{Math.round(r.vote.b)}% {label('b')}</span>
       </p>
       <p className="muted">{r.summary}</p>
 
       {r.decisive && (
-        <blockquote className="decisive" style={teamVars(r.decisive.side === 'a' ? m.teamA : m.teamB, r.decisive.side) as CSSProperties}>
-          <span className="decisive__label">결정타 논거 · {label(r.decisive.side)}</span>
+        <blockquote className="decisive" style={teamVars(team(r.decisive.side), r.decisive.side) as CSSProperties}>
+          <span className="decisive__label">
+            결정타 논거 · {label(r.decisive.side)} · {r.decisive.picks}명이 골랐어요
+          </span>
           {r.decisive.body}
         </blockquote>
       )}
 
-      <table className="score-table">
-        <thead>
-          <tr>
-            <th scope="col">기준</th>
-            <th scope="col" style={{ color: color('a') }}>{m.teamA.label}</th>
-            <th scope="col" style={{ color: color('b') }}>{m.teamB.label}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {CRITERIA.map((c) => (
-            <tr key={c.key}>
-              <th scope="row">
-                {c.label} <span className="muted">/{debateConfig.judgeCriteria[c.key]}</span>
-              </th>
-              <td>{r.ai.a[c.key]}</td>
-              <td>{r.ai.b[c.key]}</td>
-            </tr>
-          ))}
-          <tr className="score-table__sum">
-            <th scope="row">AI 심판 <span className="muted">×{w.ai}</span></th>
-            <td>{r.aiTotal.a}</td>
-            <td>{r.aiTotal.b}</td>
-          </tr>
-          <tr className="score-table__sum">
-            <th scope="row">관전 투표 <span className="muted">×{w.vote} · {r.voters}표</span></th>
-            <td>{r.vote.a}%</td>
-            <td>{r.vote.b}%</td>
-          </tr>
-          <tr className="score-table__final">
-            <th scope="row">최종</th>
-            <td>{r.final.a.toFixed(1)}</td>
-            <td>{r.final.b.toFixed(1)}</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div className="judge-comments">
-        {(['a', 'b'] as const).map((s) => (
-          <p key={s}>
-            <strong style={{ color: color(s) }}>{label(s)}</strong> {r.ai[s].comment}
-          </p>
-        ))}
-      </div>
-      {r.judgedBy.startsWith('dev') && (
-        <p className="notice">개발용 가짜 채점 결과예요. Anthropic API 키를 넣으면 AI 심판이 채점해요.</p>
+      {types.length > 0 && (
+        <div className="verdicts">
+          <h3 className="section-title">관전 유형별 판정</h3>
+          <p className="muted">유형마다 같은 무게로 셌어요. 사람이 많은 유형이 결과를 좌우하지 않아요.</p>
+          <ul className="verdict-grid">
+            {types.map((t) => {
+              const v = r.byType[t]!;
+              const lean: Side | null = v.a === v.b ? null : v.a > v.b ? 'a' : 'b';
+              return (
+                <li
+                  key={t}
+                  className="verdict"
+                  style={(lean ? teamVars(team(lean), lean) : {}) as CSSProperties}
+                  title={`${label('a')} ${v.a}표 · ${label('b')} ${v.b}표`}
+                >
+                  <span className="verdict__type">
+                    <span className="pill__dot" style={{ '--chip-color': mbtiColor(t) } as CSSProperties} />
+                    {t}
+                  </span>
+                  <span className="verdict__lean">{lean ? label(lean) : '반반'}</span>
+                  <span className="verdict__count">
+                    {v.a}:{v.b}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
 
       <ShareCard view={view} />

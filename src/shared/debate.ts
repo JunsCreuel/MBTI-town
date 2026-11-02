@@ -21,29 +21,22 @@ export interface Topic {
   sideB: string;
 }
 
-export interface Criteria {
-  logic: number;
-  factuality: number;
-  evidence: number;
-  rebuttal: number;
-  relevance: number;
-}
-
+/** 관전 판정 결과. 관전자가 대표 논거 하나를 고르면 그 논거의 팀에 한 표가 간다. */
 export interface MatchResult {
-  /** 팀별 AI 기준 점수와 한 줄 평 */
-  ai: Record<Side, Criteria & { comment: string }>;
-  aiTotal: Record<Side, number>;
-  /** 관전 투표 점수 (0~100, 두 팀 합 100) */
+  /** 판정 점수 (0~100, 두 팀 합 100). 유형마다 같은 무게로 센다. */
   vote: Record<Side, number>;
+  /** 판정한 사람 수 */
   voters: number;
-  final: Record<Side, number>;
+  /** 유형별 표 (판정한 유형만) */
+  byType: Partial<Record<MbtiType, Record<Side, number>>>;
+  /** 대표 논거별로 뽑힌 수 */
+  picks: Record<string, number>;
   winner: Side | 'draw';
-  /** 결정타 논거 */
-  decisive: { argumentId: string; side: Side; body: string } | null;
+  /** 결정타 논거: 승리 팀 대표 논거 중 가장 많이 뽑힌 것 */
+  decisive: { argumentId: string; side: Side; body: string; picks: number } | null;
   summary: string;
   representative: Record<Side, string[]>;
-  judgedBy: string;
-  judgedAt: string;
+  decidedAt: string;
 }
 
 export interface Match {
@@ -75,6 +68,8 @@ export interface Argument {
 export interface VoteRecord {
   voterMbti: MbtiType;
   side: Side;
+  /** 고른 대표 논거 */
+  argumentId: string | null;
 }
 
 // ───────────────────────── 시간표 ─────────────────────────
@@ -282,32 +277,36 @@ export function voteScore(
   return { a, b: round1(100 - a) };
 }
 
-export function criteriaTotal(c: Criteria): number {
-  return c.logic + c.factuality + c.evidence + c.rebuttal + c.relevance;
+/** 유형별 표 */
+export function tallyByType(votes: readonly VoteRecord[]): Partial<Record<MbtiType, Record<Side, number>>> {
+  const out: Partial<Record<MbtiType, Record<Side, number>>> = {};
+  for (const v of votes) {
+    const t = (out[v.voterMbti] ??= { a: 0, b: 0 });
+    t[v.side]++;
+  }
+  return out;
 }
 
-/** 기준별 상한을 넘지 않게 자른다 */
-export function clampCriteria(c: Criteria, max = debateConfig.judgeCriteria): Criteria {
-  const clamp = (v: number, hi: number) => Math.max(0, Math.min(hi, Math.round(Number.isFinite(v) ? v : 0)));
-  return {
-    logic: clamp(c.logic, max.logic),
-    factuality: clamp(c.factuality, max.factuality),
-    evidence: clamp(c.evidence, max.evidence),
-    rebuttal: clamp(c.rebuttal, max.rebuttal),
-    relevance: clamp(c.relevance, max.relevance),
-  };
+/**
+ * 판정 점수가 높은 팀이 이긴다. 같으면 표 수로 가리고, 그래도 같거나 표가 없으면 무승부.
+ */
+export function decideWinner(votes: readonly VoteRecord[], score = voteScore(votes)): Side | 'draw' {
+  if (!votes.length) return 'draw';
+  if (score.a !== score.b) return score.a > score.b ? 'a' : 'b';
+  const a = votes.filter((v) => v.side === 'a').length;
+  const b = votes.length - a;
+  return a === b ? 'draw' : a > b ? 'a' : 'b';
 }
 
-export function finalScores(
-  aiTotal: Record<Side, number>,
-  vote: Record<Side, number>,
-  w: { ai: number; vote: number } = debateConfig.scoreWeights,
-): { final: Record<Side, number>; winner: Side | 'draw' } {
-  const final = { a: round1(aiTotal.a * w.ai + vote.a * w.vote), b: round1(aiTotal.b * w.ai + vote.b * w.vote) };
-  let winner: Side | 'draw' = final.a > final.b ? 'a' : final.b > final.a ? 'b' : 'draw';
-  // 최종 점수가 같으면 AI 점수로 가린다
-  if (winner === 'draw' && aiTotal.a !== aiTotal.b) winner = aiTotal.a > aiTotal.b ? 'a' : 'b';
-  return { final, winner };
+/** 결정타 논거: 승리 팀 대표 논거 중 가장 많이 뽑힌 것. 같으면 추천 많은 순, 그다음 먼저 쓴 순. */
+export function decisiveArgument(reps: readonly Argument[], picks: Readonly<Record<string, number>>): Argument | null {
+  const sorted = [...reps].sort(
+    (x, y) =>
+      (picks[y.id] ?? 0) - (picks[x.id] ?? 0) ||
+      y.recommendations - x.recommendations ||
+      x.createdAt.getTime() - y.createdAt.getTime(),
+  );
+  return sorted[0] && (picks[sorted[0].id] ?? 0) > 0 ? sorted[0] : null;
 }
 
 function round1(x: number): number {

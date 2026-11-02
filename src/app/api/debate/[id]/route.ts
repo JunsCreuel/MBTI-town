@@ -11,6 +11,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     if (!UUID.test(id)) throw new DebateError('not_found', '경기를 찾을 수 없어요.');
     const service = await getDebateService();
-    return service.view(await service.getMatch(id), await currentUser());
+    return service.view(await service.withResult(await service.getMatch(id)), await currentUser());
   });
 }

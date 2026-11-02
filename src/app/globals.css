@@ -1036,6 +1036,7 @@ a.btn-secondary[aria-disabled='true'] {
   display: inline-grid;
   place-items: center;
   border-color: transparent;
+  white-space: nowrap;
 }
 
 .recent {
@@ -1083,10 +1084,11 @@ a.btn-secondary[aria-disabled='true'] {
 
 .final-score {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: var(--space-2);
   margin: 0;
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -1225,4 +1227,112 @@ a.btn-secondary[aria-disabled='true'] {
 .debate-link__label {
   color: var(--color-accent);
   font-weight: 800;
+}
+
+/* 관전 판정 */
+
+.judge-group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.judge-group__head {
+  margin: var(--space-2) 0 0;
+  color: var(--team-ink, var(--team-color));
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.argument--picked {
+  border: 2px solid var(--team-color);
+}
+
+.pick-btn {
+  justify-self: start;
+  min-height: 40px;
+  padding: 0 var(--space-4);
+  border: 2px solid var(--team-color);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--team-ink, var(--team-color));
+  font-size: 14px;
+  font-weight: 700;
+  transition: background-color 0.12s ease, transform 0.12s ease;
+}
+
+.pick-btn:hover:not(:disabled) {
+  background: var(--color-bg);
+}
+
+.pick-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.pick-btn:disabled {
+  opacity: 0.5;
+}
+
+.badge--team {
+  background: var(--team-color);
+}
+
+.picks {
+  color: var(--color-text);
+}
+
+.share-bar {
+  display: flex;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--color-border);
+}
+
+.share-bar span {
+  background: var(--team-color);
+}
+
+.verdicts {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.verdict-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.verdict {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--team-color, var(--color-border));
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+
+.verdict__type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: 800;
+}
+
+.verdict__lean {
+  grid-column: 1;
+  color: var(--team-ink, var(--color-textSub));
+  font-weight: 700;
+}
+
+.verdict__count {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--color-textSub);
+  font-variant-numeric: tabular-nums;
 }

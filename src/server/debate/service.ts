@@ -1,23 +1,25 @@
-// 토론 매치 규칙을 지키며 저장소와 AI를 묶는다. 화면(API)은 이 클래스만 쓴다.
+// 토론 매치 규칙을 지키며 저장소를 다룬다. 화면(API)은 이 클래스만 쓴다.
+// 승패는 관전 유형이 정한다: 관전자가 대표 논거 하나를 고르면 그 논거의 팀에 한 표가 간다.
 import 'server-only';
 import { debateConfig } from '@/config/game';
-import { isMbtiType, type MbtiType } from '@/design/mbti';
+import { MBTI_TYPES, isMbtiType, type MbtiType } from '@/design/mbti';
 import {
-  canVote, clampCriteria, criteriaTotal, currentSlot, finalScores, matchupFor, phaseOf, pickTopic, representatives,
-  sideOf, voteScore, type Match, type MatchResult, type Phase, type Side, type Topic,
+  canVote, currentSlot, decideWinner, decisiveArgument, matchupFor, phaseOf, pickTopic, representatives, sideOf,
+  tallyByType, voteScore, type Match, type MatchResult, type Phase, type Side, type Topic,
 } from '@/shared/debate';
+import { moderate } from '@/shared/moderation';
 import { TOPICS } from '@/shared/topics';
-import { isRetryableAiError, type DebateAi } from './ai';
 import type { DebateStore, Profile } from './store';
 
 export type DebateErrorCode =
   | 'login_required' | 'mbti_required' | 'not_found' | 'wrong_phase' | 'not_team' | 'limit' | 'too_short' | 'too_long'
-  | 'rejected' | 'own_argument' | 'other_team' | 'not_voter' | 'already_voted' | 'cooldown' | 'bad_request' | 'ai_unavailable';
+  | 'rejected' | 'own_argument' | 'other_team' | 'not_voter' | 'not_representative' | 'already_voted' | 'cooldown'
+  | 'bad_request';
 
 const STATUS: Record<DebateErrorCode, number> = {
   login_required: 401, mbti_required: 403, not_found: 404, wrong_phase: 409, not_team: 403, limit: 409, too_short: 400,
-  too_long: 400, rejected: 422, own_argument: 409, other_team: 403, not_voter: 403, already_voted: 409, cooldown: 429,
-  bad_request: 400, ai_unavailable: 503,
+  too_long: 400, rejected: 422, own_argument: 409, other_team: 403, not_voter: 403, not_representative: 409,
+  already_voted: 409, cooldown: 429, bad_request: 400,
 };
 
 export class DebateError extends Error {
@@ -37,6 +39,8 @@ export interface ArgumentView {
   mine: boolean;
   recommended: boolean;
   representative: boolean;
+  /** 관전자에게 뽑힌 수 (결과 발표 뒤에만) */
+  picks: number | null;
 }
 
 export interface DebateView {
@@ -57,13 +61,13 @@ export interface DebateView {
     mbti: MbtiType | null;
     side: Side | null;
     canVote: boolean;
-    vote: Side | null;
+    /** 내가 고른 대표 논거 */
+    vote: { side: Side; argumentId: string | null } | null;
     argumentsLeft: number;
   };
   arguments: ArgumentView[];
   result: MatchResult | null;
   recent: { id: string; key: string; title: string; teamA: string; teamB: string; winner: Side | 'draw' }[];
-  judgedBy: string | null;
 }
 
 export interface Viewer {
@@ -75,7 +79,6 @@ export class DebateService {
 
   constructor(
     private readonly store: DebateStore,
-    private readonly ai: DebateAi,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
@@ -110,6 +113,13 @@ export class DebateService {
     const m = await this.store.getMatch(id);
     if (!m) throw new DebateError('not_found', '경기를 찾을 수 없어요.');
     return m;
+  }
+
+  /** 판정 시간이 끝났는데 결과가 없으면 바로 집계해서 돌려준다 */
+  async withResult(match: Match): Promise<Match> {
+    if (phaseOf(match, this.now()) !== 'judging') return match;
+    await this.finalizeDue();
+    return this.getMatch(match.id);
   }
 
   async profile(userId: string): Promise<Profile | null> {
@@ -154,6 +164,7 @@ export class DebateService {
           ? [...match.result.representative.a, ...match.result.representative.b]
           : [...representatives(args, 'a'), ...representatives(args, 'b')].map((a) => a.id),
     );
+    const picks = match.result?.picks ?? null;
     const recSet = new Set(recommended);
     return {
       now: now.toISOString(),
@@ -177,8 +188,14 @@ export class DebateService {
         argumentsLeft: side ? Math.max(0, debateConfig.argumentsPerUser - mine) : 0,
       },
       arguments: args
-        // 작성 중에는 추천 많은 순, 그 뒤로는 대표 논거가 먼저
-        .sort((x, y) => Number(reps.has(y.id)) - Number(reps.has(x.id)) || y.recommendations - x.recommendations || x.createdAt.getTime() - y.createdAt.getTime())
+        // 작성 중에는 추천 많은 순, 그 뒤로는 대표 논거가 먼저 (발표 뒤에는 많이 뽑힌 순)
+        .sort(
+          (x, y) =>
+            Number(reps.has(y.id)) - Number(reps.has(x.id)) ||
+            (picks ? (picks[y.id] ?? 0) - (picks[x.id] ?? 0) : 0) ||
+            y.recommendations - x.recommendations ||
+            x.createdAt.getTime() - y.createdAt.getTime(),
+        )
         .map((a) => ({
           id: a.id,
           side: a.side,
@@ -188,13 +205,13 @@ export class DebateService {
           mine: !!viewer && a.authorId === viewer.id,
           recommended: recSet.has(a.id),
           representative: reps.has(a.id),
+          picks: picks && reps.has(a.id) ? (picks[a.id] ?? 0) : null,
         })),
       result: match.result,
       recent: recent
         .filter((m) => m.id !== match.id && m.result)
         .slice(0, 5)
         .map((m) => ({ id: m.id, key: m.key, title: m.topic.title, teamA: m.teamA.label, teamB: m.teamB.label, winner: m.result!.winner })),
-      judgedBy: match.result?.judgedBy ?? null,
     };
   }
 
@@ -221,19 +238,9 @@ export class DebateService {
     if ((await this.store.countArgumentsBy(match.id, viewer!.id)) >= debateConfig.argumentsPerUser) {
       throw new DebateError('limit', '이번 경기에 낼 수 있는 논거를 모두 냈어요.');
     }
-    const stance = side === 'a' ? match.topic.sideA : match.topic.sideB;
-    let moderation;
-    try {
-      moderation = await this.ai.moderate({ topic: match.topic, stance, body });
-    } catch (e) {
-      // 검사할 수 없을 때는 등록하지 않는다 (비하 논거를 받지 않는 게 우선)
-      console.error('[debate] 논거 필터 실패', e);
-      throw new DebateError('ai_unavailable', '지금은 논거를 검사할 수 없어요. 잠시 후 다시 시도해 주세요.');
-    }
-    if (!moderation.allowed) throw new DebateError('rejected', moderation.reason || '등록할 수 없는 내용이에요.');
-    return this.store.insertArgument({
-      matchId: match.id, authorId: viewer!.id, authorMbti: mbti, side, body, moderation: { ...moderation, by: this.ai.name }, at: this.now(),
-    });
+    const check = moderate(body);
+    if (!check.allowed) throw new DebateError('rejected', check.reason);
+    return this.store.insertArgument({ matchId: match.id, authorId: viewer!.id, authorMbti: mbti, side, body, at: this.now() });
   }
 
   async recommend(viewer: Viewer | null, argumentId: unknown, on: unknown): Promise<void> {
@@ -248,83 +255,78 @@ export class DebateService {
     await this.store.setRecommendation(match.id, arg.id, viewer!.id, on);
   }
 
-  async vote(viewer: Viewer | null, side: unknown): Promise<void> {
-    if (side !== 'a' && side !== 'b') throw new DebateError('bad_request', '요청이 올바르지 않아요.');
+  /** 관전 판정: 양 팀 대표 논거 중 가장 설득력 있는 하나를 고른다 */
+  async vote(viewer: Viewer | null, argumentId: unknown): Promise<void> {
+    if (typeof argumentId !== 'string') throw new DebateError('bad_request', '요청이 올바르지 않아요.');
     if (!viewer) throw new DebateError('login_required', '로그인이 필요해요.');
     const match = await this.currentMatch();
-    if (phaseOf(match, this.now()) !== 'voting') throw new DebateError('wrong_phase', '지금은 투표 시간이 아니에요.');
+    if (phaseOf(match, this.now()) !== 'voting') throw new DebateError('wrong_phase', '지금은 판정 시간이 아니에요.');
     const p = await this.store.getProfile(viewer.id);
     if (!p?.mbti) throw new DebateError('mbti_required', '먼저 내 MBTI를 정해 주세요.');
-    if (!canVote(match, p.mbti)) throw new DebateError('not_voter', '출전 팀은 관전 투표를 할 수 없어요.');
-    if (!(await this.store.insertVote(match.id, viewer.id, p.mbti, side))) {
-      throw new DebateError('already_voted', '이미 투표했어요.');
-    }
+    if (!canVote(match, p.mbti)) throw new DebateError('not_voter', '출전 팀은 판정할 수 없어요. 관전 주민들이 판정해요.');
+    const args = await this.store.listArguments(match.id);
+    const arg = [...representatives(args, 'a'), ...representatives(args, 'b')].find((a) => a.id === argumentId);
+    if (!arg) throw new DebateError('not_representative', '대표 논거 중에서 골라 주세요.');
+    const ok = await this.store.insertVote({ matchId: match.id, userId: viewer.id, voterMbti: p.mbti, side: arg.side, argumentId: arg.id });
+    if (!ok) throw new DebateError('already_voted', '이미 판정했어요.');
   }
 
-  /** 투표가 끝난 경기를 모두 채점한다. 다른 요청이 채점 중인 경기는 건너뛴다. */
-  async judgeDue(): Promise<Match[]> {
-    const judged: Match[] = [];
+  /** 판정 시간이 끝난 경기를 모두 집계한다. 다른 요청이 집계 중인 경기는 건너뛴다. */
+  async finalizeDue(): Promise<Match[]> {
+    const done: Match[] = [];
     for (const m of await this.store.dueMatches(this.now())) {
-      const done = await this.judge(m);
-      if (done) judged.push(done);
+      const finished = await this.finalize(m);
+      if (finished) done.push(finished);
     }
-    return judged;
+    return done;
   }
 
-  private async judge(match: Match): Promise<Match | null> {
+  private async finalize(match: Match): Promise<Match | null> {
     if (!(await this.store.tryStartJudging(match.id, debateConfig.judgingStaleMinutes))) return null;
     try {
       const args = await this.store.listArguments(match.id);
       const reps = { a: representatives(args, 'a'), b: representatives(args, 'b') };
+      const repIds = new Set([...reps.a, ...reps.b].map((a) => a.id));
       const votes = await this.store.listVotes(match.id);
       const vote = voteScore(votes);
-      const zero = { logic: 0, factuality: 0, evidence: 0, rebuttal: 0, relevance: 0 };
-      let ai: MatchResult['ai'];
-      let summary: string;
-      const best: Record<Side, string | null> = { a: null, b: null };
-      if (!reps.a.length && !reps.b.length) {
-        ai = { a: { ...zero, comment: '논거가 없습니다.' }, b: { ...zero, comment: '논거가 없습니다.' } };
-        summary = '양 팀 모두 논거가 없어 관전 투표로만 결과를 정했어요.';
-      } else {
-        const out = await this.ai.judge({
-          topic: match.topic,
-          a: { label: match.teamA.label, stance: match.topic.sideA, arguments: reps.a.map((x) => ({ id: x.id, body: x.body })) },
-          b: { label: match.teamB.label, stance: match.topic.sideB, arguments: reps.b.map((x) => ({ id: x.id, body: x.body })) },
-        });
-        // 논거가 없는 팀은 AI가 뭐라고 하든 0점이다
-        const team = (s: Side) =>
-          reps[s].length ? { ...clampCriteria(out[s]), comment: out[s].comment } : { ...zero, comment: '논거가 없습니다.' };
-        ai = { a: team('a'), b: team('b') };
-        summary = out.summary;
-        // 가장 설득력 있는 논거는 그 팀 대표 논거 중 하나여야 한다
-        for (const s of ['a', 'b'] as const) {
-          best[s] = reps[s].some((x) => x.id === out[s].bestArgumentId) ? out[s].bestArgumentId : (reps[s][0]?.id ?? null);
-        }
-      }
-      const aiTotal = { a: criteriaTotal(ai.a), b: criteriaTotal(ai.b) };
-      const { final, winner } = finalScores(aiTotal, vote);
-      const decisiveId = winner === 'draw' ? null : best[winner];
-      const decisiveArg = args.find((x) => x.id === decisiveId);
+      const winner = decideWinner(votes, vote);
+      const picks: Record<string, number> = {};
+      for (const v of votes) if (v.argumentId && repIds.has(v.argumentId)) picks[v.argumentId] = (picks[v.argumentId] ?? 0) + 1;
+      const decisive = winner === 'draw' ? null : decisiveArgument(reps[winner], picks);
+      const byType = tallyByType(votes);
       const result: MatchResult = {
-        ai,
-        aiTotal,
         vote,
         voters: votes.length,
-        final,
+        byType,
+        picks,
         winner,
-        decisive: decisiveArg ? { argumentId: decisiveArg.id, side: decisiveArg.side, body: decisiveArg.body } : null,
-        summary,
+        decisive: decisive ? { argumentId: decisive.id, side: decisive.side, body: decisive.body, picks: picks[decisive.id] ?? 0 } : null,
+        summary: summarize(match, winner, byType, votes.length),
         representative: { a: reps.a.map((x) => x.id), b: reps.b.map((x) => x.id) },
-        judgedBy: this.ai.name,
-        judgedAt: this.now().toISOString(),
+        decidedAt: this.now().toISOString(),
       };
       await this.store.finishJudging(match.id, result);
       return { ...match, status: 'done', result };
     } catch (e) {
-      // 다음 요청이나 예약 작업이 다시 채점하도록 풀어 둔다
+      // 다음 요청이나 예약 작업이 다시 집계하도록 풀어 둔다
       await this.store.releaseJudging(match.id);
-      console.error(`[debate] 채점 실패 (${isRetryableAiError(e) ? '다시 시도 예정' : '확인 필요'})`, e);
+      console.error('[debate] 결과 집계 실패', e);
       return null;
     }
   }
+}
+
+/** 결과 발표 문장 */
+function summarize(
+  match: Match,
+  winner: Side | 'draw',
+  byType: MatchResult['byType'],
+  voters: number,
+): string {
+  if (!voters) return '관전 판정이 없어 무승부예요.';
+  const types = MBTI_TYPES.filter((t) => byType[t]);
+  if (winner === 'draw') return `관전 유형 ${types.length}개, ${voters}명이 판정했는데 두 팀이 똑같이 표를 받았어요.`;
+  const label = winner === 'a' ? match.teamA.label : match.teamB.label;
+  const backers = types.filter((t) => byType[t]![winner] > byType[t]![winner === 'a' ? 'b' : 'a']).length;
+  return `관전 유형 ${types.length}개, ${voters}명이 판정했어요. 그중 ${backers}개 유형이 ${label} 손을 들었어요.`;
 }

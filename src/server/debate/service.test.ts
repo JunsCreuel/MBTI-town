@@ -1,36 +1,16 @@
-// 하루 경기 흐름을 실제 Postgres(PGlite, 메모리)와 가짜 AI, 가짜 시계로 확인한다.
+// 하루 경기 흐름을 실제 Postgres(PGlite, 메모리)와 가짜 시계로 확인한다.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MBTI_TYPES, type MbtiType } from '@/design/mbti';
 import { createPgliteSql, ensureDevAuthUser, type Sql } from '../db';
-import type { DebateAi, JudgeInput } from './ai';
 import { DebateError, DebateService, type Viewer } from './service';
 import { DebateStore } from './store';
 
 const kst = (s: string) => new Date(`${s}+09:00`);
 
-class FakeAi implements DebateAi {
-  readonly name = 'fake';
-  failJudge = false;
-  lastJudge: JudgeInput | null = null;
-  async moderate({ body }: { body: string }) {
-    return body.includes('비하') ? { allowed: false, reason: '비하 표현을 빼 주세요.' } : { allowed: true, reason: '문제없음' };
-  }
-  async judge(input: JudgeInput) {
-    if (this.failJudge) throw new Error('잠시 장애');
-    this.lastJudge = input;
-    return {
-      a: { logic: 30, factuality: 20, evidence: 15, rebuttal: 10, relevance: 12, comment: 'A 좋음', bestArgumentId: 'not-a-real-id' },
-      b: { logic: 10, factuality: 15, evidence: 5, rebuttal: 3, relevance: 10, comment: 'B 아쉬움', bestArgumentId: input.b.arguments[0]?.id ?? '' },
-      summary: '두 팀 모두 수고했어요.',
-    };
-  }
-}
-
 let sql: Sql;
 let store: DebateStore;
 let clock = kst('2026-11-02T09:00:00');
-const ai = new FakeAi();
 let service: DebateService;
 
 async function user(mbti: MbtiType | null): Promise<Viewer> {
@@ -48,7 +28,7 @@ async function expectError(p: Promise<unknown>, code: string) {
 beforeAll(async () => {
   sql = await createPgliteSql();
   store = new DebateStore(sql);
-  service = new DebateService(store, ai, () => clock);
+  service = new DebateService(store, () => clock);
 }, 60_000);
 
 afterAll(async () => {
@@ -73,6 +53,7 @@ describe('하루 경기 흐름', () => {
     a3 = await user(teamAType);
     b1 = await user(teamBType);
     const others = MBTI_TYPES.filter((t) => t !== teamAType && t !== teamBType);
+    // 같은 유형 3명 + 다른 유형 2명
     spectators = await Promise.all([others[0], others[0], others[0], others[1], others[2]].map((t) => user(t)));
     stranger = await user(null);
   });
@@ -83,7 +64,7 @@ describe('하루 경기 흐름', () => {
     await expectError(service.submitArgument(spectators[0], '관전자가 쓰는 논거입니다'), 'not_team');
     await expectError(service.submitArgument(a1, '짧음'), 'too_short');
     await expectError(service.submitArgument(a1, '가'.repeat(301)), 'too_long');
-    await expectError(service.submitArgument(a1, '상대 유형을 비하하는 논거입니다'), 'rejected');
+    await expectError(service.submitArgument(a1, '상대 유형은 다 멍청해서 틀렸어요'), 'rejected');
 
     const arg = await service.submitArgument(a1, '첫 번째 논거입니다. 왜냐하면 이유가 있기 때문입니다.');
     expect(arg.side).toBe('a');
@@ -114,31 +95,37 @@ describe('하루 경기 흐름', () => {
     expect(counts[arg1.id]).toBe(0);
   });
 
-  it('작성 시간에는 투표할 수 없다', async () => {
-    await expectError(service.vote(spectators[0], 'a'), 'wrong_phase');
+  it('작성 시간에는 판정할 수 없다', async () => {
+    const [any] = await store.listArguments(matchId);
+    await expectError(service.vote(spectators[0], any.id), 'wrong_phase');
   });
 
-  it('투표 시간: 대표 논거가 정해지고, 관전자만 한 번 투표한다', async () => {
+  it('판정 시간: 관전자만 대표 논거 하나를 한 번 고른다', async () => {
     clock = kst('2026-11-02T19:00:00');
     await expectError(service.submitArgument(a1, '시간이 지난 뒤에 쓰는 논거'), 'wrong_phase');
     const args = await store.listArguments(matchId);
-    await expectError(service.recommend(a2, args.find((x) => x.side === 'a' && x.authorId === a1.id)!.id, true), 'wrong_phase');
-    await expectError(service.vote(a1, 'a'), 'not_voter');
-    await expectError(service.vote(stranger, 'a'), 'mbti_required');
-    await expectError(service.vote(spectators[0], 'c'), 'bad_request');
-    // 같은 유형 3명은 B, 다른 두 유형은 A: 유형별로 세면 A가 앞선다
-    await service.vote(spectators[0], 'b');
-    await service.vote(spectators[1], 'b');
-    await service.vote(spectators[2], 'b');
-    await service.vote(spectators[3], 'a');
-    await service.vote(spectators[4], 'a');
-    await expectError(service.vote(spectators[0], 'a'), 'already_voted');
+    const argA1 = args.find((x) => x.authorId === a1.id)!;
+    const argA3 = args.find((x) => x.authorId === a3.id)!;
+    const argB = args.find((x) => x.side === 'b')!;
+    await expectError(service.recommend(a2, argA1.id, true), 'wrong_phase');
+    await expectError(service.vote(a1, argB.id), 'not_voter');
+    await expectError(service.vote(stranger, argB.id), 'mbti_required');
+    await expectError(service.vote(spectators[0], 7), 'bad_request');
+
+    // 같은 유형 3명은 B 논거, 다른 두 유형은 A의 세 번째 논거: 유형별로 세면 A가 앞선다
+    await service.vote(spectators[0], argB.id);
+    await service.vote(spectators[1], argB.id);
+    await service.vote(spectators[2], argB.id);
+    await service.vote(spectators[3], argA3.id);
+    await service.vote(spectators[4], argA3.id);
+    await expectError(service.vote(spectators[0], argA3.id), 'already_voted');
 
     const view = await service.view(await service.getMatch(matchId), spectators[0]);
     expect(view.phase).toBe('voting');
-    expect(view.me).toMatchObject({ canVote: true, vote: 'b', side: null });
+    expect(view.me).toMatchObject({ canVote: true, side: null, vote: { side: 'b', argumentId: argB.id } });
     expect(view.arguments.filter((x) => x.representative)).toHaveLength(4); // A 3개 + B 1개
     expect(view.arguments[0].representative).toBe(true);
+    expect(view.arguments.every((x) => x.picks === null)).toBe(true); // 발표 전에는 표 수를 숨긴다
     expect(view.result).toBeNull();
 
     const mine = await service.view(await service.getMatch(matchId), a1);
@@ -146,34 +133,34 @@ describe('하루 경기 흐름', () => {
     expect(mine.arguments.filter((x) => x.mine)).toHaveLength(1);
   });
 
-  it('채점이 실패하면 풀어 두고, 다음에 다시 채점한다', async () => {
-    clock = kst('2026-11-02T21:05:00');
-    ai.failJudge = true;
-    expect(await service.judgeDue()).toHaveLength(0);
-    expect((await service.getMatch(matchId)).status).toBe('open');
-    ai.failJudge = false;
+  it('대표 논거가 아닌 논거는 고를 수 없다', async () => {
+    const extra = await user(MBTI_TYPES.find((t) => t !== teamAType && t !== teamBType)!);
+    // 이 경기는 논거가 모두 대표 논거라 없는 id로 확인한다
+    await expectError(service.vote(extra, randomUUID()), 'not_representative');
   });
 
-  it('채점: AI 7 + 투표 3, 결정타는 승리 팀 논거', async () => {
-    const [done] = await service.judgeDue();
-    expect(done.id).toBe(matchId);
-    const r = done.result!;
-    expect(r.aiTotal).toEqual({ a: 25 + 20 + 15 + 10 + 12, b: 10 + 15 + 5 + 3 + 10 }); // A 논리성 30은 25로 잘림
-    expect(r.vote.a).toBeGreaterThan(50);
+  it('발표: 유형별 판정으로 승패, 가장 많이 뽑힌 승리 팀 논거가 결정타', async () => {
+    clock = kst('2026-11-02T21:05:00');
+    // 동시에 집계해도 한 번만
+    const [x, y] = await Promise.all([service.finalizeDue(), service.finalizeDue()]);
+    const done = [...x, ...y];
+    expect(done).toHaveLength(1);
+    const r = done[0].result!;
     expect(r.voters).toBe(5);
+    expect(r.vote.a).toBeGreaterThan(50);
     expect(r.winner).toBe('a');
-    expect(r.decisive?.side).toBe('a');
-    // AI가 엉뚱한 id를 주면 추천 1위 논거로 대신한다
-    expect(r.decisive?.argumentId).toBe(r.representative.a[0]);
+    const argA3 = (await store.listArguments(matchId)).find((x) => x.authorId === a3.id)!;
+    expect(r.decisive).toMatchObject({ argumentId: argA3.id, side: 'a', picks: 2 });
     expect(r.representative.a).toHaveLength(3);
-    expect(ai.lastJudge!.a.arguments).toHaveLength(3);
-    // 이미 채점한 경기는 다시 채점하지 않는다
-    expect(await service.judgeDue()).toHaveLength(0);
+    expect(Object.keys(r.byType)).toHaveLength(3);
+    expect(r.summary).toContain('3개, 5명');
+    expect(await service.finalizeDue()).toHaveLength(0);
 
     const view = await service.view(await service.getMatch(matchId), null);
     expect(view.phase).toBe('done');
     expect(view.me.loggedIn).toBe(false);
     expect(view.result?.winner).toBe('a');
+    expect(view.arguments.find((a) => a.id === argA3.id)?.picks).toBe(2);
   });
 
   it('다음 날에는 새 경기, 다른 대진과 주제', async () => {
@@ -186,6 +173,13 @@ describe('하루 경기 흐름', () => {
     expect(`${next.teamA.id}-${next.teamB.id}`).not.toBe(`${before.teamA.id}-${before.teamB.id}`);
     const view = await service.view(next, null);
     expect(view.recent.map((x) => x.id)).toContain(matchId);
+  });
+
+  it('아무도 판정하지 않으면 무승부', async () => {
+    clock = kst('2026-11-03T21:01:00');
+    const m = await service.withResult(await service.currentMatch());
+    expect(m.status).toBe('done');
+    expect(m.result).toMatchObject({ winner: 'draw', voters: 0, decisive: null });
   });
 
   it('MBTI는 바꾼 뒤 7일 동안 다시 바꿀 수 없다', async () => {
