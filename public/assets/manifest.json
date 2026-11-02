@@ -2,87 +2,6 @@
   "char.base": {
     "file": "characters/char_base_ph.glb"
   },
-  "char.intj.prop": {
-    "file": "characters/char_nt_prop_ph.glb"
-  },
-  "char.intp.prop": {
-    "file": "characters/char_nt_prop_ph.glb"
-  },
-  "char.entj.prop": {
-    "file": "characters/char_nt_prop_ph.glb"
-  },
-  "char.entp.prop": {
-    "file": "characters/char_nt_prop_ph.glb"
-  },
-  "char.infj.prop": {
-    "file": "characters/char_nf_prop_ph.glb"
-  },
-  "char.infp.prop": {
-    "file": "characters/char_nf_prop_ph.glb"
-  },
-  "char.enfj.prop": {
-    "file": "characters/char_nf_prop_ph.glb"
-  },
-  "char.enfp.prop": {
-    "file": "characters/char_nf_prop_ph.glb"
-  },
-  "char.istj.prop": {
-    "file": "characters/char_sj_prop_ph.glb"
-  },
-  "char.isfj.prop": {
-    "file": "characters/char_sj_prop_ph.glb"
-  },
-  "char.estj.prop": {
-    "file": "characters/char_sj_prop_ph.glb"
-  },
-  "char.esfj.prop": {
-    "file": "characters/char_sj_prop_ph.glb"
-  },
-  "char.istp.prop": {
-    "file": "characters/char_sp_prop_ph.glb"
-  },
-  "char.isfp.prop": {
-    "file": "characters/char_sp_prop_ph.glb"
-  },
-  "char.estp.prop": {
-    "file": "characters/char_sp_prop_ph.glb"
-  },
-  "char.esfp.prop": {
-    "file": "characters/char_sp_prop_ph.glb"
-  },
-  "prop.plaza.fountain": {
-    "file": "props/prop_plaza_fountain_ph.glb"
-  },
-  "prop.plaza.bench": {
-    "file": "props/prop_plaza_bench_ph.glb"
-  },
-  "prop.plaza.board": {
-    "file": "props/prop_plaza_board_ph.glb"
-  },
-  "prop.plaza.flag": {
-    "file": "props/prop_plaza_flag_ph.glb"
-  },
-  "prop.plaza.tree": {
-    "file": "props/prop_plaza_tree_ph.glb"
-  },
-  "prop.plaza.lamp": {
-    "file": "props/prop_plaza_lamp_ph.glb"
-  },
-  "ui.icon.cheer": {
-    "file": "ui/ui_icon_cheer_ph.svg"
-  },
-  "ui.icon.clap": {
-    "file": "ui/ui_icon_clap_ph.svg"
-  },
-  "ui.icon.heart": {
-    "file": "ui/ui_icon_heart_ph.svg"
-  },
-  "ui.icon.question": {
-    "file": "ui/ui_icon_question_ph.svg"
-  },
-  "ui.icon.wow": {
-    "file": "ui/ui_icon_wow_ph.svg"
-  },
   "ui.icon.exit": {
     "file": "ui/ui_icon_exit_ph.svg"
   },
@@ -96,28 +15,240 @@
       1350
     ]
   },
-  "prop.village.house": {
-    "file": "props/prop_village_house_ph.glb"
-  },
-  "prop.village.flag": {
-    "file": "props/prop_village_flag_ph.glb"
-  },
-  "prop.village.sign": {
-    "file": "props/prop_village_sign_ph.glb"
-  },
-  "tile.town": {
-    "file": "tiles/tile_town_ph.png",
-    "tile": [
-      32,
-      32
-    ],
-    "columns": 4,
-    "count": 9
-  },
   "ui.icon.map": {
     "file": "ui/ui_icon_map_ph.svg"
   },
-  "map.town": {
-    "file": "maps/town.json"
+  "char.acc.glasses": {
+    "file": "characters/char_acc_glasses_ph.glb"
+  },
+  "char.acc.flower": {
+    "file": "characters/char_acc_flower_ph.glb"
+  },
+  "char.acc.cap": {
+    "file": "characters/char_acc_cap_ph.glb"
+  },
+  "char.acc.headphones": {
+    "file": "characters/char_acc_headphones_ph.glb"
+  },
+  "char.guide.monnyang": {
+    "file": "characters/char_guide_monnyang_ph.svg"
+  },
+  "char.guide.gureum": {
+    "file": "characters/char_guide_gureum_ph.svg"
+  },
+  "furn.turntable": {
+    "file": "furniture/furn_turntable_ph.glb"
+  },
+  "furn.desk": {
+    "file": "furniture/furn_desk_ph.glb"
+  },
+  "furn.mailbox": {
+    "file": "furniture/furn_mailbox_ph.glb"
+  },
+  "furn.wardrobe": {
+    "file": "furniture/furn_wardrobe_ph.glb"
+  },
+  "furn.bookshelf": {
+    "file": "furniture/furn_bookshelf_ph.glb"
+  },
+  "furn.sofa": {
+    "file": "furniture/furn_sofa_ph.glb"
+  },
+  "furn.bed": {
+    "file": "furniture/furn_bed_ph.glb"
+  },
+  "furn.chair": {
+    "file": "furniture/furn_chair_ph.glb"
+  },
+  "furn.table": {
+    "file": "furniture/furn_table_ph.glb"
+  },
+  "furn.plant": {
+    "file": "furniture/furn_plant_ph.glb"
+  },
+  "furn.lamp": {
+    "file": "furniture/furn_lamp_ph.glb"
+  },
+  "furn.rug": {
+    "file": "furniture/furn_rug_ph.glb"
+  },
+  "furn.window": {
+    "file": "furniture/furn_window_ph.glb"
+  },
+  "furn.frame": {
+    "file": "furniture/furn_frame_ph.glb"
+  },
+  "furn.clock": {
+    "file": "furniture/furn_clock_ph.glb"
+  },
+  "furn.shelf": {
+    "file": "furniture/furn_shelf_ph.glb"
+  },
+  "room.view.wood": {
+    "file": "room/room_view_wood_ph.png",
+    "size": [
+      512,
+      512
+    ]
+  },
+  "room.view.fire": {
+    "file": "room/room_view_fire_ph.png",
+    "size": [
+      512,
+      512
+    ]
+  },
+  "room.view.earth": {
+    "file": "room/room_view_earth_ph.png",
+    "size": [
+      512,
+      512
+    ]
+  },
+  "room.view.metal": {
+    "file": "room/room_view_metal_ph.png",
+    "size": [
+      512,
+      512
+    ]
+  },
+  "room.view.water": {
+    "file": "room/room_view_water_ph.png",
+    "size": [
+      512,
+      512
+    ]
+  },
+  "ui.icon.home": {
+    "file": "ui/ui_icon_home_ph.svg"
+  },
+  "ui.icon.archive": {
+    "file": "ui/ui_icon_archive_ph.svg"
+  },
+  "ui.icon.my": {
+    "file": "ui/ui_icon_my_ph.svg"
+  },
+  "ui.icon.play": {
+    "file": "ui/ui_icon_play_ph.svg"
+  },
+  "ui.icon.pause": {
+    "file": "ui/ui_icon_pause_ph.svg"
+  },
+  "ui.icon.edit": {
+    "file": "ui/ui_icon_edit_ph.svg"
+  },
+  "ui.icon.rotate": {
+    "file": "ui/ui_icon_rotate_ph.svg"
+  },
+  "ui.icon.trash": {
+    "file": "ui/ui_icon_trash_ph.svg"
+  },
+  "ui.icon.plus": {
+    "file": "ui/ui_icon_plus_ph.svg"
+  },
+  "ui.icon.close": {
+    "file": "ui/ui_icon_close_ph.svg"
+  },
+  "ui.icon.check": {
+    "file": "ui/ui_icon_check_ph.svg"
+  },
+  "ui.icon.mail": {
+    "file": "ui/ui_icon_mail_ph.svg"
+  },
+  "ui.icon.photo": {
+    "file": "ui/ui_icon_photo_ph.svg"
+  },
+  "ui.icon.lock": {
+    "file": "ui/ui_icon_lock_ph.svg"
+  },
+  "ui.icon.friends": {
+    "file": "ui/ui_icon_friends_ph.svg"
+  },
+  "ui.icon.globe": {
+    "file": "ui/ui_icon_globe_ph.svg"
+  },
+  "ui.icon.music": {
+    "file": "ui/ui_icon_music_ph.svg"
+  },
+  "ui.icon.back": {
+    "file": "ui/ui_icon_back_ph.svg"
+  },
+  "ui.icon.share": {
+    "file": "ui/ui_icon_share_ph.svg"
+  },
+  "ui.icon.flag": {
+    "file": "ui/ui_icon_flag_ph.svg"
+  },
+  "ui.icon.block": {
+    "file": "ui/ui_icon_block_ph.svg"
+  },
+  "ui.icon.sparkle": {
+    "file": "ui/ui_icon_sparkle_ph.svg"
+  },
+  "ui.icon.debate": {
+    "file": "ui/ui_icon_debate_ph.svg"
+  },
+  "ui.emotion.calm": {
+    "file": "ui/ui_emotion_calm_ph.svg"
+  },
+  "ui.emotion.joy": {
+    "file": "ui/ui_emotion_joy_ph.svg"
+  },
+  "ui.emotion.flutter": {
+    "file": "ui/ui_emotion_flutter_ph.svg"
+  },
+  "ui.emotion.tired": {
+    "file": "ui/ui_emotion_tired_ph.svg"
+  },
+  "ui.emotion.sad": {
+    "file": "ui/ui_emotion_sad_ph.svg"
+  },
+  "ui.emotion.complex": {
+    "file": "ui/ui_emotion_complex_ph.svg"
+  },
+  "ui.emotion.angry": {
+    "file": "ui/ui_emotion_angry_ph.svg"
+  },
+  "bgm.forest": {
+    "file": "audio/bgm_forest_ph.ogg",
+    "alt": "audio/bgm_forest_ph.mp3",
+    "title": "숲길 산책",
+    "mood": "산뜻한 어쿠스틱",
+    "seconds": 31.3
+  },
+  "bgm.sunset": {
+    "file": "audio/bgm_sunset_ph.ogg",
+    "alt": "audio/bgm_sunset_ph.mp3",
+    "title": "노을 지는 옥상",
+    "mood": "따뜻한 시티팝",
+    "seconds": 28.8
+  },
+  "bgm.hill": {
+    "file": "audio/bgm_hill_ph.ogg",
+    "alt": "audio/bgm_hill_ph.mp3",
+    "title": "언덕 위 작은 카페",
+    "mood": "느긋한 재즈",
+    "seconds": 34.3
+  },
+  "bgm.silver": {
+    "file": "audio/bgm_silver_ph.ogg",
+    "alt": "audio/bgm_silver_ph.mp3",
+    "title": "은빛 오후",
+    "mood": "미니멀 일렉트로닉",
+    "seconds": 26.2
+  },
+  "bgm.lake": {
+    "file": "audio/bgm_lake_ph.ogg",
+    "alt": "audio/bgm_lake_ph.mp3",
+    "title": "달빛 호수",
+    "mood": "몽환적인 앰비언트",
+    "seconds": 28.2
+  },
+  "bgm.rain": {
+    "file": "audio/bgm_rain_ph.ogg",
+    "alt": "audio/bgm_rain_ph.mp3",
+    "title": "비 오는 창가",
+    "mood": "빗소리와 피아노",
+    "seconds": 26.7
   }
 }

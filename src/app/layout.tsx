@@ -5,8 +5,8 @@ import { tokens, tokensToCssVars } from '@/design/tokens';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'MBTI 마을',
-  description: 'MBTI 16개 유형이 모여 사는 3D 마을. 광장에서 만나고, 토론 이벤트로 마을 땅을 넓힌다.',
+  title: 'SCENE',
+  description: '나의 취향과 일상을 하나의 공간에 담는 미니홈피. 방을 꾸미고, 음악과 기록을 남기고, 친구 방에 놀러 가요.',
 };
 
 export const viewport: Viewport = {

@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'r
 import { debateConfig } from '@/config/game';
 import { MBTI_GROUPS, MBTI_TYPES, groupOf, isMbtiType, mbtiColor, type MbtiType } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
-import { loadMbti, saveMbti } from '@/lib/session';
 import type { Phase, Side } from '@/shared/debate';
 import { ApiError, api, type DebateView, type MeResponse } from './api';
 import { ResultSection } from './ResultSection';
@@ -143,7 +142,7 @@ function TopBar({ me }: { me: MeResponse | null }) {
   }
   return (
     <header className="topbar">
-      <Link className="topbar__back" href="/plaza">‹ 마을</Link>
+      <Link className="topbar__back" href="/explore">‹ 중앙광장</Link>
       <span className="topbar__title">오늘의 토론</span>
       {me?.loggedIn ? (
         <button className="topbar__me" onClick={logout} disabled={busy} title="로그아웃">
@@ -398,7 +397,6 @@ function MbtiSetup({ onChanged }: { onChanged: () => void }) {
   const [picked, setPicked] = useState<MbtiType | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => setPicked(loadMbti()), []);
 
   async function save() {
     if (!picked) return;
@@ -406,7 +404,6 @@ function MbtiSetup({ onChanged }: { onChanged: () => void }) {
     setError(null);
     try {
       await api('/api/me', { mbti: picked });
-      saveMbti(picked);
       onChanged();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '저장하지 못했어요.');

@@ -3,10 +3,8 @@
 import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
 import { useState } from 'react';
-import { MBTI_GROUPS } from '@/design/mbti';
-import { tokens } from '@/design/tokens';
 import { OAUTH_PROVIDERS, supabaseAnonKey, supabaseUrl, type AuthMode } from '@/lib/authConfig';
-import { loadMbti } from '@/lib/session';
+import { Wordmark } from '../app/Wordmark';
 import { ApiError, api } from './api';
 
 export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; devLogin: boolean; next: string; failed: boolean }) {
@@ -42,9 +40,6 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
     setError(null);
     try {
       await api('/api/auth/dev-login', {});
-      // 입장할 때 고른 유형이 있으면 바로 정한다
-      const mbti = loadMbti();
-      if (mbti) await api('/api/me', { mbti }).catch(() => {});
       window.location.href = next;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : '로그인하지 못했어요.');
@@ -54,17 +49,10 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
 
   return (
     <main className="entry">
-      <div className="wordmark">
-        <span className="wordmark__dots" aria-hidden>
-          {MBTI_GROUPS.map((g) => (
-            <span key={g.id} style={{ background: tokens.color[g.colorToken] }} />
-          ))}
-        </span>
-        MBTI 마을
-      </div>
+      <Wordmark />
       <header>
         <h1 className="entry__title">로그인</h1>
-        <p className="entry__lead">로그인하면 내 MBTI로 오늘의 토론에 참여할 수 있어요. 출전 팀이면 논거를 쓰고, 관전자면 승패를 판정해요.</p>
+        <p className="entry__lead">로그인하면 나만의 방이 생겨요. 방을 꾸미고, 음악과 기록을 남기고, 친구 방에 놀러 가요.</p>
       </header>
 
       {mode === 'supabase' ? (
@@ -96,7 +84,7 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
         <p className="notice">로그인이 아직 설정되지 않았어요.</p>
       )}
       {error && <p className="form-error" role="alert">{error}</p>}
-      <Link className="back-link" href="/debate">‹ 오늘의 토론 구경하기</Link>
+      <Link className="back-link" href="/explore">‹ 마을 먼저 구경하기</Link>
     </main>
   );
 }

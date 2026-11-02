@@ -23,7 +23,7 @@ await server.start();
 // 테스트용 소켓 서버는 여러 연결의 메시지가 섞일 수 있어 연결 하나만 쓴다 (Supabase는 해당 없음).
 // 같은 프로세스가 DB 서버를 돌리므로 테스트는 기다리는 동안 이벤트 루프를 막지 않게 따로 띄운다
 const code = await new Promise<number>((resolve) => {
-  const child = spawn('npx', ['vitest', 'run', 'src/server/debate/service.test.ts'], {
+  const child = spawn('npx', ['vitest', 'run', '--no-file-parallelism', 'src/server/debate/service.test.ts', 'src/server/scene/service.test.ts'], {
     cwd: root,
     stdio: 'inherit',
     env: { ...process.env, TEST_DATABASE_URL: `postgres://postgres:postgres@127.0.0.1:${PORT}/postgres`, DATABASE_POOL_MAX: '1' },

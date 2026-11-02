@@ -70,7 +70,7 @@ export async function drawResultCard(view: DebateView, siteAddress: string): Pro
 
   ctx.fillStyle = tokens.color.accent;
   ctx.font = font(700, 34);
-  ctx.fillText(`MBTI 마을 · 오늘의 토론 · ${m.key.slice(5, 10).replace('-', '/')}`, cx, py + 90);
+  ctx.fillText(`SCENE · 오늘의 토론 · ${m.key.slice(5, 10).replace('-', '/')}`, cx, py + 90);
 
   // 대진: 두 팀 이름을 각자 색으로
   ctx.font = font(800, 64);

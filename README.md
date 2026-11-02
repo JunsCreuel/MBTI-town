@@ -1,72 +1,79 @@
-# MBTI 마을
+# SCENE (PROJECT SCENE, 임시 이름)
 
-MBTI 16개 유형이 모여 사는 웹 3D 마을. 유형마다 마을이 있고, 가운데 광장에서 서로 만난다.
-매일 열리는 토론 이벤트에서 이기면 진 팀 땅을 가져와 우리 마을이 넓어진다 (땅따먹기).
-개발 기준은 [PROJECT_GUIDE.md](PROJECT_GUIDE.md)를 따른다.
+나의 취향과 일상을 하나의 공간에 담는 미니홈피. 3D 아이소메트릭 방을 꾸미고, 음악과 기록을 남기고, 친구 방에 놀러 간다.
+게시물이 아니라 공간이 프로필이다. 개발 기준은 [PROJECT_GUIDE.md](PROJECT_GUIDE.md)를 따른다.
 
-## 지금 되는 것
+> 이전 버전(MBTI 마을: 3D 섬, 실시간 광장, 땅따먹기)은 `archive/v0-mbti-town` 브랜치에 있다.
 
-- 입장: MBTI 직접 고르기 또는 12문항 간단 설문 → 내 유형 마을에서 시작
-- 3D 마을: 가운데 광장 + 둘레 16개 유형 마을(집·깃발·표지판은 유형 색) + 모래사장과 바다
-- 여러 명 동시 접속, 탭(클릭) 이동과 방향키 이동, 길찾기
-- 전체 지도: 위에서 내려다보며 유형별 땅 크기를 보고, 마을이나 광장을 눌러 바로 이동
-- 땅따먹기: 토론에서 이긴 팀이 진 팀 땅을 가져온다 (`src/shared/territory.ts`, `/api/town`)
-- 몸짓: 응원·박수 동작, 하트·궁금·놀람 이모티콘 (자유 채팅 없음)
-- 채널: 방(채널)당 정원이 차면 다음 채널이 자동으로 열린다
-- 임시 에셋: 코드로 만든 3D 캐릭터·소품 (`_ph`). 실제 GLB로 파일만 바꾸면 된다
-- 오늘의 토론 (이벤트): 매일 대진·주제 자동 결정 → 출전 팀 논거 작성(금지어 검사)·팀 내 추천 → 관전 판정(관전 유형이 대표 논거 하나를 골라 승패 결정) → 결과 발표와 결과 카드(1080×1350 PNG 저장·공유)
-- 로그인: Supabase Auth (카카오·구글·이메일 링크). 설정이 없으면 로컬에서 개발용 로그인
+## 지금 되는 것 (1차 출시 범위)
+
+- **첫 가입 7단계**: 세계 입장 → 취향(색·분위기·음악, MBTI·생년월일은 선택) → 거주지 추천(오행 다섯 지역) → 캐릭터 → 첫 집 → 첫 BGM → 이름·프로필 문구
+- **나의 방 (HOME)**: 3D 아이소메트릭 미니룸. 바닥을 누르면 캐릭터가 걷고, 기능 소품을 누르면 열린다
+  - 턴테이블 = BGM, 책상 = 기록, 우편함 = 방명록, 옷장 = 캐릭터, 액자 = 사진, 창문 = 거주 지역 풍경과 시간대
+  - 꾸미기: 소품 16종 추가·이동·돌리기·빼기, 벽지 8종·바닥 5종, 대표 BGM
+- **BGM**: 권리 걱정 없는 오리지널 임시 곡 6곡. 자동 재생하지 않는다
+- **기록 (ARCHIVE)**: 감정(7가지)·일상(글+사진)·메모. 기본 나만 보기, 기록마다 공개 범위. 사진첩
+- **마을 (EXPLORE)**: 다섯 지역 + 중앙광장 지도, 지역별 공개 방, 새로 온 주민, 친구 방, 오늘의 토론 이벤트
+- **소셜**: 친구 신청·수락, 방 링크 공유(`/r/주소`), 방명록(공개·친구만), 방문 기록(끌 수 있음), 신고·차단
+- **MY**: 프로필·주소, 이사, MBTI·생년월일, 방 공개 범위(전체·친구만·나만), 발견 끄기, 친구·차단 관리, 기록 내보내기(JSON)·전체 삭제
+- **오늘의 토론**: 중앙광장 이벤트. MBTI 유형끼리 논거를 쓰고, 다른 유형이 관전 판정한다 (MBTI를 넣은 사람만 참여)
+- **로그인**: Supabase Auth (카카오·구글·이메일 링크). 설정이 없으면 로컬에서 개발용 로그인
+
+공개 범위와 차단은 서버(`src/server/scene/service.ts`)가 검사한다. 화면에서 숨기는 것만으로 끝내지 않는다.
 
 ## 키 없이 바로 해 보기
 
-Supabase 없이도 로컬에서 전체 흐름이 돌아간다. DB는 PGlite(파일에 저장되는 Postgres, `~/.mbti-town/pglite`), 로그인은 개발용을 쓴다. AI API는 쓰지 않는다.
-하루를 기다리지 않고 단계를 넘기려면 개발용 시계를 앞으로 돌린다.
+Supabase 없이도 로컬에서 전체 흐름이 돌아간다. DB는 PGlite(파일에 저장되는 Postgres, `~/.mbti-town/pglite`), 로그인은 개발용을 쓴다.
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+http://localhost:3000 에서 **시작하기 → 개발용으로 로그인** 으로 들어간다. 다른 사람 방을 보려면 다른 브라우저(또는 시크릿 창)로 한 번 더 가입한다.
+
+오늘의 토론 하루 흐름을 기다리지 않고 보려면 개발용 시계를 앞으로 돌린다.
 
 ```bash
 curl -X POST localhost:3000/api/dev/clock -H 'content-type: application/json' -d '{"addMinutes": 600}'
 ```
 
-```bash
-curl -X POST localhost:3000/api/dev/clock -H 'content-type: application/json' -d '{"reset": true}'
-```
-
 ## 배포
 
-웹 화면은 Vercel, 마을 실시간 서버는 Render, DB와 로그인은 Supabase에 둔다.
-순서와 설정값은 [docs/DEPLOY.md](docs/DEPLOY.md)를 따른다. 설정 파일: `render.yaml`, `vercel.json`, `.env.example`.
+웹 화면과 API는 Vercel, DB와 로그인은 Supabase에 둔다. 순서와 설정값은 [docs/DEPLOY.md](docs/DEPLOY.md)를 따른다. 설정 파일: `vercel.json`, `.env.example`.
 
-## 실행
-
-```bash
-npm install
-cp .env.example .env.local
-npm run dev        # 웹 http://localhost:3000 + 실시간 서버 ws://localhost:2567
-```
+## 명령
 
 | 명령 | 하는 일 |
 |---|---|
-| `npm run dev` | 웹과 실시간 서버를 함께 띄운다 (시작할 때 `.next/dev` 를 비운다: 운영 빌드 뒤 남은 개발 캐시 때문에 화면이 계속 새로고침되는 문제를 막는다) |
-| `npm test` | 단위 테스트 + 실시간 서버 통합 테스트 + 토론 하루 흐름 테스트 (PGlite) |
-| `npm run test:postgres` | 토론 하루 흐름 테스트를 운영과 같은 DB 드라이버(postgres.js)로 |
-| `npm run typecheck` | 웹·서버 타입 검사 |
-| `npm run assets:ph` | 임시 에셋(GLB 등)을 다시 만든다 (`-- --map`이면 마을 맵도 새로 만든다) |
+| `npm run dev` | 웹을 띄운다 (시작할 때 `.next/dev` 를 비운다: 운영 빌드 뒤 남은 개발 캐시로 화면이 계속 새로고침되는 문제를 막는다) |
+| `npm test` | 방 배치·지역 추천·기록 규칙, 미니홈피 서버 규칙(공개 범위·친구·방명록·차단·사진 권한), 토론 하루 흐름 (PGlite) |
+| `npm run test:postgres` | 서버 규칙 테스트를 운영과 같은 DB 드라이버(postgres.js)로 |
+| `npm run typecheck` | 타입 검사 |
+| `npm run assets:ph` | 임시 에셋(가구 GLB, 창밖 풍경, 아이콘, 안내 캐릭터, BGM)을 다시 만든다. BGM 인코딩에 ffmpeg가 필요하다 (`-- --no-audio` 면 BGM은 건너뛴다) |
 | `npm run assets:check` | 에셋 규칙·용량·남은 `_ph` 목록 검사 |
 | `npm run build` | 에셋 검사 후 웹 빌드 |
-| `npm run start:server` | 실시간 서버만 실행 (배포용) |
 
 ## 구조
 
 ```
-src/app/                 Next.js 화면 (입장, 마을, 토론)
-src/components/plaza/    3D 마을과 전체 지도 (React Three Fiber)
-src/components/debate/   오늘의 토론 화면, 결과 카드, 로그인
-src/app/api/             토론·로그인 API (규칙 검사 후 DB 쓰기)
-src/server/              서버 전용: DB 연결, 토론 저장소·규칙(service)
-supabase/migrations/     DB 스키마 (Supabase와 로컬 PGlite가 같은 SQL을 쓴다)
-src/shared/              웹과 서버가 함께 쓰는 규칙 (맵, 길찾기, 이동 검사, 메시지 규약, 캐릭터 규약, 토론 규칙, 땅따먹기, 금지어, 주제 목록)
-src/config/game.ts       운영 중 바꿀 값 (방 정원, 전송 빈도, 땅 가져오는 비율 등)
-src/design/              디자인 토큰, MBTI 유형 정보
-server/                  실시간 서버 (Colyseus)
-scripts/                 임시 에셋·마을 맵 생성, 에셋 검사
-public/assets/           에셋 (manifest.json 키로만 불러온다)
+src/app/                    화면 (첫 화면, 온보딩, home, explore, archive, my, r/[handle], debate)과 API
+src/components/room/        3D 미니룸 (React Three Fiber): 장면, 캐릭터, 꾸미기, 방명록
+src/components/onboarding/  첫 가입 7단계
+src/components/home/        나의 방 화면과 꾸미기 HUD
+src/components/explore/     마을 지도
+src/components/archive/     기록·사진첩
+src/components/my/          설정
+src/components/debate/      오늘의 토론 (중앙광장 이벤트), 결과 카드, 로그인
+src/server/scene/           미니홈피 저장소와 규칙 (공개 범위·차단 검사)
+src/server/debate/          토론 저장소와 규칙
+src/shared/                 화면과 서버가 함께 쓰는 규칙 (방 배치, 지역 추천, 기록, 캐릭터, BGM 목록, 토론, 금지어)
+src/config/game.ts          운영 중 바꿀 값 (방 크기, 소품 수, 글자 수, 토론 시간표)
+src/design/                 디자인 토큰, MBTI 유형 정보
+supabase/migrations/        DB 스키마 (Supabase와 로컬 PGlite가 같은 SQL을 쓴다)
+scripts/                    임시 에셋 생성(가구 모델, 풍경, BGM), 에셋 검사
+public/assets/              에셋 (manifest.json 키로만 불러온다)
 ```

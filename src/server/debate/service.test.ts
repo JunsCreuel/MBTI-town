@@ -3,7 +3,6 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MBTI_TYPES, type MbtiType } from '@/design/mbti';
 import { createPgliteSql, createPostgresSql, type Sql } from '../db';
-import { takeRate } from '@/shared/territory';
 import { DebateError, DebateService, type Viewer } from './service';
 import { DebateStore } from './store';
 
@@ -161,17 +160,6 @@ describe('하루 경기 흐름', () => {
     expect(r.summary).toContain('3개, 5명');
     expect(await service.finalizeDue()).toHaveLength(0);
 
-    // 땅따먹기: 이긴 A팀이 진 B팀 땅을 득표율 차만큼 가져온다
-    const winType = done[0].teamA.members[0];
-    const loseType = done[0].teamB.members[0];
-    expect(r.land?.rate).toBeCloseTo(takeRate(Math.abs(r.vote.a - r.vote.b)));
-    expect(r.land?.delta[winType]).toBeGreaterThan(0);
-    expect(r.land?.delta[loseType]).toBeLessThan(0);
-    const town = await service.town();
-    expect(town.shares[winType]).toBeGreaterThan(1 / 16);
-    expect(town.shares[loseType]).toBeLessThan(1 / 16);
-    expect(Object.values(town.shares).reduce((a, b) => a + b, 0)).toBeCloseTo(1);
-    expect(town.last).toMatchObject({ matchId, winner: { members: [winType] }, loser: { members: [loseType] } });
 
     const view = await service.view(await service.getMatch(matchId), null);
     expect(view.phase).toBe('done');
@@ -196,10 +184,7 @@ describe('하루 경기 흐름', () => {
     clock = kst('2026-11-03T21:01:00');
     const m = await service.withResult(await service.currentMatch());
     expect(m.status).toBe('done');
-    expect(m.result).toMatchObject({ winner: 'draw', voters: 0, decisive: null, land: null });
-    // 무승부는 땅이 그대로다
-    const town = await service.town();
-    expect(town.last?.matchId).toBe(matchId);
+    expect(m.result).toMatchObject({ winner: 'draw', voters: 0, decisive: null });
   });
 
   it('MBTI는 바꾼 뒤 7일 동안 다시 바꿀 수 없다', async () => {

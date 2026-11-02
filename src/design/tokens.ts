@@ -1,15 +1,22 @@
 // 색, 폰트, 간격, 둥글기 토큰. 코드에서는 색 값을 직접 쓰지 않고 이 파일만 참조한다.
-// 값은 가안이다 (PROJECT_GUIDE.md 13장).
+// 방향: Nostalgic × Dreamy × Minimal. 파스텔 민트와 하늘색 (PROJECT_GUIDE.md 14, 19장). 값은 가안이다.
 export const tokens = {
   color: {
-    bg: '#FFF9F2',
+    bg: '#F2FAF8',
+    bgAlt: '#EAF5FC',
     surface: '#FFFFFF',
-    text: '#2B2B33',
-    textSub: '#6B6B76',
-    border: '#ECE4DA',
-    accent: '#5B6CFF',
+    text: '#283240',
+    textSub: '#667085',
+    border: '#DCEBE8',
+    /** 강조(민트). 흰 글자를 올리는 버튼 배경 */
+    accent: '#2E9E86',
+    /** 강조색 글자 (밝은 바탕 위) */
+    accentInk: '#1F7F6B',
+    accentSoft: '#DDF3EE',
     accentText: '#FFFFFF',
-    // 기질 그룹 색: 마을 구역과 팀 표시에 쓴다
+    sky: '#6FB3E3',
+    skySoft: '#E3F1FB',
+    // 기질 그룹 색: 오늘의 토론 팀 표시에 쓴다
     groupNT: '#7A6CF0', // 분석가
     groupNF: '#3FBF8A', // 외교관
     groupSJ: '#3E8EDE', // 관리자
@@ -17,44 +24,104 @@ export const tokens = {
     win: '#2FB36B',
     lose: '#9A9AA5',
     danger: '#E5484D',
-    shadow: 'rgb(43 43 51 / 0.1)',
-    scrim: 'rgb(43 43 51 / 0.72)',
+    shadow: 'rgb(40 50 64 / 0.1)',
+    scrim: 'rgb(40 50 64 / 0.72)',
   },
-  // 3D 마을 장면 색
+  /** 다섯 거주 지역 색 */
+  district: {
+    wood: '#6DBB7E',
+    fire: '#F08A6C',
+    earth: '#D9B57C',
+    metal: '#9EABBD',
+    water: '#6F9BDB',
+  },
+  /** 감정 아이콘 색 (감정에 따라 점수나 보상을 다르게 주지 않는다) */
+  emotion: {
+    calm: '#6CC3AE',
+    joy: '#EDB53C',
+    flutter: '#F08DAE',
+    tired: '#9C97C4',
+    sad: '#6F9EDB',
+    complex: '#A98ED0',
+    angry: '#EA8467',
+  },
+  /** 취향 고르기의 색 견본 */
+  taste: {
+    mint: '#A7E0CF',
+    green: '#8CCB8F',
+    coral: '#F59C8C',
+    peach: '#FFC9B3',
+    cream: '#FBF1E2',
+    butter: '#FFE6A1',
+    silver: '#C9D0D9',
+    white: '#FFFFFF',
+    sky: '#B4DBF6',
+    lavender: '#D9CBF3',
+  },
+  /** 캐릭터 색 */
+  avatar: {
+    mint: '#9EDCCB',
+    sky: '#A9D3F2',
+    peach: '#FFC4A8',
+    butter: '#FFE08F',
+    lilac: '#D2C3F0',
+    coral: '#F7A08F',
+    sage: '#B6CFA3',
+    navy: '#7287B8',
+  },
+  /** 3D 방 색 */
+  room: {
+    wall: {
+      mint: '#D9F1EA',
+      sky: '#DDEEFA',
+      cream: '#FBF1E2',
+      peach: '#FDE4D8',
+      lilac: '#ECE5F8',
+      'mint-stripe': '#D9F1EA',
+      'sky-dot': '#DDEEFA',
+      night: '#34406A',
+    },
+    /** 줄무늬·물방울 무늬 색 */
+    wallPattern: {
+      'mint-stripe': '#C4E8DD',
+      'sky-dot': '#C4E0F5',
+      night: '#F6EDC4',
+    },
+    floor: {
+      oak: '#E8CBA3',
+      walnut: '#B07E57',
+      tile: '#F3F5F8',
+      'mint-tile': '#CDEBE2',
+      carpet: '#CBE2F4',
+    },
+    /** 바닥 판자 사이 줄, 타일 줄눈 */
+    floorLine: 'rgb(60 40 20 / 0.12)',
+    /** 벽 윗면과 걸레받이 */
+    trim: '#FFFFFF',
+    /** 방 밖 배경 */
+    backdropTop: '#EAF5FC',
+    backdropBottom: '#F2FAF8',
+    sun: '#FFF3DE',
+    hemiSky: '#EEF7FF',
+    hemiGround: '#F2E4CF',
+    /** 저녁·밤에 창밖 풍경과 빛에 곱하는 색 */
+    evening: '#FFD9C2',
+    night: '#8E99C9',
+    /** BGM이 나올 때 턴테이블 위 음표 */
+    note: '#2E9E86',
+    /** 고른 소품·놓을 자리 표시 */
+    select: '#2E9E86',
+    invalid: '#E5484D',
+  },
+  /** 결과 카드 배경과 기본 하늘 */
   scene: {
-    skyTop: '#5DB6F2',
-    skyHorizon: '#D6EEFF',
-    fog: '#D9EFFF',
+    skyTop: '#8FCBF2',
+    skyHorizon: '#E3F3FC',
     cloud: '#FFFFFF',
-    sun: '#FFF1D8',
-    hemiSky: '#DDF0FF',
-    hemiGround: '#D8D2A6',
-    grass: '#8FD06E',
-    grassDark: '#7BC15C',
-    grassTuft: '#A6DD82',
-    path: '#E6CFA6',
-    pathPebble: '#CDB894',
-    stone: '#F1E6D6',
-    stoneGrout: '#D3C3AD',
-    stoneSide: '#CDBBA2',
-    soil: '#9C7457',
-    planter: '#C79466',
-    hedge: '#5FAE5A',
-    leaf: '#6FBF62',
-    water: '#8ED2F2',
-    sea: '#79C9EE',
-    sand: '#F2E2B4',
-    sandSide: '#DCC690',
-    /** 전체 지도의 마을 경계선 */
-    mapBorder: '#FFFFFF',
-    flowerPink: '#FF9FC0',
-    flowerYellow: '#FFDA6B',
-    flowerWhite: '#FFFFFF',
-    flowerLilac: '#C9B4FF',
-    shadow: '#2B2B33',
+    grass: '#9ED6A3',
+    grassDark: '#86C98E',
     tagBg: '#FFFFFF',
-    tagText: '#2B2B33',
-    heart: '#FF6F96',
+    tagText: '#283240',
   },
   font: {
     base: "'Pretendard Variable', 'Pretendard', system-ui, sans-serif",
@@ -69,6 +136,8 @@ export type ColorToken = keyof typeof tokens.color;
 export function tokensToCssVars(): Record<string, string> {
   const vars: Record<string, string> = {};
   for (const [k, v] of Object.entries(tokens.color)) vars[`--color-${k}`] = v;
+  for (const [k, v] of Object.entries(tokens.district)) vars[`--district-${k}`] = v;
+  for (const [k, v] of Object.entries(tokens.emotion)) vars[`--emotion-${k}`] = v;
   vars['--font-base'] = tokens.font.base;
   for (const [k, v] of Object.entries(tokens.radius)) vars[`--radius-${k}`] = `${v}px`;
   tokens.space.forEach((v, i) => (vars[`--space-${i}`] = `${v}px`));

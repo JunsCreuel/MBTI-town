@@ -1,4 +1,4 @@
-// 에셋 규칙 검사 (PROJECT_GUIDE.md 11, 12, 15, 16, 17장). `npm run build` 전에 실행된다.
+// 에셋 규칙 검사 (PROJECT_GUIDE.md 16~22장). `npm run build` 전에 실행된다.
 // 실패: manifest 파일 누락, 명명 규칙 위반, LICENSES.md 기록 누락, 첫 화면 용량 초과
 // 경고: 남아 있는 _ph 임시 에셋 목록, manifest에 없는 파일
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
@@ -6,14 +6,14 @@ import { join, relative } from 'node:path';
 
 const ROOT = join(import.meta.dirname, '..', 'public', 'assets');
 const PLAZA_BUDGET_BYTES = 3 * 1024 * 1024;
-// 마을 첫 화면에서 불러오는 키 접두사
-const PLAZA_PREFIXES = ['char.', 'map.town', 'prop.plaza.', 'prop.village.', 'ui.'];
+// 나의 방 첫 화면에서 불러오는 키 접두사 (BGM은 누를 때 받으므로 뺀다)
+const PLAZA_PREFIXES = ['char.', 'furn.', 'room.', 'ui.'];
 // 규칙 검사에서 빼는 파일 (폰트 묶음은 외부 배포본의 파일명을 그대로 쓴다)
 const EXEMPT_DIRS = ['fonts/'];
 const META_FILES = ['manifest.json', 'LICENSES.md'];
 const NAME_RULE = /^[a-z]+(_[a-z0-9]+)*\.[a-z0-9]+$/;
 
-type Entry = { file: string };
+type Entry = { file: string; alt?: string };
 
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -29,8 +29,10 @@ const warnings: string[] = [];
 
 const referenced = new Set<string>();
 for (const [key, entry] of Object.entries(manifest)) {
-  referenced.add(entry.file);
-  if (!existsSync(join(ROOT, entry.file))) errors.push(`manifest 키 ${key}의 파일이 없습니다: ${entry.file}`);
+  for (const f of [entry.file, entry.alt].filter((x): x is string => !!x)) {
+    referenced.add(f);
+    if (!existsSync(join(ROOT, f))) errors.push(`manifest 키 ${key}의 파일이 없습니다: ${f}`);
+  }
 }
 
 const files = walk(ROOT).filter((f) => !f.endsWith('.gitkeep'));
@@ -53,9 +55,9 @@ const plazaFiles = new Set(
 let plazaBytes = 0;
 for (const f of plazaFiles) plazaBytes += statSync(join(ROOT, f)).size;
 const mb = (n: number) => (n / 1024 / 1024).toFixed(2);
-if (plazaBytes > PLAZA_BUDGET_BYTES) errors.push(`마을 첫 화면 에셋 ${mb(plazaBytes)}MB가 기준 3MB를 넘습니다.`);
+if (plazaBytes > PLAZA_BUDGET_BYTES) errors.push(`나의 방 첫 화면 에셋 ${mb(plazaBytes)}MB가 기준 3MB를 넘습니다.`);
 
-console.log(`마을 첫 화면 에셋: ${mb(plazaBytes)}MB / 3MB (폰트는 쓰는 글자 범위만 따로 내려받음)`);
+console.log(`나의 방 첫 화면 에셋: ${mb(plazaBytes)}MB / 3MB (폰트는 쓰는 글자 범위만 따로 내려받음)`);
 if (placeholders.length) {
   console.log(`\n아직 임시(_ph) 에셋 ${placeholders.length}개가 남아 있습니다. 배포 전에 실제 에셋으로 바꾸세요:`);
   for (const f of placeholders) console.log(`  - ${f}`);

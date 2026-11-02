@@ -1,73 +1,54 @@
 // 운영 중 바꿀 수 있어야 하는 값은 코드에 박지 않고 여기에 둔다 (PROJECT_GUIDE.md 3부 2번).
 
-export const plazaConfig = {
-  /** Colyseus 방 이름 */
-  roomName: 'plaza',
-  /** 방(채널)당 정원. 서버에서는 PLAZA_ROOM_CAPACITY 환경변수가 있으면 그 값을 쓴다. */
-  roomCapacity: 100,
-  /** 클라이언트가 위치를 보내는 최대 빈도 (초당). 가이드 기준 10회 이하. */
-  moveSendHz: 10,
-  /** 서버가 상태를 내려보내는 주기 (ms) */
-  patchRateMs: 100,
-  /** 걷는 속도 (타일/초) */
-  walkSpeed: 3.5,
-  /** 서버 속도 검사 여유 배수. 네트워크 지연으로 몰려 도착하는 경우를 감안한다. */
-  speedTolerance: 1.6,
-  /** 클라이언트 한 명이 1초에 보낼 수 있는 메시지 수. 넘으면 연결을 끊는다. */
-  maxMessagesPerSecond: 30,
-  /** 응원·박수 동작 길이 (ms) */
-  actionDurationMs: 1600,
-  /** 동작·이모티콘 재사용 대기 (ms) */
-  emoteCooldownMs: 1200,
-  /** 머리 위 이모티콘 표시 시간 (ms) */
-  emoteDurationMs: 1800,
-  /** 한 화면에 그리는 다른 사람 수 상한 (가까운 순). 저가폰 성능을 위한 값이다. */
-  maxVisiblePlayers: 40,
+// 나의 방 (PROJECT_GUIDE.md 6장)
+export const roomConfig = {
+  /** 바닥 칸 수 (가로 x, 세로 z). 방 크기 확장은 2차 */
+  width: 6,
+  depth: 6,
+  /** 벽 높이 (칸) */
+  wallHeight: 3,
+  /** 방 하나에 둘 수 있는 소품 수 */
+  maxItems: 60,
+  /** 캐릭터 걷는 속도 (칸/초) */
+  walkSpeed: 2.2,
+  /** 카메라: 위에서 내려다보는 각도와 방향 (도). 아이소메트릭 느낌으로 비스듬히 본다. */
+  pitchDeg: 33,
+  yawDeg: 45,
+  /** 방 전체가 화면에 들어오게 맞출 때의 여백 배율 */
+  framePadding: 1.12,
 } as const;
 
-// 마을 전체 구조: 가운데 광장 + 둘레에 16개 유형 마을. 땅 배치는 Tiled 맵(map.town)에 있다.
-export const townConfig = {
-  /** 마을 사이 순간 이동 재사용 대기 (ms) */
-  warpCooldownMs: 1500,
-  /** 지분이 같아도 마을 한가운데 이 반지름(칸) 안은 늘 그 마을 땅이다 */
-  coreRadius: 4.5,
-  /** 걸어 다닐 때 땅 주인 색을 잔디에 섞는 정도 (0~1). 전체 지도에서는 진하게 칠한다. */
-  groundTint: 0.12,
-  /** 땅 지분을 다시 받아 오는 주기 (ms). 결과 발표 뒤 곧 반영된다. */
-  refreshMs: 5 * 60 * 1000,
+// 기록과 사진 (8장)
+export const recordConfig = {
+  /** 기록 글자 수 상한 */
+  bodyMax: 2000,
+  /** 감정 기록 한 줄 상한 */
+  lineMax: 120,
+  /** 사진: 화면에서 긴 변을 이 크기로 줄여 올린다 (px) */
+  photoMaxSide: 1600,
+  /** 사진 파일 크기 상한 (바이트) */
+  photoMaxBytes: 800 * 1024,
+  /** 한 번에 불러오는 기록 수 */
+  pageSize: 30,
 } as const;
 
-// 땅따먹기 규칙 (PROJECT_GUIDE.md 7장). 처음에는 16개 유형이 땅을 똑같이 나눠 갖는다.
-export const landConfig = {
-  /** 이긴 팀이 진 팀 땅에서 가져오는 기본 비율 */
-  takeBase: 0.05,
-  /** 판정 득표율 차 1%p마다 더 가져오는 비율 */
-  takePerPoint: 0.005,
-  /** 한 경기에서 가져오는 비율 상한 */
-  takeMax: 0.3,
-  /** 한 유형 땅은 전체의 이 비율보다 작아지지 않는다 */
-  minShare: 0.015,
-} as const;
-
-export const cameraConfig = {
-  /** 내려다보는 각도 (도). 가까이 당기면 낮아져 하늘이 보이고, 멀리 빼면 높아진다. */
-  pitchNearDeg: 16,
-  pitchFarDeg: 46,
-  /** 화각이 넓으면 화면 가장자리 물체가 기울어 보여서 좁게 둔다 */
-  fov: 30,
-  distance: 15,
-  /** 세로 화면(휴대폰)은 좌우가 좁아서 조금 더 멀리서 본다 */
-  portraitDistance: 19,
-  minDistance: 8,
-  maxDistance: 26,
-  /** 전체 지도: 위에서 내려다보는 각도 (도, 90이면 바로 위) */
-  mapPitchDeg: 72,
+// 소셜 (9장)
+export const socialConfig = {
+  displayNameMax: 20,
+  bioMax: 80,
+  guestbookMax: 300,
+  /** 마을 지도에서 지역마다 보여 줄 방 수 */
+  exploreLimit: 24,
+  /** 방명록을 한 번에 보여 줄 수 */
+  guestbookPageSize: 30,
+  /** 방문 기록을 보여 줄 기간 (일) */
+  visitDays: 30,
 } as const;
 
 /** 대진 방식. 초기 인원이 적으면 축 대전이나 기질 그룹 대전으로 바꾼다. */
 export type MatchupMode = 'type' | 'axis' | 'temperament';
 
-// 토론 매치 규칙 (PROJECT_GUIDE.md 7장). 시간과 숫자는 모두 가안이다.
+// 오늘의 토론: 중앙광장 이벤트 (PROJECT_GUIDE.md 10장). 시간과 숫자는 모두 가안이다.
 export const debateConfig = {
   /** 하루 경기 시간표 (한국 시간). 칸 하나가 한 경기다. 하루 1~2경기. */
   slots: [{ opensAt: '00:00', writingEndsAt: '18:00', votingEndsAt: '21:00' }],

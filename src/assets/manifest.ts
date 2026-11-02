@@ -1,4 +1,4 @@
-// 코드는 파일 경로를 직접 쓰지 않고 manifest 키만 쓴다 (PROJECT_GUIDE.md 12장).
+// 코드는 파일 경로를 직접 쓰지 않고 manifest 키만 쓴다 (PROJECT_GUIDE.md 18장).
 import manifestJson from '../../public/assets/manifest.json';
 
 export interface AssetEntry {
@@ -13,6 +13,11 @@ export interface AssetEntry {
   count?: number;
   /** 소품 이미지 크기 [가로, 세로] px */
   size?: [number, number];
+  /** 다른 형식 파일 (BGM: OGG를 못 트는 브라우저용 MP3) */
+  alt?: string;
+  title?: string;
+  mood?: string;
+  seconds?: number;
 }
 
 const manifest = manifestJson as unknown as Record<string, AssetEntry>;
@@ -25,4 +30,10 @@ export function asset(key: string): AssetEntry {
 
 export function assetUrl(key: string): string {
   return `/assets/${asset(key).file}`;
+}
+
+/** 다른 형식 파일 주소 (없으면 null) */
+export function assetAltUrl(key: string): string | null {
+  const alt = asset(key).alt;
+  return alt ? `/assets/${alt}` : null;
 }
