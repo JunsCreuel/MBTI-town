@@ -122,6 +122,16 @@ function teamBlock(tag: 'A' | 'B', t: JudgeTeamInput): string {
   return `## 팀 ${tag}: ${t.label}\n입장: ${t.stance}\n${args}`;
 }
 
+/**
+ * 안전 분류기가 거절하면 서버에서 다른 모델로 다시 돌리는 옵션.
+ * Haiku에는 서버 쪽 대체 모델이 없어서 붙이지 않는다 (붙이면 400 또는 효과 없음).
+ */
+function fallbackParams(model: string) {
+  return model.startsWith('claude-haiku')
+    ? {}
+    : { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const };
+}
+
 export class ClaudeDebateAi implements DebateAi {
   readonly name: string;
   private readonly client = new Anthropic();
@@ -137,8 +147,7 @@ export class ClaudeDebateAi implements DebateAi {
     const response = await this.client.beta.messages.parse({
       model: this.moderationModel,
       max_tokens: 4000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
+      ...fallbackParams(this.moderationModel),
       thinking: { type: 'adaptive' },
       output_config: { effort: 'low', format: betaZodOutputFormat(ModerationSchema) },
       system: MODERATION_SYSTEM,
@@ -149,7 +158,7 @@ export class ClaudeDebateAi implements DebateAi {
         },
       ],
     });
-    // 안전 분류기가 거절했다면 등록하지 않는 쪽으로 처리한다
+    // 안전 분류기가 거절했다면 등록하지 않는 쪽으로 처리한다 (Haiku는 대체 모델이 없어 여기서 끝난다)
     if (response.stop_reason === 'refusal') {
       return { allowed: false, reason: '부적절한 내용으로 판단되어 등록할 수 없어요.' };
     }
@@ -161,8 +170,7 @@ export class ClaudeDebateAi implements DebateAi {
     const response = await this.client.beta.messages.parse({
       model: this.judgeModel,
       max_tokens: 16000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
+      ...fallbackParams(this.judgeModel),
       thinking: { type: 'adaptive' },
       output_config: { effort: 'high', format: betaZodOutputFormat(JudgmentSchema) },
       system: judgeSystem(),

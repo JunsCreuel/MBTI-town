@@ -69,7 +69,7 @@ export const debateConfig = {
   mbtiChangeCooldownDays: 7,
   /** 채점이 이 시간(분) 넘게 끝나지 않으면 멈춘 것으로 보고 다시 채점한다 */
   judgingStaleMinutes: 10,
-  /** AI 모델. 필터는 논거마다 호출되므로 비용을 줄이려면 더 가벼운 모델로 바꿀 수 있다. */
+  /** AI 모델. 채점은 하루 한 번이라 가장 좋은 모델, 필터는 논거마다 호출되므로 가벼운 모델. */
   judgeModel: 'claude-opus-5-5',
-  moderationModel: 'claude-opus-5-5',
+  moderationModel: 'claude-haiku-5-5',
 } as const;
