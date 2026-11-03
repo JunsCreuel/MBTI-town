@@ -20,6 +20,7 @@ import { normalDistance, saveCamera } from './camera';
 import { pointerState } from './pointer';
 import { now } from './session';
 import { Terrain } from './Terrain';
+import { BeaconSigns } from './BeaconSigns';
 
 const S = tokens.scene;
 /** 저가폰을 고려해 휴대폰에서는 그림자 해상도를 낮춘다 */
@@ -831,6 +832,7 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <AdaptiveResolution />
         <FruitDrops />
         <ClubFx />
+        <BeaconSigns />
         <FirstFrame
           onFrame={() => {
             if (!firstFrame.current) {

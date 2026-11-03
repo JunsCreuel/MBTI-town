@@ -43,10 +43,10 @@ export type { FishResult, PickResult, PlayState };
 export const CLUB_FLOOR_RADIUS = 4.4;
 
 /** 비콘: 본섬 광장에서는 놀이터로 가는 곳, 놀이터에서는 광장으로 돌아가는 곳 */
-export function beaconsOf(map: TownMap): { kind: Spot; x: number; z: number }[] {
+export function beaconsOf(map: TownMap): { kind: Spot; x: number; z: number; yaw: number }[] {
   return map.props.flatMap((p) => {
     const kind = parseSpot(p.key.replace('prop.plaza.beacon_', ''));
-    return p.key.startsWith('prop.plaza.beacon_') && kind ? [{ kind, x: p.x, z: p.z }] : [];
+    return p.key.startsWith('prop.plaza.beacon_') && kind ? [{ kind, x: p.x, z: p.z, yaw: p.yaw }] : [];
   });
 }
 

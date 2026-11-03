@@ -184,6 +184,15 @@ export const tokens = {
     clubTileOff: '#1A1824',
     clubNeon: ['#FF5FA2', '#7C6BFF', '#3CC8FF', '#5BE38C', '#FFD24A'],
     clubBall: '#E4E2F2',
+    /** 비콘 간판: 나무 간판(낚시터·광장)과 네온 간판(클럽) */
+    signWood: '#B98556',
+    signWoodDark: '#7E5236',
+    signFace: '#FFF4DF',
+    signInk: '#2F7FB8',
+    signSub: '#8A7A66',
+    signDark: '#1C1726',
+    signNeonSub: '#B9A8FF',
+    signExit: '#5BE38C',
   },
   font: {
     base: "'Pretendard Variable', 'Pretendard', system-ui, sans-serif",
