@@ -98,6 +98,8 @@ export const tokens = {
     floorLine: 'rgb(60 40 20 / 0.12)',
     /** 벽 윗면과 걸레받이 */
     trim: '#FFFFFF',
+    /** 집 안에서 벽 너머(방 밖)의 어둠. 방이 무대처럼 떠 보이게 따뜻한 어두운 색 */
+    outside: '#2B2731',
     /** 방 밖 배경 */
     backdropTop: '#EAF5FC',
     backdropBottom: '#F2FAF8',
@@ -186,6 +188,7 @@ export function tokensToCssVars(): Record<string, string> {
   for (const [k, v] of Object.entries(tokens.color)) vars[`--color-${k}`] = v;
   for (const [k, v] of Object.entries(tokens.district)) vars[`--district-${k}`] = v;
   for (const [k, v] of Object.entries(tokens.emotion)) vars[`--emotion-${k}`] = v;
+  vars['--room-outside'] = tokens.room.outside;
   vars['--font-base'] = tokens.font.base;
   for (const [k, v] of Object.entries(tokens.radius)) vars[`--radius-${k}`] = `${v}px`;
   tokens.space.forEach((v, i) => (vars[`--space-${i}`] = `${v}px`));

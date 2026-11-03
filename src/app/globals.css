@@ -1792,9 +1792,9 @@ a:focus-visible {
   position: fixed;
   inset: 0;
   overflow: hidden;
+  /* 집 안: 벽 너머(방 밖)는 어둡게, 방 가운데에 지역 색이 아주 조금 비친다 */
   background:
-    radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--district, var(--color-accent)) 18%, transparent) 0, transparent 60%),
-    linear-gradient(var(--color-bgAlt), var(--color-bg));
+    radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--district, var(--color-accent)) 16%, var(--room-outside)) 0, var(--room-outside) 65%);
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -1803,6 +1803,37 @@ a:focus-visible {
 .room-page__stage {
   position: absolute;
   inset: 0;
+}
+
+/* 방에 들어가는 중: 마을에서 문을 열고 들어오는 동안 어둡게 덮었다가 서서히 걷힌다 */
+.room-enter {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--space-3);
+  background: var(--room-outside);
+  color: var(--color-accentText);
+  transition: opacity 0.6s ease 0.15s, visibility 0s linear 0.75s;
+}
+.room-enter--done {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.room-enter .loader {
+  border-color: color-mix(in srgb, var(--color-accentText) 25%, transparent);
+  border-top-color: var(--color-accentText);
+}
+.room-enter__text {
+  font-size: 16px;
+  font-weight: 700;
+}
+.room-enter__sub {
+  font-size: 13px;
+  opacity: 0.7;
 }
 
 .room-top {

@@ -202,7 +202,7 @@ export function OnboardingClient() {
           <Guide>첫 방이에요! 자세한 배치는 나의 방에서 마음껏 바꿀 수 있어요.</Guide>
           <div className="room-preview">
             {assets ? (
-              <RoomScene assets={assets} layout={layout} district={chosenDistrict} avatar={avatar} mode="view" />
+              <RoomScene assets={assets} layout={layout} district={chosenDistrict} avatar={avatar} mode="view" framing="overview" />
             ) : (
               <div className="loader" aria-hidden />
             )}

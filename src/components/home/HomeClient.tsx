@@ -27,6 +27,7 @@ import { useMe } from '../app/useMe';
 import { loadRoomAssets, type RoomAssets } from '../room/assets';
 import { Guestbook } from '../room/Guestbook';
 
+import { useHudInsets } from '../room/useHudInsets';
 const RoomScene = dynamic(() => import('../room/RoomScene'), { ssr: false });
 const AvatarPreview = dynamic(() => import('../room/AvatarPreview'), { ssr: false });
 
@@ -195,6 +196,9 @@ export function HomeClient() {
     }
   }
 
+  // HUD 사이에 방이 오게 (모드가 바뀌거나 HUD가 처음 그려지면 다시 잰다)
+  const insets = useHudInsets(`${mode}:${!!(me && profile && shown)}`, mode === 'edit' ? { top: 70, bottom: 190 } : { top: 104, bottom: 250 });
+
   if (!me || !profile || !shown) {
     return (
       <main className="room-page">
@@ -224,23 +228,23 @@ export function HomeClient() {
             onAction={onAction}
             playing={playing}
             photoUrl={photoUrl}
-            insetTop={mode === 'edit' ? 70 : 104}
-            insetBottom={mode === 'edit' ? 190 : 250}
+            insetTop={insets.top}
+            insetBottom={insets.bottom}
             onReady={() => setReady(true)}
           />
         )}
       </div>
 
-      {!ready && (
-        <div className="overlay overlay--soft">
-          <div className="loader" aria-hidden />
-          <p className="overlay__sub">나의 방을 여는 중 {Math.round(progress * 100)}%</p>
-        </div>
-      )}
+      {/* 마을에서 문을 열고 들어오는 동안. 장면이 그려지면 서서히 걷힌다 */}
+      <div className={`room-enter${ready ? ' room-enter--done' : ''}`} aria-hidden={ready}>
+        <div className="loader" aria-hidden />
+        <p className="room-enter__text">방에 들어가는 중…</p>
+        {!assets && <p className="room-enter__sub">{Math.round(progress * 100)}%</p>}
+      </div>
 
       {mode === 'view' && (
         <>
-          <header className="room-top">
+          <header className="room-top" data-hud="top">
             <div className="owner-card">
               <span className="owner-card__dot" style={{ background: tokens.avatar[profile.avatar.color] }} aria-hidden />
               <div className="owner-card__text">
@@ -277,11 +281,11 @@ export function HomeClient() {
 
           {welcome && (
             <div className="room-welcome">
-              <Guide>나의 방이 생겼어요! 바닥을 누르면 걸어 다니고, 턴테이블을 누르면 음악이 나와요. 연필 버튼으로 꾸며 보세요.</Guide>
+              <Guide>나의 방이 생겼어요! 바닥을 누르면 걸어 다니고, 두 손가락(휠)으로 다가가 볼 수 있어요. 턴테이블을 누르면 음악이 나와요. 연필 버튼으로 꾸며 보세요.</Guide>
             </div>
           )}
 
-          <div className="room-bottom">
+          <div className="room-bottom" data-hud="bottom">
             <BgmPlayer ref={player} trackKey={bgm} onPlayingChange={setPlaying} />
             <div className="quick-actions">
               <button className="quick" onClick={() => router.push('/archive?new=1')}>
@@ -308,14 +312,14 @@ export function HomeClient() {
 
       {mode === 'edit' && draft && (
         <>
-          <header className="edit-top">
+          <header className="edit-top" data-hud="top">
             <button className="btn-ghost" onClick={cancelEdit}>취소</button>
             <strong>방 꾸미기</strong>
             <button className="btn-primary btn-primary--inline" onClick={saveEdit} disabled={saving}>
               {saving ? '저장 중…' : '저장'}
             </button>
           </header>
-          <div className="edit-panel">
+          <div className="edit-panel" data-hud="bottom">
             {selectedItem && selectedDef ? (
               <div className="edit-selected">
                 <span className="edit-selected__name">{selectedDef.name}</span>

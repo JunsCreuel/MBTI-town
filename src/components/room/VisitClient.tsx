@@ -19,6 +19,7 @@ import { TabBar } from '../app/TabBar';
 import { loadRoomAssets, type RoomAssets } from './assets';
 import { Guestbook } from './Guestbook';
 
+import { useHudInsets } from './useHudInsets';
 const RoomScene = dynamic(() => import('./RoomScene'), { ssr: false });
 
 const VISIBILITY_NOTE = { friends: '이 방은 친구에게만 열려 있어요.', private: '이 방은 지금 주인만 볼 수 있어요.', public: '' };
@@ -91,6 +92,9 @@ export function VisitClient({ handle }: { handle: string }) {
     setToast('신고했어요. 확인 후 조치할게요.');
   }
 
+  // HUD 사이에 방이 오게 (HUD가 처음 그려지면 다시 잰다)
+  const insets = useHudInsets(!!view, { top: 104, bottom: 250 });
+
   if (missing) {
     return (
       <main className="page page--center">
@@ -125,14 +129,17 @@ export function VisitClient({ handle }: { handle: string }) {
             onAction={onAction}
             playing={playing}
             photoUrl={(id) => `/api/photos/${id}`}
-            insetTop={104}
-            insetBottom={250}
+            insetTop={insets.top}
+            insetBottom={insets.bottom}
             onReady={() => setReady(true)}
           />
         )}
       </div>
-      {view.room && !ready && (
-        <div className="overlay overlay--soft"><div className="loader" aria-hidden /></div>
+      {view.room && (
+        <div className={`room-enter${ready ? ' room-enter--done' : ''}`} aria-hidden={ready}>
+          <div className="loader" aria-hidden />
+          <p className="room-enter__text">{owner.displayName}의 방에 들어가는 중…</p>
+        </div>
       )}
       {!view.room && (
         <div className="room-locked">
@@ -140,7 +147,7 @@ export function VisitClient({ handle }: { handle: string }) {
         </div>
       )}
 
-      <header className="room-top">
+      <header className="room-top" data-hud="top">
         <div className="owner-card">
           <span className="owner-card__dot" style={{ background: tokens.avatar[owner.avatar.color] }} aria-hidden />
           <div className="owner-card__text">
@@ -172,7 +179,7 @@ export function VisitClient({ handle }: { handle: string }) {
         </div>
       </header>
 
-      <div className="room-bottom">
+      <div className="room-bottom" data-hud="bottom">
         {view.room && <BgmPlayer ref={player} trackKey={view.room.bgm} onPlayingChange={setPlaying} />}
         <div className="quick-actions">
           <button className="quick" onClick={() => setSheet('guestbook')} disabled={!view.room}>

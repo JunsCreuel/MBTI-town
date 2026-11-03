@@ -1,8 +1,9 @@
 'use client';
 
-// 나의 방 3D 장면 (PROJECT_GUIDE.md 6장). 정사영 카메라로 비스듬히 내려다보는 아이소메트릭 방.
-// 보기: 바닥을 누르면 캐릭터가 걸어가고, 기능 소품을 누르면 onAction.
-// 꾸미기: 소품을 눌러 고르고, 끌어서 칸에 맞춰 옮긴다 (놓을 수 있는 자리로만).
+// 나의 방 3D 장면 (PROJECT_GUIDE.md 6장). 마을의 내 집 문으로 들어온 집 안.
+// 보기: 원근 카메라가 방 앞쪽 위에서 캐릭터를 따라가며 비스듬히 내려다본다 (앞 벽은 없고, 벽 너머는 어둡다).
+//       바닥을 누르면 캐릭터가 걸어가고, 기능 소품을 누르면 onAction.
+// 꾸미기: 방 전체가 보이게 더 높이서 본다. 소품을 눌러 고르고, 끌어서 칸에 맞춰 옮긴다 (놓을 수 있는 자리로만).
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -28,6 +29,8 @@ const WALL_T = 0.14;
 const deg = THREE.MathUtils.degToRad;
 
 export type RoomMode = 'view' | 'edit';
+/** inside: 캐릭터를 따라 방 안을 본다 / overview: 방 전체를 본다 (꾸미기, 가입 미리보기) */
+export type RoomFraming = 'inside' | 'overview';
 type TimeOfDay = 'day' | 'evening' | 'night';
 
 export interface RoomSceneProps {
@@ -36,6 +39,8 @@ export interface RoomSceneProps {
   district: District;
   avatar: Avatar;
   mode: RoomMode;
+  /** 기본: 보기는 inside, 꾸미기는 overview */
+  framing?: RoomFraming;
   selectedId?: string | null;
   onSelect?: (id: string | null) => void;
   /** 꾸미기에서 소품을 옮겼을 때 (놓을 수 있는 자리일 때만 부른다) */
@@ -59,43 +64,150 @@ function timeOfDay(): TimeOfDay {
 
 // ───────────────────────── 카메라 ─────────────────────────
 
-/** 방 상자 전체가 HUD 사이에 들어오게 맞춘다 */
-function CameraRig({ insetTop = 0, insetBottom = 0 }: { insetTop?: number; insetBottom?: number }) {
-  const { camera, size } = useThree();
-  useEffect(() => {
-    const cam = camera as THREE.OrthographicCamera;
-    const yaw = deg(roomConfig.yawDeg);
-    const pitch = deg(roomConfig.pitchDeg);
-    const center = new THREE.Vector3(W / 2, H * 0.36, D / 2);
-    const dir = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
-    cam.position.copy(center).addScaledVector(dir, 40);
-    cam.up.set(0, 1, 0);
-    cam.lookAt(center);
-    cam.updateMatrixWorld();
-    const inv = cam.matrixWorldInverse;
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minY = Infinity;
-    let maxY = -Infinity;
+const UP = new THREE.Vector3(0, 1, 0);
+const clamp = THREE.MathUtils.clamp;
+
+/**
+ * 화면 크기와 HUD에 맞춘 카메라 자리: 내려다보는 각도와, 방 상자 전체가 HUD 사이에 들어오는 거리.
+ * 화면 중심은 HUD 사이 가운데로 옮겨 둔다 (setViewOffset).
+ */
+function frameFor(framing: RoomFraming, width: number, height: number, availH: number) {
+  const tanV = Math.tan(deg(roomConfig.fovDeg) / 2);
+  const tanH = tanV * (width / height);
+  // HUD 사이에서 위아래로 보이는 범위
+  const tanAvail = tanV * (availH / height);
+  const portrait = width < availH;
+  const pitch = deg(framing === 'overview' ? roomConfig.overviewPitchDeg : portrait ? roomConfig.portraitPitchDeg : roomConfig.pitchDeg);
+  const center = new THREE.Vector3(W / 2, H * 0.3, D / 2);
+  const probe = new THREE.PerspectiveCamera();
+  const corner = new THREE.Vector3();
+  const pad = roomConfig.framePadding;
+  let dist = 4;
+  for (; dist < 80; dist += 0.1) {
+    probe.position.set(center.x, center.y + Math.sin(pitch) * dist, center.z + Math.cos(pitch) * dist);
+    probe.lookAt(center);
+    probe.updateMatrixWorld();
+    let ok = true;
     for (const x of [0, W]) for (const y of [0, H]) for (const z of [0, D]) {
-      const p = new THREE.Vector3(x, y, z).applyMatrix4(inv);
-      minX = Math.min(minX, p.x);
-      maxX = Math.max(maxX, p.x);
-      minY = Math.min(minY, p.y);
-      maxY = Math.max(maxY, p.y);
+      corner.set(x, y, z).applyMatrix4(probe.matrixWorldInverse);
+      const depth = -corner.z;
+      if (depth <= 0 || Math.abs(corner.x) * pad > tanH * depth || Math.abs(corner.y) * pad > tanAvail * depth) ok = false;
     }
-    const availH = Math.max(120, size.height - insetTop - insetBottom);
-    const zoom = Math.min(size.width / ((maxX - minX) * roomConfig.framePadding), availH / ((maxY - minY) * roomConfig.framePadding));
-    // 상자 가운데가 HUD 사이 가운데에 오게 옮긴다. 아래 HUD가 더 크면 방을 위로 올려야 하므로 카메라를 내린다.
-    const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
-    const up = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 1);
-    const shiftY = (insetBottom - insetTop) / 2 / zoom;
-    cam.position.addScaledVector(right, (minX + maxX) / 2).addScaledVector(up, (minY + maxY) / 2 - shiftY);
-    cam.zoom = zoom;
+    if (ok) break;
+  }
+  return { pitch, dist, center, tanH, tanAvail };
+}
+
+/**
+ * 처음에는 방 전체가 HUD 사이에 들어오게 본다. 보기에서는 휠·두 손가락으로 다가갈 수 있고,
+ * 다가가면 캐릭터(focus)를 따라가되 벽 밖이 너무 보이지 않게 붙잡아 둔다.
+ * 들어설 때는 조금 멀고 높은 곳에서 방 안으로 다가온다 (방에 들어서는 느낌).
+ */
+function CameraRig({
+  framing, insetTop = 0, insetBottom = 0, focus,
+}: {
+  framing: RoomFraming;
+  insetTop?: number;
+  insetBottom?: number;
+  focus: React.RefObject<Point>;
+}) {
+  const { camera, size, gl } = useThree();
+  const cam = camera as THREE.PerspectiveCamera;
+  const availH = Math.max(160, size.height - insetTop - insetBottom);
+  const frame = useMemo(() => frameFor(framing, size.width, size.height, availH), [framing, size.width, size.height, availH]);
+  // 움직임 줄이기를 켠 사람에게는 다가오는 연출을 하지 않는다
+  const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const now = useRef({ look: new THREE.Vector3(W / 2, 0.6, D / 2), goal: new THREE.Vector3(), dist: 0, pitch: 0, enter: reduced ? 1 : 0 });
+  /** 다가간 정도 (1 = 방 전체, minZoom = 가장 가까이) */
+  const zoom = useRef(1);
+
+  // 화면 중심을 HUD 사이 가운데로 (아래 HUD가 크면 방을 위로 올린다)
+  useEffect(() => {
+    cam.fov = roomConfig.fovDeg;
     cam.near = 0.1;
     cam.far = 200;
+    cam.setViewOffset(size.width, size.height, 0, (insetBottom - insetTop) / 2, size.width, size.height);
     cam.updateProjectionMatrix();
-  }, [camera, size, insetTop, insetBottom]);
+    return () => {
+      cam.clearViewOffset();
+    };
+  }, [cam, size.width, size.height, insetTop, insetBottom]);
+
+  // 휠·두 손가락으로 다가가기 (꾸미기와 미리보기에서는 방 전체를 본다)
+  useEffect(() => {
+    if (framing !== 'inside') {
+      zoom.current = 1;
+      return;
+    }
+    const el = gl.domElement;
+    const clampZoom = (z: number) => clamp(z, roomConfig.minZoom, 1);
+    const pointers = new Map<number, { x: number; y: number }>();
+    let pinch = 0;
+    let zoomStart = 1;
+    const spread = () => {
+      const [a, b] = [...pointers.values()];
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    };
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      zoom.current = clampZoom(zoom.current * Math.exp(e.deltaY * 0.0012));
+    };
+    const onDown = (e: PointerEvent) => {
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) {
+        pinch = spread();
+        zoomStart = zoom.current;
+      }
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2 && pinch > 0) zoom.current = clampZoom((zoomStart * pinch) / spread());
+    };
+    const onUp = (e: PointerEvent) => {
+      pointers.delete(e.pointerId);
+      if (pointers.size < 2) pinch = 0;
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('pointerdown', onDown);
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+    window.addEventListener('pointercancel', onUp);
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('pointerdown', onDown);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onUp);
+    };
+  }, [framing, gl]);
+
+  useFrame((_, rawDt) => {
+    const dt = Math.min(rawDt, 0.1);
+    const st = now.current;
+    const z = framing === 'inside' ? zoom.current : 1;
+    const dist = frame.dist * z;
+    // 다가간 만큼 캐릭터를 따라간다 (0 = 방 가운데, 1 = 캐릭터)
+    const follow = (1 - z) / (1 - roomConfig.minZoom);
+    const f = focus.current;
+    const halfW = dist * frame.tanH;
+    const tx = halfW * 2 >= W + 0.6 ? W / 2 : clamp(f.x, halfW - 0.3, W - halfW + 0.3);
+    const tz = THREE.MathUtils.lerp(frame.center.z, f.z, 0.7 * follow);
+    const ty = THREE.MathUtils.lerp(frame.center.y, 0.7, follow);
+    const first = st.dist === 0;
+    const k = first ? 1 : 1 - Math.exp(-dt * 5);
+    st.look.lerp(st.goal.set(THREE.MathUtils.lerp(W / 2, tx, follow), ty, tz), k);
+    st.dist = first ? dist : st.dist + (dist - st.dist) * k;
+    st.pitch = first ? frame.pitch : st.pitch + (frame.pitch - st.pitch) * k;
+    // 들어설 때: 조금 멀고 높은 곳에서 다가온다
+    st.enter = Math.min(1, st.enter + dt / roomConfig.enterSec);
+    const away = Math.pow(1 - st.enter, 3);
+    const d = st.dist * (1 + 0.4 * away);
+    const pitch = st.pitch + deg(12) * away;
+    cam.position.set(st.look.x, st.look.y + Math.sin(pitch) * d, st.look.z + Math.cos(pitch) * d);
+    cam.up.copy(UP);
+    cam.lookAt(st.look);
+  });
   return null;
 }
 
@@ -159,6 +271,7 @@ function Shell({ layout, onFloorClick }: { layout: RoomLayout; onFloorClick: (e:
   useEffect(() => () => floorMap.dispose(), [floorMap]);
   useEffect(() => () => backMap.dispose(), [backMap]);
   useEffect(() => () => leftMap.dispose(), [leftMap]);
+  const front = shiftLightness(R.floor[layout.floor], -0.22);
   const floorEdge = shiftLightness(R.floor[layout.floor], -0.12);
   const wallEdge = shiftLightness(R.wall[layout.wallpaper], -0.06);
 
@@ -170,8 +283,8 @@ function Shell({ layout, onFloorClick }: { layout: RoomLayout; onFloorClick: (e:
         <meshStandardMaterial map={floorMap} roughness={0.85} />
       </mesh>
       {/* 바닥 판 (윗면을 바닥 그림보다 살짝 낮춰 두 면이 깜빡이며 겹치지 않게) */}
-      <mesh position={[W / 2 - WALL_T / 2, -0.1, D / 2 - WALL_T / 2]} receiveShadow>
-        <boxGeometry args={[W + WALL_T, 0.18, D + WALL_T]} />
+      <mesh position={[W / 2, -0.1, D / 2 - WALL_T / 2]} receiveShadow>
+        <boxGeometry args={[W + WALL_T * 2, 0.18, D + WALL_T]} />
         <meshStandardMaterial color={floorEdge} roughness={0.9} />
       </mesh>
       {/* 뒤 벽 (z = 0) */}
@@ -179,8 +292,8 @@ function Shell({ layout, onFloorClick }: { layout: RoomLayout; onFloorClick: (e:
         <planeGeometry args={[W, H]} />
         <meshStandardMaterial map={backMap} roughness={0.95} />
       </mesh>
-      <mesh position={[W / 2 - WALL_T / 2, H / 2, -WALL_T / 2 - 0.002]} castShadow>
-        <boxGeometry args={[W + WALL_T, H, WALL_T]} />
+      <mesh position={[W / 2, H / 2, -WALL_T / 2 - 0.002]} castShadow>
+        <boxGeometry args={[W + WALL_T * 2, H, WALL_T]} />
         <meshStandardMaterial color={wallEdge} roughness={0.95} />
       </mesh>
       {/* 왼쪽 벽 (x = 0) */}
@@ -192,9 +305,31 @@ function Shell({ layout, onFloorClick }: { layout: RoomLayout; onFloorClick: (e:
         <boxGeometry args={[WALL_T, H, D + WALL_T]} />
         <meshStandardMaterial color={wallEdge} roughness={0.95} />
       </mesh>
+      {/* 오른쪽 벽 (x = W). 소품은 걸지 않고, 앞에서 들여다볼 때 방을 감싼다 */}
+      <mesh position={[W - 0.006, H / 2, D / 2]} rotation-y={-Math.PI / 2} receiveShadow>
+        <planeGeometry args={[D, H]} />
+        <meshStandardMaterial map={leftMap} roughness={0.95} />
+      </mesh>
+      <mesh position={[W + WALL_T / 2 + 0.002, H / 2, D / 2 - WALL_T / 2]} castShadow>
+        <boxGeometry args={[WALL_T, H, D + WALL_T]} />
+        <meshStandardMaterial color={wallEdge} roughness={0.95} />
+      </mesh>
+      <mesh position={[W + WALL_T / 2, H + 0.02, D / 2 - WALL_T / 2]}>
+        <boxGeometry args={[WALL_T + 0.02, 0.04, D + WALL_T]} />
+        <meshStandardMaterial color={R.trim} />
+      </mesh>
+      <mesh position={[W - 0.015, 0.06, D / 2]} receiveShadow>
+        <boxGeometry args={[0.03, 0.12, D]} />
+        <meshStandardMaterial color={R.trim} />
+      </mesh>
+      {/* 앞쪽 문턱: 방 바닥이 끝나는 곳 (앞 벽은 없다) */}
+      <mesh position={[W / 2, -0.1, D + 0.04]}>
+        <boxGeometry args={[W + WALL_T * 2, 0.2, 0.08]} />
+        <meshStandardMaterial color={front} roughness={0.9} />
+      </mesh>
       {/* 벽 윗면과 걸레받이 */}
-      <mesh position={[W / 2 - WALL_T / 2, H + 0.02, -WALL_T / 2]}>
-        <boxGeometry args={[W + WALL_T, 0.04, WALL_T + 0.02]} />
+      <mesh position={[W / 2, H + 0.02, -WALL_T / 2]}>
+        <boxGeometry args={[W + WALL_T * 2, 0.04, WALL_T + 0.02]} />
         <meshStandardMaterial color={R.trim} />
       </mesh>
       <mesh position={[-WALL_T / 2, H + 0.02, D / 2 - WALL_T / 2]}>
@@ -461,12 +596,14 @@ function startSpot(blocked: Uint8Array): Point {
 }
 
 function RoomAvatar({
-  assets, avatar, layout, walkTo,
+  assets, avatar, layout, walkTo, focus,
 }: {
   assets: RoomAssets;
   avatar: Avatar;
   layout: RoomLayout;
   walkTo: React.RefObject<Point | null>;
+  /** 카메라가 따라갈 캐릭터 자리 */
+  focus: React.RefObject<Point>;
 }) {
   const color = tokens.avatar[avatar.color];
   const { model, mixer, actions } = useMemo(() => {
@@ -544,6 +681,7 @@ function RoomAvatar({
     mixer.update(dt);
     model.position.set(s.pos.x, 0, s.pos.z);
     model.rotation.y = s.rot;
+    focus.current = s.pos;
   });
 
   return <primitive object={model} />;
@@ -564,8 +702,10 @@ function FirstFrame({ onFrame }: { onFrame?: () => void }) {
 
 function SceneContent(props: RoomSceneProps) {
   const { assets, layout, district, avatar, mode, selectedId = null, onSelect, onMove, onAction, playing = false, photoUrl } = props;
+  const framing: RoomFraming = mode === 'edit' ? 'overview' : (props.framing ?? 'inside');
   const time = useMemo(timeOfDay, []);
   const walkTo = useRef<Point | null>(null);
+  const focus = useRef<Point>({ x: W / 2, z: D - 1.5 });
   const drag = useRef<{ id: string; pointerId: number } | null>(null);
   const itemsRef = useRef(layout.items);
   itemsRef.current = layout.items;
@@ -574,7 +714,7 @@ function SceneContent(props: RoomSceneProps) {
 
   return (
     <>
-      <CameraRig insetTop={props.insetTop} insetBottom={props.insetBottom} />
+      <CameraRig framing={framing} insetTop={props.insetTop} insetBottom={props.insetBottom} focus={focus} />
       <Lights time={time} />
       <Shell
         layout={layout}
@@ -602,7 +742,7 @@ function SceneContent(props: RoomSceneProps) {
           }}
         />
       ))}
-      <RoomAvatar assets={assets} avatar={avatar} layout={layout} walkTo={walkTo} />
+      <RoomAvatar assets={assets} avatar={avatar} layout={layout} walkTo={walkTo} focus={focus} />
       {mode === 'edit' && <DragController drag={drag} items={itemsRef} onMove={onMoveRef} />}
       <FirstFrame onFrame={props.onReady} />
     </>
@@ -612,11 +752,10 @@ function SceneContent(props: RoomSceneProps) {
 export default function RoomScene(props: RoomSceneProps) {
   return (
     <Canvas
-      orthographic
       shadows="percentage"
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
-      camera={{ zoom: 60, position: [20, 20, 20], near: 0.1, far: 200 }}
+      camera={{ fov: roomConfig.fovDeg, position: [W / 2, 8, D + 8], near: 0.1, far: 200 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NeutralToneMapping;
         gl.setClearColor(0x000000, 0);
