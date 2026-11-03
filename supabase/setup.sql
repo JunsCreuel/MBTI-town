@@ -237,6 +237,15 @@ alter table public.profiles add column if not exists house_hood integer not null
 drop index if exists public.profiles_house_lot_key;
 create unique index if not exists profiles_house_slot_key on public.profiles (district, house_hood, house_lot) where house_lot is not null;
 
+-- ───────── 20261103010000_saju.sql ─────────
+
+-- 사주로 거주 지역 자동 배정 (PROJECT_GUIDE.md 3장).
+-- birth = 사용자가 넣은 생일 그대로 {calendar: solar|lunar, date, leap, time|null}. 본인만 본다.
+-- saju  = 계산한 네 기둥과 오행 (화면 표시용). 거주 지역(district)은 saju의 일간 오행이다.
+-- birth_date는 양력으로 바꾼 생일을 그대로 쓴다.
+alter table public.profiles add column if not exists birth jsonb;
+alter table public.profiles add column if not exists saju jsonb;
+
 -- ───────── 실행 기록 ─────────
 
 create table if not exists public.schema_migrations (name text primary key, applied_at timestamptz not null default now());
@@ -246,5 +255,6 @@ insert into public.schema_migrations (name) values
   ('20261102010000_spectator_judging.sql'),
   ('20261102020000_scene.sql'),
   ('20261102030000_town.sql'),
-  ('20261103000000_hoods.sql')
+  ('20261103000000_hoods.sql'),
+  ('20261103010000_saju.sql')
 on conflict (name) do nothing;

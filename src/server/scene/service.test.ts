@@ -2,7 +2,9 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { townConfig } from '@/config/game';
+import { DISTRICTS, type District } from '@/shared/districts';
 import { verifyTownPass } from '@/shared/townToken';
+import { computeSaju, type BirthInput } from '../saju';
 import { createPgliteSql, createPostgresSql, type Sql } from '../db';
 import { SceneError, SceneService, type Viewer } from './service';
 import { SceneStore } from './store';
@@ -20,18 +22,38 @@ async function user(): Promise<Viewer> {
   return { id };
 }
 
+/** 그 지역(일간 오행)이 나오는 생일 (1990년부터 날짜를 넘기며 찾는다, 시간 모름) */
+const birthCache = new Map<District, BirthInput>();
+function birthFor(d: District, time: string | null = null): BirthInput {
+  if (!time && birthCache.has(d)) return birthCache.get(d)!;
+  for (let i = 0; i < 20; i++) {
+    const date = new Date(Date.UTC(1990, 0, 1 + i)).toISOString().slice(0, 10);
+    const b: BirthInput = { calendar: 'solar', date, time };
+    if (computeSaju(b).district === d) {
+      if (!time) birthCache.set(d, b);
+      return b;
+    }
+  }
+  throw new Error(d);
+}
+
 async function onboard(v: Viewer, name: string, extra: Record<string, unknown> = {}) {
+  // district는 테스트 편의: 그 지역이 나오는 생일로 바꿔 넣는다. 서버로는 보내지 않는다 (birth가 있으면 birth를 쓴다).
+  const { district, ...rest } = extra as { district?: District };
   return service.completeOnboarding(v, {
     taste: { colors: ['sky'], moods: ['calm'], music: ['lofi'] },
-    district: 'water',
+    birth: birthFor(district ?? 'water'),
     avatar: { color: 'sky', accessory: 'cap' },
     starter: 'cozy',
     bgm: 'bgm.lake',
     displayName: name,
     bio: '안녕하세요',
-    ...extra,
+    ...rest,
   });
 }
+
+/** 생일을 고쳐 다른 지역으로 이사 */
+const moveTo = (v: Viewer, d: District, more: Record<string, unknown> = {}) => service.updateProfile(v, { birth: birthFor(d), ...more });
 
 async function expectError(p: Promise<unknown>, code: string) {
   await expect(p).rejects.toSatisfy((e: unknown) => e instanceof SceneError && e.code === code);
@@ -58,11 +80,16 @@ describe('미니홈피', () => {
     expect((await service.me(a)).profile.onboarded).toBe(false);
     await expectError(service.saveRoom(a, { layout: {} }), 'onboarding_required');
     await expectError(onboard(a, ''), 'bad_request');
-    await expectError(onboard(a, '하나', { district: 'moon' }), 'bad_request');
-    await expectError(onboard(a, '하나', { birthDate: '2026-13-01' }), 'bad_request');
+    await expectError(onboard(a, '하나', { birth: { calendar: 'solar', date: '2026-13-01', time: null } }), 'bad_request');
+    await expectError(onboard(a, '하나', { birth: { calendar: 'lunar', date: '1990-04-21', leap: true, time: null } }), 'bad_request');
+    await expectError(onboard(a, '하나', { birth: undefined }), 'bad_request');
 
-    const pa = await onboard(a, '하나', { mbti: 'ENFP', birthDate: '1998-04-02' });
-    expect(pa).toMatchObject({ onboarded: true, district: 'water', displayName: '하나', mbti: 'ENFP', birthDate: '1998-04-02', roomVisibility: 'public' });
+    // 사는 지역은 사주(일간 오행)로 정해진다. 화면이 다른 지역을 보내도 쓰지 않는다.
+    const pa = await onboard(a, '하나', { mbti: 'ENFP', birth: { ...birthFor('water'), time: '09:30' }, district: 'fire' as never });
+    expect(pa).toMatchObject({ onboarded: true, district: 'water', displayName: '하나', mbti: 'ENFP', roomVisibility: 'public' });
+    expect(pa.birth).toEqual({ ...birthFor('water'), leap: false, time: '09:30' });
+    expect(pa.saju?.district).toBe('water');
+    expect(pa.saju?.hour).not.toBeNull();
     expect(pa.handle).toMatch(/^[a-z0-9_]{3,20}$/);
     const me = await service.me(a);
     expect(me.room?.bgm).toBe('bgm.lake');
@@ -200,7 +227,7 @@ describe('미니홈피', () => {
   });
 
   it('마을 둘러보기: 공개·발견 켠 방만, 지역별로', async () => {
-    await service.updateProfile(c, { district: 'wood' });
+    await moveTo(c, 'wood');
     expect((await service.explore(null, 'wood')).rooms.map((r) => r.handle)).toEqual([hc]);
     await service.updateProfile(c, { discoverable: false });
     expect((await service.explore(null, 'wood')).rooms).toEqual([]);
@@ -232,9 +259,12 @@ describe('마을 집터', () => {
   });
 
   it('이사하면 새 지역 집터로 옮기고, 비운 집터는 다음 사람이 쓴다', async () => {
-    expect((await service.updateProfile(p, { district: 'metal' })).houseLot).toBe(1);
-    // 같은 지역으로 다시 저장해도 집터는 그대로
-    expect((await service.updateProfile(p, { district: 'metal', bio: '이사 왔어요' })).houseLot).toBe(1);
+    // 생일을 고쳐 사주가 바뀌면 그 지역 빈 집터로 이사한다
+    expect((await moveTo(p, 'metal')).houseLot).toBe(1);
+    // 같은 지역이 나오는 생일로 다시 저장해도 집터는 그대로
+    expect((await moveTo(p, 'metal', { bio: '이사 왔어요' })).houseLot).toBe(1);
+    // 지역을 직접 고를 수는 없다
+    await expectError(service.updateProfile(p, { district: 'water' }), 'bad_request');
     const s = await user();
     expect((await onboard(s, '에스', { district: 'fire' })).houseLot).toBe(0);
   });
@@ -251,7 +281,7 @@ describe('마을 집터', () => {
     const third = await onboard(await user(), '셋째 동네', { district: 'earth' });
     expect(third).toMatchObject({ houseHood: 3, houseLot: 0 });
     // 1동에 빈 집터가 생기면 다음 사람은 1동으로 (작은 동네부터 채운다)
-    await service.updateProfile(first[4], { district: 'wood' });
+    await moveTo(first[4], 'wood');
     const next = await onboard(await user(), '빈자리', { district: 'earth' });
     expect(next).toMatchObject({ houseHood: 1, houseLot: 4 });
     // 같은 동네·같은 집터에 두 집이 서지 않는다
@@ -311,5 +341,21 @@ describe('마을 집터', () => {
     expect(guest.pass.pid).not.toBe((await service.townTicket(null)).pass.pid);
     const fresh = await user();
     expect((await service.townTicket(fresh)).guest).toBe(true);
+  });
+});
+
+describe('사주로 사는 지역 정하기', () => {
+  it('서버로 보낸 지역은 쓰지 않고 생일로 계산한 일간 오행을 쓴다', async () => {
+    const v = await user();
+    const sent = await service.completeOnboarding(v, {
+      birth: birthFor('metal'), district: 'water', avatar: {}, starter: 'cozy', bgm: 'bgm.lake', displayName: '직접',
+    } as never);
+    expect(sent.district).toBe('metal');
+    expect(sent.saju?.dayMaster.element).toBe('metal');
+  });
+
+  it('미리 보기는 저장하지 않고 사주와 지역만 알려 준다', () => {
+    for (const d of DISTRICTS) expect(service.previewSaju(birthFor(d)).district).toBe(d);
+    expect(() => service.previewSaju({ calendar: 'solar', date: '1800-01-01', time: null })).toThrow();
   });
 });

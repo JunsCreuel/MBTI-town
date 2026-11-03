@@ -14,6 +14,7 @@ import {
 } from '@/shared/records';
 import { framedPhotoIds, starterLayout, validateLayout, type RoomLayout } from '@/shared/room';
 import { guestPid, signTownPass, townPid, type TownPass } from '@/shared/townToken';
+import { SajuError, cleanBirthInput, computeSaju, type BirthInput, type SajuReading } from '../saju';
 import type { ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
 
 export type SceneErrorCode =
@@ -39,7 +40,6 @@ export interface Viewer {
 
 const HANDLE = /^[a-z0-9_]{3,20}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 // ───────────────────────── 화면에 내보내는 모양 ─────────────────────────
 
@@ -57,7 +57,10 @@ export interface PublicProfile {
 export interface MyProfile extends PublicProfile {
   onboarded: boolean;
   taste: Taste;
-  birthDate: string | null;
+  /** 넣은 생일 그대로 (본인만 본다) */
+  birth: BirthInput | null;
+  /** 사주 네 기둥과 오행. 거주 지역은 일간 오행이다 */
+  saju: SajuReading | null;
   roomVisibility: Visibility;
   showVisits: boolean;
   discoverable: boolean;
@@ -140,10 +143,10 @@ export interface RoomView {
 }
 
 export interface OnboardingInput {
-  taste: unknown;
+  /** 생일 (양력·음력, 시간은 모르면 null). 거주 지역은 여기서 계산한 사주로 정해진다 */
+  birth: unknown;
+  taste?: unknown;
   mbti?: unknown;
-  birthDate?: unknown;
-  district: unknown;
   avatar: unknown;
   starter: unknown;
   wallpaper?: unknown;
@@ -198,15 +201,15 @@ function cleanText(v: unknown, max: number, what: string, required = false): str
   return s;
 }
 
-function cleanBirthDate(v: unknown, now: Date): string | null {
-  if (v === null || v === undefined || v === '') return null;
-  if (typeof v !== 'string' || !DATE.test(v)) throw new SceneError('bad_request', '생년월일은 YYYY-MM-DD로 적어 주세요.');
-  const d = new Date(`${v}T00:00:00Z`);
-  const year = Number(v.slice(0, 4));
-  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v || year < 1900 || d > now) {
-    throw new SceneError('bad_request', '생년월일이 올바르지 않아요.');
+/** 생일로 사주를 푼다. 입력이 틀리면 화면에 그대로 보여 줄 말로 알려 준다 */
+function readSaju(v: unknown, now: Date): { birth: BirthInput; saju: SajuReading } {
+  const birth = cleanBirthInput(v);
+  try {
+    return { birth, saju: computeSaju(birth, now) };
+  } catch (e) {
+    if (e instanceof SajuError) throw new SceneError('bad_request', e.message);
+    throw e;
   }
-  return v;
 }
 
 /** 이미지 파일 앞부분으로 형식을 확인한다 (보낸 사람이 적은 형식을 믿지 않는다) */
@@ -245,7 +248,8 @@ export class SceneService {
       ...toPublic(p),
       onboarded: !!p.onboarded_at,
       taste: cleanTaste(p.taste),
-      birthDate: p.birth_date,
+      birth: p.birth,
+      saju: p.saju,
       roomVisibility: p.room_visibility,
       showVisits: p.show_visits,
       discoverable: p.discoverable,
@@ -274,25 +278,28 @@ export class SceneService {
     if (!viewer) throw new SceneError('login_required', '로그인이 필요해요.');
     await this.store.ensureProfile(viewer.id);
     const p = (await this.store.getProfile(viewer.id))!;
-    if (!isDistrict(input.district)) throw new SceneError('bad_request', '거주 지역을 골라 주세요.');
+    const now = this.now();
+    // 거주 지역은 사주(일간 오행)로 정해진다. 화면이 보낸 지역은 쓰지 않는다.
+    const { birth, saju } = readSaju(input.birth, now);
     const bgm = bgmTrack(typeof input.bgm === 'string' ? input.bgm : null);
     if (!bgm) throw new SceneError('bad_request', '대표 BGM을 골라 주세요.');
     const displayName = cleanText(input.displayName, socialConfig.displayNameMax, '이름', true);
     const bio = cleanText(input.bio, socialConfig.bioMax, '프로필 문구');
-    const now = this.now();
     const layout = starterLayout(String(input.starter ?? ''), String(input.wallpaper ?? ''), String(input.floor ?? ''));
     await this.store.updateProfile(viewer.id, {
       handle: p.handle ?? (await this.newHandle(viewer.id)),
       display_name: displayName,
       bio,
-      birth_date: cleanBirthDate(input.birthDate, now),
+      birth_date: saju.solarDate,
+      birth,
+      saju,
       taste: cleanTaste(input.taste),
       avatar: cleanAvatar(input.avatar),
       onboarded_at: p.onboarded_at ?? now,
     });
-    // 고른 지역의 빈 집터에 집이 선다 (1동이 다 찼으면 2동, 3동… 새 동네가 열린다)
-    if (p.district !== input.district || p.house_lot === null) {
-      await this.store.moveHouse(viewer.id, input.district, townConfig.lotsPerDistrict, townConfig.hoodLots);
+    // 사주로 정해진 지역의 빈 집터에 집이 선다 (1동이 다 찼으면 2동, 3동… 새 동네가 열린다)
+    if (p.district !== saju.district || p.house_lot === null) {
+      await this.store.moveHouse(viewer.id, saju.district, townConfig.lotsPerDistrict, townConfig.hoodLots);
     }
     // MBTI는 선택 입력. 처음 정할 때만 여기서 저장한다 (바꾸기는 7일에 한 번, 설정 화면에서)
     if (input.mbti && isMbtiType(input.mbti) && !p.mbti) await this.store.setMbti(viewer.id, input.mbti, now);
@@ -313,16 +320,21 @@ export class SceneService {
       if (await this.store.handleTaken(h, id)) throw new SceneError('conflict', '이미 쓰는 주소예요.');
       next.handle = h;
     }
-    // 이사: 새 지역의 빈 집터로 옮긴다
+    // 거주 지역은 직접 고르지 않는다. 생일을 고치면 사주를 다시 풀고, 지역이 바뀌면 새 지역 빈 집터로 이사한다.
     if ('district' in patch) {
-      if (!isDistrict(patch.district)) throw new SceneError('bad_request', '거주 지역이 올바르지 않아요.');
-      if (patch.district !== p.district || p.house_lot === null) {
-        await this.store.moveHouse(id, patch.district, townConfig.lotsPerDistrict, townConfig.hoodLots);
+      throw new SceneError('bad_request', '거주 지역은 사주로 정해져요. 생일 정보를 고치면 다시 정해져요.');
+    }
+    if ('birth' in patch) {
+      const { birth, saju } = readSaju(patch.birth, this.now());
+      next.birth = birth;
+      next.saju = saju;
+      next.birth_date = saju.solarDate;
+      if (saju.district !== p.district || p.house_lot === null) {
+        await this.store.moveHouse(id, saju.district, townConfig.lotsPerDistrict, townConfig.hoodLots);
       }
     }
     if ('avatar' in patch) next.avatar = cleanAvatar(patch.avatar);
     if ('taste' in patch) next.taste = cleanTaste(patch.taste);
-    if ('birthDate' in patch) next.birth_date = cleanBirthDate(patch.birthDate, this.now());
     if ('roomVisibility' in patch) {
       if (!isVisibility(patch.roomVisibility)) throw new SceneError('bad_request', '공개 범위가 올바르지 않아요.');
       next.room_visibility = patch.roomVisibility;
@@ -630,6 +642,13 @@ export class SceneService {
       this.store.districtCounts(),
     ]);
     return { rooms: rooms.map(toCard), newcomers: newcomers.map(toCard), counts };
+  }
+
+  // ───────────────────────── 사주 ─────────────────────────
+
+  /** 가입 화면 미리 보기: 생일로 사주와 거주 지역을 보여 준다 (저장하지 않는다) */
+  previewSaju(input: unknown): SajuReading {
+    return readSaju(input, this.now()).saju;
   }
 
   // ───────────────────────── 마을 ─────────────────────────

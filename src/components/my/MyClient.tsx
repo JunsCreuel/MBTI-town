@@ -1,18 +1,21 @@
 'use client';
 
-// MY: 설정 (PROJECT_GUIDE.md 4, 9, 11장). 프로필, 이사, 공개 범위, 친구·차단, 기록 내보내기·삭제.
+// MY: 설정 (PROJECT_GUIDE.md 4, 9, 11장). 프로필, 나의 사주(생일 고치기 → 사는 동네 다시 정하기), 공개 범위, 친구·차단, 기록 내보내기·삭제.
 import Link from 'next/link';
-import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { socialConfig } from '@/config/game';
 import { MBTI_TYPES } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { call, errorMessage } from '@/lib/api';
 import type { MyProfile, RoomCard } from '@/server/scene/service';
-import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
+import { DISTRICT } from '@/shared/districts';
+import type { SajuReading } from '@/shared/saju';
 import { VISIBILITY_LABEL, type Visibility } from '@/shared/records';
 import { Icon } from '../app/Icon';
 import { TabBar } from '../app/TabBar';
 import { useMe } from '../app/useMe';
+import { BirthForm, birthFromDraft, draftFromBirth, type BirthDraft } from '../saju/BirthForm';
+import { SajuCard } from '../saju/SajuCard';
 
 interface Friends {
   friends: RoomCard[];
@@ -43,6 +46,9 @@ export function MyClient() {
   const [blocked, setBlocked] = useState<{ handle: string; displayName: string }[]>([]);
   const [friendHandle, setFriendHandle] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  /** 생일 고치기: 고친 값과 미리 본 사주 */
+  const [birthEdit, setBirthEdit] = useState<BirthDraft | null>(null);
+  const [birthPreview, setBirthPreview] = useState<SajuReading | null>(null);
 
   useEffect(() => {
     if (!me?.profile) return;
@@ -74,6 +80,27 @@ export function MyClient() {
     } catch (e) {
       setToast(errorMessage(e));
     }
+  }
+
+  async function previewBirth() {
+    const b = birthEdit && birthFromDraft(birthEdit);
+    if (!b) return;
+    try {
+      setBirthPreview(await call<SajuReading>('POST', '/api/saju', b));
+    } catch (e) {
+      setToast(errorMessage(e));
+    }
+  }
+
+  async function saveBirth() {
+    const b = birthEdit && birthFromDraft(birthEdit);
+    if (!b || !birthPreview || !profile) return;
+    const moving = birthPreview.district !== profile.district;
+    const to = `${DISTRICT[birthPreview.district].short} 지역`;
+    if (moving && !confirm(`사주가 바뀌어 ${to}으로 이사해요. 집이 그 지역의 빈 집터로 옮겨져요. 저장할까요?`)) return;
+    await patch({ birth: b }, moving ? `${to}으로 이사했어요` : '생일 정보를 고쳤어요');
+    setBirthEdit(null);
+    setBirthPreview(null);
   }
 
   async function friendAction(h: string, action: 'request' | 'accept' | 'remove') {
@@ -142,28 +169,36 @@ export function MyClient() {
       </section>
 
       <section className="section card">
-        <h2 className="section-title">나의 동네</h2>
+        <h2 className="section-title">나의 사주와 동네</h2>
         {profile.district && profile.houseLot !== null && (
           <p>
             내 집: <b>{DISTRICT[profile.district].short} {profile.houseHood > 1 ? `${profile.houseHood}동` : '지역 1동'} {profile.houseLot + 1}번지</b>
           </p>
         )}
-        <p className="muted">
-          이사하면 새 지역의 빈 집터로 집을 옮겨요 (1동이 다 찼으면 2동부터). 방과 기록은 그대로이고, 창밖 풍경과 마을 속 집 자리만 바뀌어요.
-        </p>
-        <div className="district-chips">
-          {DISTRICTS.map((d) => (
-            <button
-              key={d}
-              className={`chip${profile.district === d ? ' chip--on' : ''}`}
-              style={{ '--district': tokens.district[d] } as CSSProperties}
-              onClick={() => profile.district !== d && patch({ district: d as District }, `${DISTRICT[d].name}로 이사했어요`)}
-            >
-              <span className="chip__swatch" style={{ background: tokens.district[d] }} aria-hidden />
-              {DISTRICT[d].name}
-            </button>
-          ))}
-        </div>
+        {profile.saju ? (
+          <SajuCard reading={profile.saju} compact />
+        ) : (
+          <p className="muted">생일을 넣으면 사주를 풀어 사는 동네를 다시 정해요. (사주로 동네를 정하기 전에 가입한 주민이에요)</p>
+        )}
+        {!birthEdit ? (
+          <button className="btn-secondary" onClick={() => setBirthEdit(draftFromBirth(profile.birth))}>
+            {profile.birth ? '생일 정보 고치기' : '생일 넣고 사주 보기'}
+          </button>
+        ) : (
+          <div className="birth-edit">
+            <BirthForm value={birthEdit} onChange={(b) => { setBirthEdit(b); setBirthPreview(null); }} />
+            {birthPreview && <SajuCard reading={birthPreview} compact />}
+            <div className="field__row">
+              <button className="btn-ghost" onClick={() => { setBirthEdit(null); setBirthPreview(null); }}>취소</button>
+              {birthPreview ? (
+                <button className="btn-primary btn-primary--inline" onClick={saveBirth}>저장</button>
+              ) : (
+                <button className="btn-primary btn-primary--inline" onClick={previewBirth} disabled={!birthFromDraft(birthEdit)}>사주 다시 보기</button>
+              )}
+            </div>
+          </div>
+        )}
+        <p className="muted">사는 동네는 사주의 일간 오행으로 정해져서 직접 고르지 않아요. 생일을 고쳐 동네가 바뀌면 집이 새 동네 빈 집터로 옮겨지고, 방과 기록은 그대로예요.</p>
         <label className="field">
           <span>MBTI (오늘의 토론 참여용, 선택)</span>
           <select value={me.mbti ?? ''} disabled={!!changeable} onChange={(e) => e.target.value && setMbti(e.target.value)}>
@@ -173,13 +208,6 @@ export function MyClient() {
             ))}
           </select>
           {changeable && <small className="muted">{changeable.toLocaleDateString('ko-KR')} 이후에 바꿀 수 있어요 (7일에 한 번)</small>}
-        </label>
-        <label className="field">
-          <span>생년월일 (선택, 재미로 보는 추천에만 써요)</span>
-          <div className="field__row">
-            <input type="date" value={profile.birthDate ?? ''} max={new Date().toISOString().slice(0, 10)} onChange={(e) => patch({ birthDate: e.target.value || null })} />
-            {profile.birthDate && <button className="link-btn" onClick={() => patch({ birthDate: null }, '생년월일을 지웠어요')}>지우기</button>}
-          </div>
         </label>
       </section>
 

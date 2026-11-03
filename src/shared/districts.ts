@@ -1,5 +1,5 @@
-// 다섯 거주 지역(오행)과 첫 거주지 추천 규칙 (PROJECT_GUIDE.md 3장).
-// 추천은 재미로 보는 출발점일 뿐이다. 누구나 원하는 지역을 고르고 언제든 이사할 수 있다.
+// 다섯 거주 지역(오행) (PROJECT_GUIDE.md 3장).
+// 거주 지역은 사주의 일간 오행으로 자동으로 정해진다 (src/server/saju.ts). 취향은 지역을 정하는 데 쓰지 않는다.
 
 export const DISTRICTS = ['wood', 'fire', 'earth', 'metal', 'water'] as const;
 export type District = (typeof DISTRICTS)[number];
@@ -90,47 +90,4 @@ export function cleanTaste(v: unknown): Taste {
     Array.isArray(list) ? [...new Set(list.filter((x): x is string => options.some((o) => o.id === x)))].slice(0, options.length) : [];
   const t = (v ?? {}) as Partial<Record<keyof Taste, unknown>>;
   return { colors: pick(t.colors, TASTE_COLORS), moods: pick(t.moods, TASTE_MOODS), music: pick(t.music, TASTE_MUSIC) };
-}
-
-/** 태어난 해 끝자리 → 천간 오행 (甲乙 목, 丙丁 화, 戊己 토, 庚辛 금, 壬癸 수) */
-export function yearElement(year: number): District {
-  const d = ((year % 10) + 10) % 10;
-  if (d === 4 || d === 5) return 'wood';
-  if (d === 6 || d === 7) return 'fire';
-  if (d === 8 || d === 9) return 'earth';
-  if (d === 0 || d === 1) return 'metal';
-  return 'water';
-}
-
-export interface Recommendation {
-  district: District;
-  scores: Record<District, number>;
-  /** 추천 이유 (화면에 짧게 보여 준다) */
-  reasons: string[];
-}
-
-/** 첫 거주지 추천. 점수가 같으면 목 → 화 → 토 → 금 → 수, 아무것도 없으면 토(Hill). */
-export function recommendDistrict(taste: Taste, birthDate?: string | null): Recommendation {
-  const scores = Object.fromEntries(DISTRICTS.map((d) => [d, 0])) as Record<District, number>;
-  const reasons: string[] = [];
-  const add = (ids: string[], options: readonly TasteOption[], what: string) => {
-    for (const id of ids) {
-      const o = options.find((x) => x.id === id);
-      if (!o) continue;
-      scores[o.district]++;
-      reasons.push(`${what} '${o.label}'`);
-    }
-  };
-  add(taste.colors, TASTE_COLORS, '색');
-  add(taste.moods, TASTE_MOODS, '분위기');
-  add(taste.music, TASTE_MUSIC, '음악');
-  const year = birthDate ? Number(birthDate.slice(0, 4)) : NaN;
-  if (Number.isInteger(year) && year > 1900) {
-    const e = yearElement(year);
-    scores[e]++;
-    reasons.push(`태어난 해의 기운 '${DISTRICT[e].element}'`);
-  }
-  const best = Math.max(...DISTRICTS.map((d) => scores[d]));
-  const district = best === 0 ? 'earth' : DISTRICTS.find((d) => scores[d] === best)!;
-  return { district, scores, reasons };
 }

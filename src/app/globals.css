@@ -2895,3 +2895,143 @@ a:focus-visible {
   margin-top: var(--space-3);
   width: 100%;
 }
+
+/* ───────── 사주 ───────── */
+
+.birth-form {
+  display: grid;
+  gap: var(--space-3);
+}
+.birth-form__date {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr 1fr;
+  gap: var(--space-2);
+}
+.saju-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 4px 18px var(--color-shadow);
+}
+.saju-card__head {
+  display: grid;
+  gap: 2px;
+}
+.saju-card__head b {
+  font-size: 17px;
+}
+.saju-card__note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.pillars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+}
+.pillar {
+  display: grid;
+  gap: var(--space-1);
+  text-align: center;
+}
+.pillar__label {
+  color: var(--color-textSub);
+  font-size: 12px;
+  font-weight: 700;
+}
+.pillar__cell {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  padding: var(--space-2) 0;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--el) 22%, var(--color-surface));
+  border: 1px solid color-mix(in srgb, var(--el) 55%, transparent);
+}
+.pillar__cell b {
+  font-size: 24px;
+  line-height: 1.1;
+}
+.pillar__cell small {
+  color: var(--color-textSub);
+  font-size: 11px;
+}
+.pillar__cell--me {
+  border-width: 2px;
+  border-color: var(--el);
+}
+.pillar__me {
+  position: absolute;
+  top: -8px;
+  right: -4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-accentText);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+}
+.pillar__cell--empty {
+  min-height: 52px;
+  align-content: center;
+  background: var(--color-bg);
+  border: 1px dashed var(--color-border);
+  color: var(--color-textSub);
+}
+.elements {
+  display: grid;
+  gap: 6px;
+}
+.element-row {
+  display: grid;
+  grid-template-columns: 52px 1fr 20px;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 13px;
+}
+.element-row__bar {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+.element-row__bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--el);
+}
+.saju-result {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--el) 16%, var(--color-surface));
+}
+.saju-result img {
+  border-radius: 12px;
+}
+.saju-result div {
+  display: grid;
+  gap: 2px;
+}
+.saju-result b {
+  font-size: 14px;
+}
+.saju-result span {
+  color: var(--color-textSub);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.birth-edit {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}

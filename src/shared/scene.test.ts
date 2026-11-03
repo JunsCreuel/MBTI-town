@@ -1,37 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { roomConfig } from '@/config/game';
 import { cleanAvatar } from './avatar';
-import { cleanTaste, recommendDistrict, yearElement } from './districts';
+import { cleanTaste } from './districts';
 import { canView, validateRecord, visibleLevels } from './records';
 import {
   FURNITURE, STARTER_ROOMS, blockedCells, canPlace, findFreeSpot, findRoomPath, footprint, starterLayout, validateLayout,
   type PlacedItem,
 } from './room';
 
-describe('거주지 추천', () => {
-  it('고른 취향이 많은 지역을 추천한다', () => {
-    const r = recommendDistrict(cleanTaste({ colors: ['sky', 'lavender'], moods: ['cozy'], music: ['lofi'] }));
-    expect(r.district).toBe('water');
-    expect(r.scores.water).toBe(3);
-    expect(r.reasons).toContain("색 '하늘'");
-  });
-
-  it('태어난 해의 천간 오행에 1점을 더한다 (甲乙 목 … 壬癸 수)', () => {
-    expect(yearElement(1994)).toBe('wood');
-    expect(yearElement(1996)).toBe('fire');
-    expect(yearElement(1998)).toBe('earth');
-    expect(yearElement(2000)).toBe('metal');
-    expect(yearElement(2002)).toBe('water');
-    const r = recommendDistrict(cleanTaste({ colors: ['coral'] }), '2001-05-03');
-    // 화 1점, 금 1점 → 같으면 목·화·토·금·수 순서
-    expect(r.district).toBe('fire');
-    expect(r.scores.metal).toBe(1);
-  });
-
-  it('아무것도 고르지 않으면 언덕(토)', () => {
-    expect(recommendDistrict(cleanTaste({})).district).toBe('earth');
-  });
-
+describe('입력 정리', () => {
   it('모르는 값은 버린다', () => {
     expect(cleanTaste({ colors: ['sky', 'sky', 'nope'], moods: 'x', music: [1] })).toEqual({ colors: ['sky'], moods: [], music: [] });
     expect(cleanAvatar({ color: 'gold', accessory: 'cap' })).toEqual({ color: 'mint', accessory: 'cap' });

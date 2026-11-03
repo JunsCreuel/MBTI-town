@@ -2,19 +2,17 @@
 
 // 첫 가입 2~7단계 (1단계 "세계에 입장"은 첫 화면). PROJECT_GUIDE.md 5장.
 // 목표: 긴 설명보다 짧은 시간에 "내 공간이 생겼다"는 만족감.
+// 사는 지역은 고르지 않는다. 생일로 사주를 풀어 일간의 오행으로 자동으로 정해진다 (서버가 다시 계산한다).
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { assetUrl } from '@/assets/manifest';
 import { socialConfig } from '@/config/game';
 import { MBTI_TYPES, type MbtiType } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { ACCESSORIES, AVATAR_COLORS, DEFAULT_AVATAR, type Avatar } from '@/shared/avatar';
 import { BGM_TRACKS, bgmForDistrict } from '@/shared/bgm';
-import {
-  DISTRICT, DISTRICTS, TASTE_COLORS, TASTE_MOODS, TASTE_MUSIC, recommendDistrict,
-  type District, type Taste, type TasteOption,
-} from '@/shared/districts';
+import { DISTRICT } from '@/shared/districts';
+import type { SajuReading } from '@/shared/saju';
 import { FLOORS, STARTER_ROOMS, WALLPAPERS, starterLayout, type FloorId, type WallpaperId } from '@/shared/room';
 import { call, errorMessage } from '@/lib/api';
 import { BgmPlayer } from '../app/BgmPlayer';
@@ -22,46 +20,22 @@ import { Guide } from '../app/Guide';
 import { Icon } from '../app/Icon';
 import { useMe } from '../app/useMe';
 import { loadRoomAssets, type RoomAssets } from '../room/assets';
+import { BirthForm, birthFromDraft, emptyBirthDraft, type BirthDraft } from '../saju/BirthForm';
+import { SajuCard } from '../saju/SajuCard';
 
 const RoomScene = dynamic(() => import('../room/RoomScene'), { ssr: false });
 const AvatarPreview = dynamic(() => import('../room/AvatarPreview'), { ssr: false });
 
-const STEPS = ['취향', '거주지', '캐릭터', '첫 집', 'BGM', '완성'] as const;
-
-function Chips({ options, value, onChange, swatch }: {
-  options: readonly TasteOption[];
-  value: string[];
-  onChange: (v: string[]) => void;
-  swatch?: boolean;
-}) {
-  return (
-    <div className="chips">
-      {options.map((o) => {
-        const on = value.includes(o.id);
-        return (
-          <button
-            key={o.id}
-            className={`chip${on ? ' chip--on' : ''}`}
-            aria-pressed={on}
-            onClick={() => onChange(on ? value.filter((x) => x !== o.id) : [...value, o.id])}
-          >
-            {swatch && <span className="chip__swatch" style={{ background: (tokens.taste as Record<string, string>)[o.id] }} aria-hidden />}
-            {o.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+const STEPS = ['나의 사주', '나의 지역', '캐릭터', '첫 집', 'BGM', '완성'] as const;
 
 export function OnboardingClient() {
   const router = useRouter();
   const { me } = useMe({ require: 'login' });
   const [step, setStep] = useState(0);
-  const [taste, setTaste] = useState<Taste>({ colors: [], moods: [], music: [] });
+  const [sajuName, setSajuName] = useState('');
+  const [birth, setBirth] = useState<BirthDraft>(emptyBirthDraft);
+  const [reading, setReading] = useState<SajuReading | null>(null);
   const [mbti, setMbti] = useState<MbtiType | ''>('');
-  const [birthDate, setBirthDate] = useState('');
-  const [district, setDistrict] = useState<District | null>(null);
   const [avatar, setAvatar] = useState<Avatar>(DEFAULT_AVATAR);
   const [starter, setStarter] = useState<string>(STARTER_ROOMS[0].id);
   const [wallpaper, setWallpaper] = useState<WallpaperId>(STARTER_ROOMS[0].layout.wallpaper);
@@ -74,8 +48,9 @@ export function OnboardingClient() {
   const [error, setError] = useState<string | null>(null);
   const top = useRef<HTMLDivElement>(null);
 
-  const rec = useMemo(() => recommendDistrict(taste, birthDate || null), [taste, birthDate]);
-  const chosenDistrict = district ?? rec.district;
+  // 사주를 풀기 전에는 쓰이지 않는다 (지역 단계부터 reading이 있다)
+  const chosenDistrict = reading?.district ?? 'earth';
+  const birthInput = birthFromDraft(birth);
 
   useEffect(() => {
     if (me?.profile?.onboarded) router.replace('/village');
@@ -94,15 +69,29 @@ export function OnboardingClient() {
   const layout = useMemo(() => starterLayout(starter, wallpaper, floor), [starter, wallpaper, floor]);
   const recommendedBgm = bgmForDistrict(chosenDistrict).key;
 
+  /** 생일로 사주를 풀어 보고 지역 단계로 */
+  async function readSaju() {
+    if (!birthInput) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setReading(await call<SajuReading>('POST', '/api/saju', birthInput));
+      if (!name.trim() && sajuName.trim()) setName(sajuName.trim().slice(0, socialConfig.displayNameMax));
+      setStep(1);
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function finish() {
     setBusy(true);
     setError(null);
     try {
       await call('POST', '/api/onboarding', {
-        taste,
+        birth: birthInput,
         mbti: mbti || undefined,
-        birthDate: birthDate || undefined,
-        district: chosenDistrict,
         avatar,
         starter,
         wallpaper,
@@ -138,16 +127,17 @@ export function OnboardingClient() {
 
       {step === 0 && (
         <section className="onboarding__body">
-          <Guide>어떤 분위기를 좋아해요? 고른 취향으로 첫 동네를 추천해 줄게요.</Guide>
-          <h2 className="field-title">좋아하는 색</h2>
-          <Chips options={TASTE_COLORS} value={taste.colors} onChange={(colors) => setTaste({ ...taste, colors })} swatch />
-          <h2 className="field-title">좋아하는 분위기</h2>
-          <Chips options={TASTE_MOODS} value={taste.moods} onChange={(moods) => setTaste({ ...taste, moods })} />
-          <h2 className="field-title">자주 듣는 음악</h2>
-          <Chips options={TASTE_MUSIC} value={taste.music} onChange={(music) => setTaste({ ...taste, music })} />
+          <Guide>태어난 날로 사주를 풀어 볼게요. 사주의 오행(목·화·토·금·수)에 따라 살 동네가 정해져요.</Guide>
+          <label className="field">
+            <span>이름</span>
+            <input value={sajuName} maxLength={40} onChange={(e) => setSajuName(e.target.value)} placeholder="사주에 보일 이름" />
+          </label>
+          <BirthForm value={birth} onChange={(b) => { setBirth(b); setReading(null); }} />
+          <p className="muted">
+            태어난 시간을 몰라도 괜찮아요. 사는 동네는 태어난 날로 정해져서 시간과 상관없어요. 생일과 시간은 나만 볼 수 있어요.
+          </p>
           <details className="optional">
-            <summary>MBTI · 생년월일 (선택)</summary>
-            <p className="muted">재미로 보는 추천에만 써요. 성격이나 운명을 정하는 근거가 아니에요. 출생시간은 묻지 않아요.</p>
+            <summary>MBTI (선택)</summary>
             <label className="field">
               <span>MBTI</span>
               <select value={mbti} onChange={(e) => setMbti(e.target.value as MbtiType | '')}>
@@ -157,49 +147,24 @@ export function OnboardingClient() {
                 ))}
               </select>
             </label>
-            <label className="field">
-              <span>생년월일</span>
-              <input type="date" value={birthDate} max={new Date().toISOString().slice(0, 10)} min="1900-01-01" onChange={(e) => setBirthDate(e.target.value)} />
-            </label>
-            {mbti && <p className="muted">MBTI를 넣으면 중앙광장의 &lsquo;오늘의 토론&rsquo; 이벤트에도 참여할 수 있어요.</p>}
+            <p className="muted">MBTI를 넣으면 중앙광장의 &lsquo;오늘의 토론&rsquo; 이벤트에 참여할 수 있어요. 사는 동네와는 상관없어요.</p>
           </details>
-          <button className="btn-primary" onClick={next}>다음</button>
+          <button className="btn-primary" onClick={readSaju} disabled={busy || !birthInput || !sajuName.trim()}>
+            {busy ? '사주를 푸는 중…' : '사주 보기'}
+          </button>
         </section>
       )}
 
-      {step === 1 && (
+      {step === 1 && reading && (
         <section className="onboarding__body">
           <Guide>
-            {DISTRICT[rec.district].name}가 잘 어울릴 것 같아요! 다른 곳이 좋으면 골라도 돼요. 언제든 이사할 수 있어요.
+            {sajuName.trim() || '당신'}님은 {DISTRICT[reading.district].short} 지역 주민이에요! 그곳 빈 집터에 첫 집을 지어 줄게요.
           </Guide>
-          <div className="district-list">
-            {DISTRICTS.map((d) => {
-              const meta = DISTRICT[d];
-              const on = chosenDistrict === d;
-              return (
-                <button
-                  key={d}
-                  className={`district-card${on ? ' district-card--on' : ''}`}
-                  style={{ '--district': tokens.district[d] } as CSSProperties}
-                  aria-pressed={on}
-                  onClick={() => setDistrict(d)}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element -- 작은 풍경 그림 */}
-                  <img src={assetUrl(`room.view.${d}`)} alt="" width={64} height={64} />
-                  <span className="district-card__text">
-                    <span className="district-card__name">
-                      {meta.name} <small>{meta.element}</small>
-                    </span>
-                    <span className="district-card__mood">{meta.mood}</span>
-                  </span>
-                  {d === rec.district && <span className="badge-rec">추천</span>}
-                </button>
-              );
-            })}
-          </div>
-          {rec.reasons.length > 0 && <p className="muted">추천 이유: {rec.reasons.slice(0, 4).join(', ')}</p>}
-          <p className="muted">재미로 보는 추천이에요. 지역은 창밖 풍경과 마을 지도에만 쓰고, 생활을 제한하지 않아요.</p>
-          <button className="btn-primary" onClick={next}>{DISTRICT[chosenDistrict].name}에 살래요</button>
+          <SajuCard reading={reading} name={sajuName.trim() || undefined} />
+          <p className="muted">생일을 잘못 넣었다면 이전으로 돌아가 고칠 수 있어요. 가입한 뒤에는 MY에서 고치면 사는 동네도 다시 정해져요.</p>
+          <button className="btn-primary" onClick={next}>
+            {DISTRICT[reading.district].short} 지역에 집 짓기
+          </button>
         </section>
       )}
 
@@ -302,10 +267,11 @@ export function OnboardingClient() {
 
       {step === 5 && (
         <section className="onboarding__body">
-          <Guide>마지막이에요! 이름과 한 줄 소개를 적으면 나의 방이 열려요.</Guide>
+          <Guide>마지막이에요! 마을에서 보일 이름과 한 줄 소개를 적으면 내 집이 생겨요.</Guide>
           <label className="field">
-            <span>이름</span>
-            <input value={name} maxLength={socialConfig.displayNameMax} onChange={(e) => setName(e.target.value)} placeholder="방에 보일 이름" />
+            <span>마을에서 보일 이름</span>
+            <input value={name} maxLength={socialConfig.displayNameMax} onChange={(e) => setName(e.target.value)} placeholder="방과 이름표에 보일 이름" />
+            <small className="muted">다른 주민에게 보여요. 실명이 싫으면 별명으로 바꿔도 돼요.</small>
           </label>
           <label className="field">
             <span>프로필 문구 (선택)</span>

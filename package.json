@@ -32,6 +32,8 @@
     "@react-three/fiber": "9.8.2",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.118.0",
+    "korean-lunar-calendar": "0.4.0",
+    "lunar-javascript": "1.7.7",
     "next": "16.4.3",
     "postgres": "4.0.0",
     "react": "19.3.1",

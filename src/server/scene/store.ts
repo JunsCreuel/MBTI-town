@@ -2,6 +2,7 @@
 import 'server-only';
 import type { MbtiType } from '@/design/mbti';
 import type { Avatar } from '@/shared/avatar';
+import type { BirthInput, SajuReading } from '@/shared/saju';
 import type { District, Taste } from '@/shared/districts';
 import type { Emotion, RecordInput, RecordKind, Visibility } from '@/shared/records';
 import type { RoomLayout } from '@/shared/room';
@@ -14,6 +15,10 @@ export interface ProfileRow {
   bio: string | null;
   district: District | null;
   birth_date: string | null;
+  /** 사용자가 넣은 생일 (본인만 본다) */
+  birth: BirthInput | null;
+  /** 사주 계산 결과 (화면 표시용) */
+  saju: SajuReading | null;
   taste: Partial<Taste>;
   avatar: Partial<Avatar>;
   mbti: MbtiType | null;
@@ -78,7 +83,7 @@ export interface RoomCardRow {
   bgm: string | null;
 }
 
-const PROFILE_COLS = `id, handle, display_name, bio, district, to_char(birth_date, 'YYYY-MM-DD') as birth_date, taste, avatar, mbti,
+const PROFILE_COLS = `id, handle, display_name, bio, district, to_char(birth_date, 'YYYY-MM-DD') as birth_date, birth, saju, taste, avatar, mbti,
   room_visibility, show_visits, discoverable, onboarded_at, house_hood, house_lot`;
 const RECORD_COLS = `id, owner_id, kind, emotion, body, photo_id, visibility, created_at`;
 const CARD_COLS = `p.id, p.handle, p.display_name, p.bio, p.district, p.avatar, r.bgm`;
@@ -93,6 +98,8 @@ export type ProfilePatch = Partial<{
   bio: string;
   district: District;
   birth_date: string | null;
+  birth: BirthInput;
+  saju: SajuReading;
   taste: Taste;
   avatar: Avatar;
   room_visibility: Visibility;
@@ -100,9 +107,10 @@ export type ProfilePatch = Partial<{
   discoverable: boolean;
   onboarded_at: Date;
 }>;
-const JSON_COLS = new Set(['taste', 'avatar']);
+const JSON_COLS = new Set(['taste', 'avatar', 'birth', 'saju']);
 const PATCH_COLS = new Set([
-  'handle', 'display_name', 'bio', 'district', 'birth_date', 'taste', 'avatar', 'room_visibility', 'show_visits', 'discoverable', 'onboarded_at',
+  'handle', 'display_name', 'bio', 'district', 'birth_date', 'birth', 'saju', 'taste', 'avatar', 'room_visibility', 'show_visits', 'discoverable',
+  'onboarded_at',
 ]);
 
 export class SceneStore {
