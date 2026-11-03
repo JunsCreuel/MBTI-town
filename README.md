@@ -62,6 +62,7 @@ curl -X POST localhost:3000/api/dev/clock -H 'content-type: application/json' -d
 | `npm test` | 마을 맵·길찾기·이동 검사·입장 토큰, 실시간 서버(실제 접속), 집터 배정, 방 배치·지역 추천·기록 규칙, 미니홈피 서버 규칙(공개 범위·친구·방명록·차단·사진 권한), 토론 하루 흐름 (PGlite) |
 | `npm run test:postgres` | 서버 규칙 테스트를 운영과 같은 DB 드라이버(postgres.js)로 |
 | `npm run typecheck` | 타입 검사 |
+| `npm run db:bundle` | `supabase/migrations/` 를 이어 붙여 `supabase/setup.sql` (Supabase에 한 번에 붙여 넣는 파일)을 다시 만든다. 마이그레이션을 추가하면 실행한다 |
 | `npm run assets:ph` | 임시 에셋(마을 소품·가구 GLB, 창밖 풍경, 아이콘, 안내 캐릭터, BGM)을 다시 만든다. 마을 맵은 없을 때만 만든다 (`-- --map` 이면 다시 만든다). BGM 인코딩에 ffmpeg가 필요하다 (`-- --no-audio` 면 BGM은 건너뛴다) |
 | `npm run assets:check` | 에셋 규칙·용량·남은 `_ph` 목록 검사 |
 | `npm run build` | 에셋 검사 후 웹 빌드 |

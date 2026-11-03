@@ -252,8 +252,10 @@ export function randomSpawnPoint(
   if (!cells.length) throw new Error('스폰 영역에 걸을 수 있는 칸이 없습니다');
   const [tx, tz] = cells[Math.floor(rand() * cells.length)];
   const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  // 가장자리에서 조금 안쪽까지만 (실시간 서버는 위치를 32비트 실수로 보내므로 경계값은 밖으로 반올림될 수 있다)
+  const EDGE = 0.02;
   return {
-    x: clamp(tx + 0.35 + rand() * 0.3, Math.max(x, tx + 0.05), Math.min(x + w, tx + 0.95)),
-    z: clamp(tz + 0.35 + rand() * 0.3, Math.max(z, tz + 0.05), Math.min(z + h, tz + 0.95)),
+    x: clamp(tx + 0.35 + rand() * 0.3, Math.max(x + EDGE, tx + 0.05), Math.min(x + w - EDGE, tx + 0.95)),
+    z: clamp(tz + 0.35 + rand() * 0.3, Math.max(z + EDGE, tz + 0.05), Math.min(z + h - EDGE, tz + 0.95)),
   };
 }

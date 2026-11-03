@@ -18,7 +18,8 @@
     "assets:check": "tsx scripts/check-assets.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p server/tsconfig.json",
     "test": "vitest run",
-    "test:postgres": "tsx scripts/test-postgres.ts"
+    "test:postgres": "tsx scripts/test-postgres.ts",
+    "db:bundle": "tsx scripts/bundle-sql.ts"
   },
   "dependencies": {
     "@colyseus/core": "0.18.25",

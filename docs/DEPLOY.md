@@ -40,19 +40,17 @@ SCENE(PROJECT SCENE)을 인터넷 주소로 띄우는 순서입니다. 처음 �
 2. Region은 **Northeast Asia (Seoul)** 를 고릅니다. 한국 사용자에게 가장 빠릅니다.
 3. **Database Password** 는 따로 적어 둡니다. 아래 DB 주소에 들어갑니다.
 
-### 1-2. 표 만들기 (마이그레이션)
+### 1-2. 표 만들기 (한 번에)
 
-왼쪽 메뉴 **SQL Editor → New query** 에서 아래 다섯 파일 내용을 **순서대로** 붙여 넣고 각각 **Run** 합니다.
+1. 프로젝트가 다 만들어지면(1~2분) 왼쪽 메뉴 **SQL Editor → New query**.
+2. 저장소의 `supabase/setup.sql` 내용을 **통째로** 복사해 붙여 넣고 **Run**.
+3. 아래쪽에 `Success. No rows returned` 가 나오면 끝입니다.
 
-1. `supabase/migrations/20261102000000_debate.sql`
-2. `supabase/migrations/20261102010000_spectator_judging.sql`
-3. `supabase/migrations/20261102020000_scene.sql` (나의 방, 기록, 사진, 친구, 방명록, 차단, 신고, 방문)
-4. `supabase/migrations/20261102030000_town.sql` (마을 집터)
-5. `supabase/migrations/20261103000000_hoods.sql` (집터가 다 차면 열리는 새 동네)
+`setup.sql` 은 `supabase/migrations/` 의 파일 다섯 개를 순서대로 이어 붙인 것입니다. 여러 번 실행해도 안전하고, 실행한 파일 목록이 `schema_migrations` 표에 남습니다 (**Table Editor** 에서 볼 수 있습니다).
 
-모든 표는 보안 규칙(RLS)으로 잠겨 있어서, 브라우저에서 직접 읽거나 쓸 수 없습니다. 읽기·쓰기는 모두 웹 서버(Vercel)가 규칙을 검사한 뒤에 합니다.
+모든 표는 보안 규칙(RLS)으로 잠겨 있어서, 브라우저에서 직접 읽거나 쓸 수 없습니다. 읽기·쓰기는 모두 웹 서버(Vercel)가 규칙을 검사한 뒤에 합니다. RLS를 켜고 정책을 두지 않은 것이라 Supabase가 "RLS enabled, no policies" 라고 알려 줘도 정상입니다.
 
-> 나중에 `supabase/migrations/` 에 새 파일이 생기면, 그 파일만 같은 방법으로 실행하면 됩니다.
+> 나중에 `supabase/migrations/` 에 새 파일이 생기면, 그 파일만 같은 방법으로 실행하거나 새로 만든 `setup.sql` 을 다시 실행하면 됩니다.
 
 ### 1-3. 값 세 개 복사하기
 
@@ -193,7 +191,7 @@ Vercel 환경변수 `NEXT_PUBLIC_AUTH_PROVIDERS` 에 켠 것만 적고 Redeploy 
 ## 8. 그다음부터
 
 - `main` 에 올리면 Vercel과 Render가 알아서 다시 배포합니다.
-- DB 표 구조가 바뀌면 `supabase/migrations/` 의 새 파일만 SQL Editor에서 실행합니다.
+- DB 표 구조가 바뀌면 `supabase/migrations/` 의 새 파일만 SQL Editor에서 실행합니다 (또는 `setup.sql` 전체를 다시 실행해도 됩니다).
 - 운영 DB 경로는 로컬에서 `npm run test:postgres` 로 확인할 수 있습니다 (운영과 같은 드라이버로 미니홈피 규칙과 토론 하루 흐름을 돌립니다).
 - 사진은 1차에서 DB에 저장합니다 (한 장 800KB 이하). Supabase Free DB는 500MB라 사용자가 늘면 Supabase Storage로 옮겨야 합니다.
 
@@ -203,9 +201,9 @@ Vercel 환경변수 `NEXT_PUBLIC_AUTH_PROVIDERS` 에 켠 것만 적고 Redeploy 
 
 | 증상 | 확인할 것 |
 |---|---|
-| 화면마다 "잠시 후 다시 시도해 주세요" | `DATABASE_URL` 이 Transaction pooler(포트 6543) 주소이고 비밀번호가 맞는지. 1-2의 SQL 다섯 개를 모두 실행했는지. Vercel **Logs** 에서 오류 확인 |
+| 화면마다 "잠시 후 다시 시도해 주세요" | `DATABASE_URL` 이 Transaction pooler(포트 6543) 주소이고 비밀번호가 맞는지. 1-2의 `setup.sql` 을 실행했는지 (Table Editor에 `profiles`, `rooms` 같은 표가 보이는지). Vercel **Logs** 에서 오류 확인 |
 | 마을 화면에서 "마을 서버에 연결하지 못했어요" | `NEXT_PUBLIC_REALTIME_URL` 이 Render 주소와 같은지 (`https://`, 끝에 `/` 없이. 바꿨다면 Redeploy). `TOWN_TOKEN_SECRET` 이 Vercel과 Render에 똑같이 들어 있는지. Render Free가 자고 있었다면 1분 뒤 다시 |
-| 마을에 내 집이 없음 | 1-2의 4·5번 SQL(`…_town.sql`, `…_hoods.sql`)을 실행했는지. 1동이 다 찼으면 집은 2동부터 서고, 접속하면 그 동네로 바로 간다 (본섬에서는 큰길 끝 동네 길 아치로 오간다) |
+| 마을에 내 집이 없음 | 1-2의 `setup.sql` 을 마지막 버전으로 실행했는지 (`schema_migrations` 표에 `…_town.sql`, `…_hoods.sql` 이 있는지). 1동이 다 찼으면 집은 2동부터 서고, 접속하면 그 동네로 바로 간다 (본섬에서는 큰길 끝 동네 길 아치로 오간다) |
 | 사진을 올리면 "사진이 너무 커요" | 화면에서 긴 변 1600px JPEG로 줄여 올립니다. 그래도 크면 `recordConfig.photoMaxBytes` 확인 |
 | 로그인 뒤 `/login?error=1` | 5-1의 Redirect URLs에 `…/auth/callback` 이 있는지 |
 | 카카오·구글 버튼을 누르면 오류 | Supabase에서 그 로그인을 켰는지, `NEXT_PUBLIC_AUTH_PROVIDERS` 에 켠 것만 적었는지 |
