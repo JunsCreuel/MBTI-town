@@ -21,9 +21,10 @@ services:
       # 운영 모드: 입장 토큰 비밀값이 없으면 서버가 토큰을 하나도 받지 않는다
       - key: NODE_ENV
         value: production
-      # 마을 입장 토큰 비밀값. Vercel의 TOWN_TOKEN_SECRET과 똑같은 값을 넣는다 (만들 때 대시보드가 물어본다)
+      # 마을 입장 토큰 비밀값. Render가 처음 만들 때 무작위 값을 만들어 둔다.
+      # 이 값을 복사해 Vercel의 TOWN_TOKEN_SECRET에 똑같이 넣는다.
       - key: TOWN_TOKEN_SECRET
-        sync: false
+        generateValue: true
       # 방(채널)당 정원. 비우면 src/config/game.ts 기본값(100)
       - key: TOWN_ROOM_CAPACITY
         value: "100"

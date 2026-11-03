@@ -16,7 +16,7 @@ SCENE(PROJECT SCENE)을 인터넷 주소로 띄우는 순서입니다. 처음 �
 
 준비물: GitHub 계정, 그리고 Supabase·Render·Vercel 계정 (셋 다 GitHub로 가입할 수 있습니다).
 
-순서: **0. GitHub 정리 → 1. Supabase → 2. 비밀값 만들기 → 3. Render → 4. Vercel → 5. 로그인 설정 → 6. 확인**
+순서: **0. GitHub 정리 → 1. Supabase → 2. 비밀값(Render가 만듦) → 3. Render → 4. Vercel → 5. 로그인 설정 → 6. 확인**
 
 ---
 
@@ -65,16 +65,12 @@ DB 접속 주소의 `[YOUR-PASSWORD]` 는 1-1에서 정한 비밀번호로 바�
 
 ---
 
-## 2. 비밀값 만들기: `TOWN_TOKEN_SECRET`
+## 2. 비밀값: `TOWN_TOKEN_SECRET`
 
-마을 입장 토큰에 서명하는 값입니다. 길고 무작위인 문자열 하나를 만들어 Render와 Vercel에 **똑같이** 넣습니다.
-터미널에서 아래 명령으로 만들 수 있습니다 (또는 비밀번호 관리자의 무작위 생성 기능).
+마을 입장 토큰에 서명하는 값입니다. **Render가 서비스를 만들 때 무작위 값을 자동으로 만들어 줍니다** (`render.yaml` 의 `generateValue`).
+3단계가 끝나면 Render 서비스의 **Environment** 탭에서 이 값을 복사해, 4단계에서 Vercel에 **똑같이** 넣으면 됩니다.
 
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
-```
-
-이 값은 코드나 채팅에 붙여 넣지 말고, 두 서비스의 환경변수 화면에만 넣으세요. 값이 새면 새로 만들어 두 곳을 함께 바꾸면 됩니다.
+이 값은 코드나 채팅에 붙여 넣지 말고, 두 서비스의 환경변수 화면에만 넣으세요. 값이 새면 Render에서 새 값으로 바꾸고 Vercel에도 같은 값을 넣은 뒤 둘 다 다시 배포하면 됩니다.
 
 ---
 
@@ -84,7 +80,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))"
 
 1. https://render.com 에서 **New → Blueprint**.
 2. GitHub 저장소를 연결하고, 브랜치 `main` 을 고릅니다.
-3. `render.yaml` 을 읽어 `scene-town-realtime` 서비스를 보여 줍니다. `TOWN_TOKEN_SECRET` 값을 물어보면 2단계 값을 넣고 **Apply** (또는 Deploy Blueprint).
+3. `render.yaml` 을 읽어 `scene-town-realtime` 서비스를 보여 주면 **Apply** (또는 Deploy Blueprint). `TOWN_TOKEN_SECRET` 은 Render가 알아서 만듭니다.
 4. 배포가 끝나면 서비스 주소를 복사합니다. 예: `https://scene-town-realtime.onrender.com` (이름이 겹치면 뒤에 글자가 붙습니다)
 5. 확인: 브라우저로 `주소/__healthcheck` 를 열어 오류 없이 열리면 됩니다.
 
@@ -107,7 +103,7 @@ Free 플랜은 15분 동안 접속이 없으면 잠들고, 다음 사람이 마�
 | `NEXT_PUBLIC_SUPABASE_URL` | 1-3의 Project URL | 필수 |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 1-3의 Publishable key | 필수 |
 | `NEXT_PUBLIC_REALTIME_URL` | 3단계 Render 주소 (`https://…onrender.com`, 끝에 `/` 없이) | 필수 |
-| `TOWN_TOKEN_SECRET` | 2단계 값 (Render와 똑같이) | 필수 |
+| `TOWN_TOKEN_SECRET` | Render 서비스 Environment 탭의 같은 이름 값 (똑같이 복사) | 필수 |
 | `NEXT_PUBLIC_AUTH_PROVIDERS` | 비워 둡니다. 5단계에서 소셜 로그인을 켠 뒤 `kakao,google` 처럼 적습니다 | 선택 |
 | `CRON_SECRET` | 아무 긴 무작위 문자열 (7단계) | 선택 |
 
