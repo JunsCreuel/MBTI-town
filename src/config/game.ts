@@ -104,16 +104,12 @@ export const socialConfig = {
   visitDays: 30,
 } as const;
 
-/** 대진 방식. 초기 인원이 적으면 축 대전이나 기질 그룹 대전으로 바꾼다. */
-export type MatchupMode = 'type' | 'axis' | 'temperament';
-
 // 오늘의 토론: 중앙광장 이벤트 (PROJECT_GUIDE.md 10장). 시간과 숫자는 모두 가안이다.
 export const debateConfig = {
   /** 하루 경기 시간표 (한국 시간). 칸 하나가 한 경기다. 하루 1~2경기. */
   slots: [{ opensAt: '00:00', writingEndsAt: '18:00', votingEndsAt: '21:00' }],
   /** 시간표 기준 시간대 (UTC 기준 분). 한국은 +9시간, 서머타임 없음. */
   utcOffsetMinutes: 540,
-  matchupMode: 'type' as MatchupMode,
   /** 논거 한 개 최대 글자 수 */
   argumentMaxLength: 300,
   argumentMinLength: 10,
@@ -123,11 +119,11 @@ export const debateConfig = {
   representativeArgs: 3,
   /**
    * 관전 판정 집계 방식. 관전자는 대표 논거 하나를 고르고, 그 논거의 팀에 한 표가 간다.
-   * byType: 유형마다 같은 무게로 센다 (사람이 많은 유형이 투표를 좌우하지 않게).
+   * byDistrict: 판정 지역마다 같은 무게로 센다 (주민이 많은 지역이 판정을 좌우하지 않게).
    * none: 표 수 그대로 센다.
    */
-  voteNormalization: 'byType' as 'byType' | 'none',
-  /** MBTI를 바꾼 뒤 다시 바꿀 수 있을 때까지 (일). 팀을 옮겨 다니며 참여하는 걸 막는다. */
+  voteNormalization: 'byDistrict' as 'byDistrict' | 'none',
+  /** MBTI(프로필 태그)를 바꾼 뒤 다시 바꿀 수 있을 때까지 (일) */
   mbtiChangeCooldownDays: 7,
   /** 결과 집계가 이 시간(분) 넘게 끝나지 않으면 멈춘 것으로 보고 다시 집계한다 */
   judgingStaleMinutes: 10,

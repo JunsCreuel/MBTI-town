@@ -2,7 +2,9 @@
 
 import { useEffect, useState, type CSSProperties } from 'react';
 import { MBTI_TYPES, mbtiColor } from '@/design/mbti';
+import { tokens } from '@/design/tokens';
 import type { Side } from '@/shared/debate';
+import { DISTRICT, DISTRICTS } from '@/shared/districts';
 import type { DebateView } from './api';
 import { canvasToBlob, drawResultCard } from './resultCard';
 import { teamInk, teamVars } from './teamColor';
@@ -13,7 +15,13 @@ export function ResultSection({ view }: { view: DebateView }) {
   const team = (s: Side) => (s === 'a' ? m.teamA : m.teamB);
   const color = (s: Side) => teamInk(team(s), s);
   const label = (s: Side) => team(s).label;
-  const types = MBTI_TYPES.filter((t) => r.byType[t]);
+  // 판정한 무리: 지역 대결은 관전 지역, 예전 MBTI 대결 기록은 관전 유형
+  const groups: { id: string; name: string; color: string; v: Record<Side, number> }[] = r.byDistrict
+    ? DISTRICTS.filter((d) => r.byDistrict![d]).map((d) => ({
+        id: d, name: `${DISTRICT[d].short} 지역`, color: tokens.district[d], v: r.byDistrict![d]!,
+      }))
+    : MBTI_TYPES.filter((t) => r.byType?.[t]).map((t) => ({ id: t, name: t, color: mbtiColor(t), v: r.byType![t]! }));
+  const unit = r.byDistrict ? '지역' : '유형';
 
   return (
     <section className="panel result-panel" aria-label="결과 발표">
@@ -41,24 +49,23 @@ export function ResultSection({ view }: { view: DebateView }) {
         </blockquote>
       )}
 
-      {types.length > 0 && (
+      {groups.length > 0 && (
         <div className="verdicts">
-          <h3 className="section-title">관전 유형별 판정</h3>
-          <p className="muted">유형마다 같은 무게로 셌어요. 사람이 많은 유형이 결과를 좌우하지 않아요.</p>
+          <h3 className="section-title">관전 {unit}별 판정</h3>
+          <p className="muted">{unit}마다 같은 무게로 셌어요. 사람이 많은 {unit}이 결과를 좌우하지 않아요.</p>
           <ul className="verdict-grid">
-            {types.map((t) => {
-              const v = r.byType[t]!;
+            {groups.map(({ id, name, color: dot, v }) => {
               const lean: Side | null = v.a === v.b ? null : v.a > v.b ? 'a' : 'b';
               return (
                 <li
-                  key={t}
+                  key={id}
                   className="verdict"
                   style={(lean ? teamVars(team(lean), lean) : {}) as CSSProperties}
                   title={`${label('a')} ${v.a}표 · ${label('b')} ${v.b}표`}
                 >
                   <span className="verdict__type">
-                    <span className="pill__dot" style={{ '--chip-color': mbtiColor(t) } as CSSProperties} />
-                    {t}
+                    <span className="pill__dot" style={{ '--chip-color': dot } as CSSProperties} />
+                    {name}
                   </span>
                   <span className="verdict__lean">{lean ? label(lean) : '반반'}</span>
                   <span className="verdict__count">

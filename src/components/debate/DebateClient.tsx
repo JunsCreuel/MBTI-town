@@ -3,9 +3,9 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { debateConfig } from '@/config/game';
-import { MBTI_GROUPS, MBTI_TYPES, groupOf, isMbtiType, mbtiColor, type MbtiType } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import type { Phase, Side } from '@/shared/debate';
+import { DISTRICT, isDistrict } from '@/shared/districts';
 import { ApiError, api, type DebateView, type MeResponse } from './api';
 import { ResultSection } from './ResultSection';
 import { teamColor, teamInk, teamVars } from './teamColor';
@@ -146,10 +146,11 @@ function TopBar({ me }: { me: MeResponse | null }) {
       <span className="topbar__title">오늘의 토론</span>
       {me?.loggedIn ? (
         <button className="topbar__me" onClick={logout} disabled={busy} title="로그아웃">
-          {me.mbti ? (
-            <span className="pill__dot" style={{ '--chip-color': mbtiColor(me.mbti as MbtiType) } as CSSProperties} />
+          {me.profile?.district ? (
+            <span className="pill__dot" style={{ '--chip-color': tokens.district[me.profile.district] } as CSSProperties} />
           ) : null}
-          {me.mbti ?? '유형 미정'} · 로그아웃
+          {me.profile?.district ? `${DISTRICT[me.profile.district].short} 주민` : '주민 등록 전'}
+          {me.mbti ? ` · ${me.mbti}` : ''} · 로그아웃
         </button>
       ) : (
         <Link className="topbar__me" href="/login?next=/debate">로그인</Link>
@@ -212,7 +213,7 @@ function TeamName({ view, side }: { view: DebateView; side: Side }) {
     <span className="team-name" style={teamVars(team, side) as CSSProperties}>
       <span className="team-name__dot" aria-hidden />
       {team.label}
-      {view.me.side === side && <span className="team-name__mine">우리 팀</span>}
+      {view.me.side === side && <span className="team-name__mine">우리 지역</span>}
     </span>
   );
 }
@@ -227,12 +228,20 @@ function ActionPanel({ view, me, onChanged }: { view: DebateView; me: MeResponse
         <p className="action-panel__lead">
           {view.phase === 'voting' ? '관전 판정이 열렸어요.' : `오늘은 ${m.teamA.label}과 ${m.teamB.label}의 대결이에요.`}
         </p>
-        <p className="muted">로그인하면 우리 팀 논거를 쓰거나, 관전자로 승패를 판정할 수 있어요.</p>
+        <p className="muted">로그인하면 우리 지역 논거를 쓰거나, 다른 지역 주민으로서 승패를 판정할 수 있어요.</p>
         <Link className="btn-primary btn-primary--inline" href="/login?next=/debate">로그인하고 참여하기</Link>
       </section>
     );
   }
-  if (!view.me.mbti) return <MbtiSetup onChanged={onChanged} />;
+  if (!view.me.district) {
+    return (
+      <section className="panel action-panel">
+        <p className="action-panel__lead">마을 주민만 참여할 수 있어요</p>
+        <p className="muted">가입을 마치면 사주로 사는 지역이 정해져요. 우리 지역이 출전하는 날엔 논거를 쓰고, 아닌 날엔 판정해요.</p>
+        <Link className="btn-primary btn-primary--inline" href="/onboarding">가입 마치기</Link>
+      </section>
+    );
+  }
 
   if (view.phase === 'judging') {
     return (
@@ -248,8 +257,8 @@ function ActionPanel({ view, me, onChanged }: { view: DebateView; me: MeResponse
     if (!view.me.side) {
       return (
         <section className="panel action-panel">
-          <p className="action-panel__lead">오늘 {view.me.mbti}는 관전자예요.</p>
-          <p className="muted">{hm(m.writingEndsAt)}부터 관전 판정이 열려요. 그때 양 팀 대표 논거 중 가장 설득력 있는 하나를 고르면, 그 팀에 한 표가 가요.</p>
+          <p className="action-panel__lead">오늘 {DISTRICT[view.me.district].short} 지역은 관전 지역이에요.</p>
+          <p className="muted">{hm(m.writingEndsAt)}부터 관전 판정이 열려요. 그때 두 지역 대표 논거 중 가장 설득력 있는 하나를 고르면, 그 지역에 한 표가 가요.</p>
         </section>
       );
     }
@@ -257,7 +266,7 @@ function ActionPanel({ view, me, onChanged }: { view: DebateView; me: MeResponse
     return (
       <section className="panel action-panel">
         <p className="action-panel__lead">논거를 냈어요!</p>
-        <p className="muted">우리 팀 논거에 추천을 눌러 대표 논거 {debateConfig.representativeArgs}개를 뽑아 주세요. 추천은 {hm(m.writingEndsAt)}까지예요.</p>
+        <p className="muted">우리 지역 논거에 추천을 눌러 대표 논거 {debateConfig.representativeArgs}개를 뽑아 주세요. 추천은 {hm(m.writingEndsAt)}까지예요.</p>
       </section>
     );
   }
@@ -266,8 +275,8 @@ function ActionPanel({ view, me, onChanged }: { view: DebateView; me: MeResponse
   if (!view.me.canVote) {
     return (
       <section className="panel action-panel">
-        <p className="action-panel__lead">우리 팀 대표 논거가 정해졌어요.</p>
-        <p className="muted">다른 유형 주민들이 대표 논거를 읽고 판정하고 있어요. {hm(m.votingEndsAt)}에 결과가 발표돼요.</p>
+        <p className="action-panel__lead">우리 지역 대표 논거가 정해졌어요.</p>
+        <p className="muted">다른 세 지역 주민들이 대표 논거를 읽고 판정하고 있어요. {hm(m.votingEndsAt)}에 결과가 발표돼요.</p>
       </section>
     );
   }
@@ -299,8 +308,8 @@ function Compose({ view, onChanged }: { view: DebateView; onChanged: () => void 
 
   return (
     <section className="panel action-panel" aria-label="논거 쓰기">
-      <p className="action-panel__lead">우리 팀 입장: “{stance}”</p>
-      <p className="muted">설득력 있는 이유와 근거를 써 주세요. 팀 안에서 추천을 많이 받은 {debateConfig.representativeArgs}개가 대표 논거가 돼요.</p>
+      <p className="action-panel__lead">우리 지역 입장: “{stance}”</p>
+      <p className="muted">설득력 있는 이유와 근거를 써 주세요. 지역 안에서 추천을 많이 받은 {debateConfig.representativeArgs}개가 대표 논거가 돼요.</p>
       <label className="sr-only" htmlFor="argument">논거</label>
       <textarea
         id="argument"
@@ -353,7 +362,7 @@ function JudgePanel({ view, onChanged, teamLabel }: { view: DebateView; onChange
       ) : (
         <>
           <p className="action-panel__lead">가장 설득력 있는 논거 하나를 골라 주세요</p>
-          <p className="muted">팀 이름보다 내용을 보고 골라 주세요. 고른 논거의 팀에 한 표가 가고, 한 번만 고를 수 있어요.</p>
+          <p className="muted">지역 이름보다 내용을 보고 골라 주세요. 고른 논거의 지역에 한 표가 가고, 한 번만 고를 수 있어요.</p>
         </>
       )}
       {reps.length === 0 ? (
@@ -388,53 +397,6 @@ function JudgePanel({ view, onChanged, teamLabel }: { view: DebateView; onChange
           );
         })
       )}
-      {error && <p className="form-error" role="alert">{error}</p>}
-    </section>
-  );
-}
-
-function MbtiSetup({ onChanged }: { onChanged: () => void }) {
-  const [picked, setPicked] = useState<MbtiType | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function save() {
-    if (!picked) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api('/api/me', { mbti: picked });
-      onChanged();
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : '저장하지 못했어요.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="panel action-panel" aria-label="내 MBTI 정하기">
-      <p className="action-panel__lead">내 MBTI를 정해 주세요</p>
-      <p className="muted">유형에 따라 출전 팀이 되거나 관전자가 돼요. 정한 뒤 {debateConfig.mbtiChangeCooldownDays}일 동안은 바꿀 수 없어요.</p>
-      <div className="type-grid type-grid--compact">
-        {MBTI_GROUPS.flatMap((g) =>
-          MBTI_TYPES.filter((t) => groupOf(t) === g.id).map((code) => (
-            <button
-              key={code}
-              className="type-chip"
-              style={{ '--chip-color': mbtiColor(code) } as CSSProperties}
-              aria-pressed={picked === code}
-              onClick={() => setPicked(code)}
-            >
-              <span className="type-chip__swatch" aria-hidden />
-              <span className="type-chip__code">{code}</span>
-            </button>
-          )),
-        )}
-      </div>
-      <button className="btn-primary btn-primary--inline" disabled={!picked || busy} onClick={save}>
-        {picked ? `${picked}(으)로 정하기` : '유형을 골라 주세요'}
-      </button>
       {error && <p className="form-error" role="alert">{error}</p>}
     </section>
   );
@@ -492,8 +454,12 @@ function Arguments({ view, onChanged }: { view: DebateView; onChanged: () => voi
               <p className="argument__body">{a.body}</p>
               <div className="argument__meta">
                 <span className="argument__author">
-                  <span className="pill__dot" style={{ '--chip-color': isMbtiType(a.authorMbti) ? mbtiColor(a.authorMbti) : tokens.color.lose } as CSSProperties} />
-                  {a.mine ? '내 논거' : `${a.authorMbti} 주민`}
+                  <span
+                    className="pill__dot"
+                    style={{ '--chip-color': isDistrict(a.authorDistrict) ? tokens.district[a.authorDistrict] : tokens.color.lose } as CSSProperties}
+                  />
+                  {a.mine ? '내 논거' : isDistrict(a.authorDistrict) ? `${DISTRICT[a.authorDistrict].short} 주민` : '주민'}
+                  {a.authorMbti && <span className="argument__tag">{a.authorMbti}</span>}
                 </span>
                 {canRecommend && !a.mine ? (
                   <button

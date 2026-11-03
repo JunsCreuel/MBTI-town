@@ -1,23 +1,26 @@
 // 토론 매치 규칙을 지키며 저장소를 다룬다. 화면(API)은 이 클래스만 쓴다.
-// 승패는 관전 유형이 정한다: 관전자가 대표 논거 하나를 고르면 그 논거의 팀에 한 표가 간다.
+// 오늘의 토론은 지역(오행) 대결이다. 출전 두 지역 주민이 논거를 쓰고, 나머지 세 지역 주민이 판정한다.
+// 승패는 관전 지역이 정한다: 관전자가 대표 논거 하나를 고르면 그 논거의 팀에 한 표가 간다.
+// MBTI는 토론 편과 상관없는 프로필 태그다.
 import 'server-only';
 import { debateConfig } from '@/config/game';
-import { MBTI_TYPES, isMbtiType, type MbtiType } from '@/design/mbti';
+import { isMbtiType, type MbtiType } from '@/design/mbti';
 import {
   canVote, currentSlot, decideWinner, decisiveArgument, matchupFor, phaseOf, pickTopic, representatives, sideOf,
-  tallyByType, voteScore, type Match, type MatchResult, type Phase, type Side, type Topic,
+  tallyByDistrict, voteScore, type Match, type MatchResult, type Phase, type Side, type Topic,
 } from '@/shared/debate';
+import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
 import { moderate } from '@/shared/moderation';
 import { TOPICS } from '@/shared/topics';
 import type { DebateStore, Profile } from './store';
 
 export type DebateErrorCode =
-  | 'login_required' | 'mbti_required' | 'not_found' | 'wrong_phase' | 'not_team' | 'limit' | 'too_short' | 'too_long'
+  | 'login_required' | 'resident_required' | 'not_found' | 'wrong_phase' | 'not_team' | 'limit' | 'too_short' | 'too_long'
   | 'rejected' | 'own_argument' | 'other_team' | 'not_voter' | 'not_representative' | 'already_voted' | 'cooldown'
   | 'bad_request';
 
 const STATUS: Record<DebateErrorCode, number> = {
-  login_required: 401, mbti_required: 403, not_found: 404, wrong_phase: 409, not_team: 403, limit: 409, too_short: 400,
+  login_required: 401, resident_required: 403, not_found: 404, wrong_phase: 409, not_team: 403, limit: 409, too_short: 400,
   too_long: 400, rejected: 422, own_argument: 409, other_team: 403, not_voter: 403, not_representative: 409,
   already_voted: 409, cooldown: 429, bad_request: 400,
 };
@@ -34,7 +37,10 @@ export interface ArgumentView {
   id: string;
   side: Side;
   body: string;
-  authorMbti: MbtiType;
+  /** 쓴 사람의 지역 (예전 MBTI 대결 기록은 null) */
+  authorDistrict: District | null;
+  /** 쓴 사람의 MBTI 태그 (선택) */
+  authorMbti: string | null;
   recommendations: number;
   mine: boolean;
   recommended: boolean;
@@ -58,7 +64,8 @@ export interface DebateView {
   };
   me: {
     loggedIn: boolean;
-    mbti: MbtiType | null;
+    /** 내 지역 (가입을 마친 주민만) */
+    district: District | null;
     side: Side | null;
     canVote: boolean;
     /** 내가 고른 대표 논거 */
@@ -147,8 +154,8 @@ export class DebateService {
     const now = this.now();
     const phase = phaseOf(match, now);
     const profile = viewer ? await this.store.getProfile(viewer.id) : null;
-    const mbti = profile?.mbti ?? null;
-    const side = sideOf(match, mbti);
+    const district = profile?.district ?? null;
+    const side = sideOf(match, district);
     const [args, recommended, vote, mine, recent] = await Promise.all([
       this.store.listArguments(match.id),
       viewer ? this.store.recommendedBy(match.id, viewer.id) : Promise.resolve([]),
@@ -181,9 +188,9 @@ export class DebateService {
       },
       me: {
         loggedIn: !!viewer,
-        mbti,
+        district,
         side,
-        canVote: !!viewer && canVote(match, mbti),
+        canVote: !!viewer && canVote(match, district),
         vote,
         argumentsLeft: side ? Math.max(0, debateConfig.argumentsPerUser - mine) : 0,
       },
@@ -200,6 +207,7 @@ export class DebateService {
           id: a.id,
           side: a.side,
           body: a.body,
+          authorDistrict: a.authorDistrict,
           authorMbti: a.authorMbti,
           recommendations: a.recommendations,
           mine: !!viewer && a.authorId === viewer.id,
@@ -215,18 +223,23 @@ export class DebateService {
     };
   }
 
-  private async requireMember(viewer: Viewer | null, match: Match): Promise<{ mbti: MbtiType; side: Side }> {
+  private async requireResident(viewer: Viewer | null): Promise<{ district: District; mbti: MbtiType | null }> {
     if (!viewer) throw new DebateError('login_required', '로그인이 필요해요.');
     const p = await this.store.getProfile(viewer.id);
-    if (!p?.mbti) throw new DebateError('mbti_required', '먼저 내 MBTI를 정해 주세요.');
-    const side = sideOf(match, p.mbti);
-    if (!side) throw new DebateError('not_team', `오늘은 ${match.teamA.label}과 ${match.teamB.label}만 논거를 쓸 수 있어요.`);
-    return { mbti: p.mbti, side };
+    if (!p?.district) throw new DebateError('resident_required', '마을에 집이 있는 주민만 참여할 수 있어요. 먼저 가입을 마쳐 주세요.');
+    return { district: p.district, mbti: p.mbti };
+  }
+
+  private async requireMember(viewer: Viewer | null, match: Match): Promise<{ district: District; mbti: MbtiType | null; side: Side }> {
+    const r = await this.requireResident(viewer);
+    const side = sideOf(match, r.district);
+    if (!side) throw new DebateError('not_team', `오늘은 ${match.teamA.label}과 ${match.teamB.label} 주민만 논거를 쓸 수 있어요.`);
+    return { ...r, side };
   }
 
   async submitArgument(viewer: Viewer | null, rawBody: unknown) {
     const match = await this.currentMatch();
-    const { mbti, side } = await this.requireMember(viewer, match);
+    const { district, mbti, side } = await this.requireMember(viewer, match);
     if (phaseOf(match, this.now()) !== 'writing') throw new DebateError('wrong_phase', '논거 작성 시간이 끝났어요.');
     const body = typeof rawBody === 'string' ? rawBody.trim() : '';
     if ([...body].length < debateConfig.argumentMinLength) {
@@ -240,7 +253,9 @@ export class DebateService {
     }
     const check = moderate(body);
     if (!check.allowed) throw new DebateError('rejected', check.reason);
-    return this.store.insertArgument({ matchId: match.id, authorId: viewer!.id, authorMbti: mbti, side, body, at: this.now() });
+    return this.store.insertArgument({
+      matchId: match.id, authorId: viewer!.id, authorDistrict: district, authorMbti: mbti, side, body, at: this.now(),
+    });
   }
 
   async recommend(viewer: Viewer | null, argumentId: unknown, on: unknown): Promise<void> {
@@ -250,7 +265,7 @@ export class DebateService {
     if (phaseOf(match, this.now()) !== 'writing') throw new DebateError('wrong_phase', '추천 시간이 끝났어요. 대표 논거가 정해졌어요.');
     const arg = await this.store.getArgument(argumentId);
     if (!arg || arg.matchId !== match.id) throw new DebateError('not_found', '논거를 찾을 수 없어요.');
-    if (arg.side !== side) throw new DebateError('other_team', '추천은 우리 팀 논거에만 할 수 있어요.');
+    if (arg.side !== side) throw new DebateError('other_team', '추천은 우리 지역 논거에만 할 수 있어요.');
     if (arg.authorId === viewer!.id) throw new DebateError('own_argument', '내 논거는 추천할 수 없어요.');
     await this.store.setRecommendation(match.id, arg.id, viewer!.id, on);
   }
@@ -261,13 +276,12 @@ export class DebateService {
     if (!viewer) throw new DebateError('login_required', '로그인이 필요해요.');
     const match = await this.currentMatch();
     if (phaseOf(match, this.now()) !== 'voting') throw new DebateError('wrong_phase', '지금은 판정 시간이 아니에요.');
-    const p = await this.store.getProfile(viewer.id);
-    if (!p?.mbti) throw new DebateError('mbti_required', '먼저 내 MBTI를 정해 주세요.');
-    if (!canVote(match, p.mbti)) throw new DebateError('not_voter', '출전 팀은 판정할 수 없어요. 관전 주민들이 판정해요.');
+    const { district } = await this.requireResident(viewer);
+    if (!canVote(match, district)) throw new DebateError('not_voter', '출전 지역은 판정할 수 없어요. 다른 세 지역 주민들이 판정해요.');
     const args = await this.store.listArguments(match.id);
     const arg = [...representatives(args, 'a'), ...representatives(args, 'b')].find((a) => a.id === argumentId);
     if (!arg) throw new DebateError('not_representative', '대표 논거 중에서 골라 주세요.');
-    const ok = await this.store.insertVote({ matchId: match.id, userId: viewer.id, voterMbti: p.mbti, side: arg.side, argumentId: arg.id });
+    const ok = await this.store.insertVote({ matchId: match.id, userId: viewer.id, voterDistrict: district, side: arg.side, argumentId: arg.id });
     if (!ok) throw new DebateError('already_voted', '이미 판정했어요.');
   }
 
@@ -293,15 +307,15 @@ export class DebateService {
       const picks: Record<string, number> = {};
       for (const v of votes) if (v.argumentId && repIds.has(v.argumentId)) picks[v.argumentId] = (picks[v.argumentId] ?? 0) + 1;
       const decisive = winner === 'draw' ? null : decisiveArgument(reps[winner], picks);
-      const byType = tallyByType(votes);
+      const byDistrict = tallyByDistrict(votes);
       const result: MatchResult = {
         vote,
         voters: votes.length,
-        byType,
+        byDistrict,
         picks,
         winner,
         decisive: decisive ? { argumentId: decisive.id, side: decisive.side, body: decisive.body, picks: picks[decisive.id] ?? 0 } : null,
-        summary: summarize(match, winner, byType, votes.length),
+        summary: summarize(match, winner, byDistrict, votes.length),
         representative: { a: reps.a.map((x) => x.id), b: reps.b.map((x) => x.id) },
         decidedAt: this.now().toISOString(),
       };
@@ -320,13 +334,14 @@ export class DebateService {
 function summarize(
   match: Match,
   winner: Side | 'draw',
-  byType: MatchResult['byType'],
+  byDistrict: NonNullable<MatchResult['byDistrict']>,
   voters: number,
 ): string {
   if (!voters) return '관전 판정이 없어 무승부예요.';
-  const types = MBTI_TYPES.filter((t) => byType[t]);
-  if (winner === 'draw') return `관전 유형 ${types.length}개, ${voters}명이 판정했는데 두 팀이 똑같이 표를 받았어요.`;
+  const judging = DISTRICTS.filter((d) => byDistrict[d]);
+  if (winner === 'draw') return `관전 지역 ${judging.length}곳, ${voters}명이 판정했는데 두 지역이 똑같이 표를 받았어요.`;
   const label = winner === 'a' ? match.teamA.label : match.teamB.label;
-  const backers = types.filter((t) => byType[t]![winner] > byType[t]![winner === 'a' ? 'b' : 'a']).length;
-  return `관전 유형 ${types.length}개, ${voters}명이 판정했어요. 그중 ${backers}개 유형이 ${label} 손을 들었어요.`;
+  const backers = judging.filter((d) => byDistrict[d]![winner] > byDistrict[d]![winner === 'a' ? 'b' : 'a']);
+  const names = backers.map((d) => DISTRICT[d].short).join('·');
+  return `관전 지역 ${judging.length}곳, ${voters}명이 판정했어요. ${backers.length ? `${names} 지역이 ` : ''}${label} 손을 들었어요.`;
 }

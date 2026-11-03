@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { MBTI_TYPES } from '../design/mbti';
 import {
   canVote, clip, currentSlot, decideWinner, decisiveArgument, localDate, matchupCycle, matchupFor, phaseOf, pickTopic,
-  representatives, sideOf, tallyByType, voteScore, voterTypes, type Argument, type VoteRecord,
+  representatives, sideOf, tallyByDistrict, voteScore, voterDistricts, type Argument, type VoteRecord,
 } from './debate';
+import { DISTRICTS } from './districts';
 import { TOPICS } from './topics';
 
 const kst = (s: string) => new Date(`${s}+09:00`);
@@ -44,22 +44,26 @@ describe('시간표', () => {
 });
 
 describe('대진', () => {
-  it('유형 대진은 120가지를 한 바퀴 다 돌기 전에 반복하지 않는다', () => {
-    const cycle = matchupCycle('type');
-    expect(cycle).toHaveLength(120);
+  it('지역 대진은 다섯 지역에서 두 곳씩 10가지를 한 바퀴 다 돌기 전에 반복하지 않는다', () => {
+    const cycle = matchupCycle();
+    expect(cycle).toHaveLength(10);
     const keys = new Set(cycle.map(([a, b]) => [a.id, b.id].sort().join('-')));
-    expect(keys.size).toBe(120);
+    expect(keys.size).toBe(10);
+    // 한 바퀴 안에서 모든 지역이 4번씩 출전한다
+    for (const d of DISTRICTS) expect(cycle.filter(([a, b]) => a.id === d || b.id === d)).toHaveLength(4);
+    // 한 바퀴 안에서는 같은 지역이 이틀 연속 출전하지 않는다 (바퀴가 넘어가는 날은 한 지역이 겹칠 수밖에 없다)
+    for (let i = 0; i + 1 < cycle.length; i++) {
+      const [a, b] = cycle[i];
+      const [c, d] = cycle[i + 1];
+      expect([c.id, d.id]).not.toContain(a.id);
+      expect([c.id, d.id]).not.toContain(b.id);
+    }
     const m = matchupFor(3);
-    expect(m.teamA.label).toMatch(/^[EI][SN][TF][JP]팀$/);
+    expect(m.teamA.kind).toBe('district');
+    expect(m.teamA.label).toMatch(/지역/);
     expect(m.teamA.id).not.toBe(m.teamB.id);
-  });
-
-  it('축 대전과 기질 그룹 대전', () => {
-    const axis = matchupFor(0, 'axis');
-    expect(axis.teamA.members).toHaveLength(8);
-    expect([...axis.teamA.members, ...axis.teamB.members].sort()).toEqual([...MBTI_TYPES].sort());
-    expect(matchupCycle('temperament')).toHaveLength(6);
-    expect(matchupFor(1, 'temperament').teamA.members).toHaveLength(4);
+    const again = matchupFor(13);
+    expect([again.teamA.id, again.teamB.id].sort()).toEqual([m.teamA.id, m.teamB.id].sort());
   });
 
   it('주제는 가장 오래 안 쓴 것부터', () => {
@@ -70,26 +74,29 @@ describe('대진', () => {
 });
 
 describe('참여 자격', () => {
-  const typeMatch = { teamA: matchupFor(0, 'type').teamA, teamB: matchupFor(0, 'type').teamB };
+  const match = matchupFor(0);
 
-  it('유형 대진은 두 유형이 팀, 나머지 14개 유형이 관전자', () => {
-    const a = typeMatch.teamA.members[0];
-    expect(sideOf(typeMatch, a)).toBe('a');
-    expect(canVote(typeMatch, a)).toBe(false);
-    expect(voterTypes(typeMatch)).toHaveLength(14);
-    expect(sideOf(typeMatch, null)).toBeNull();
-  });
-
-  it('축 대전은 모두가 팀이라 전원이 투표한다', () => {
-    const axis = matchupFor(0, 'axis');
-    expect(voterTypes(axis)).toHaveLength(16);
-    expect(canVote(axis, 'ENTP')).toBe(true);
+  it('출전 두 지역 주민이 팀, 나머지 세 지역 주민이 관전자', () => {
+    const a = match.teamA.id as (typeof DISTRICTS)[number];
+    const b = match.teamB.id as (typeof DISTRICTS)[number];
+    expect(sideOf(match, a)).toBe('a');
+    expect(sideOf(match, b)).toBe('b');
+    expect(canVote(match, a)).toBe(false);
+    const voters = voterDistricts(match);
+    expect(voters).toHaveLength(3);
+    expect(voters).not.toContain(a);
+    for (const d of voters) {
+      expect(sideOf(match, d)).toBeNull();
+      expect(canVote(match, d)).toBe(true);
+    }
+    expect(sideOf(match, null)).toBeNull();
+    expect(canVote(match, null)).toBe(false);
   });
 });
 
 describe('집계', () => {
   const arg = (id: string, side: 'a' | 'b', rec: number, t: number): Argument => ({
-    id, matchId: 'm', authorId: null, authorMbti: 'ENTP', side, body: id, createdAt: new Date(t), recommendations: rec,
+    id, matchId: 'm', authorId: null, authorDistrict: 'wood', authorMbti: 'ENTP', side, body: id, createdAt: new Date(t), recommendations: rec,
   });
 
   it('대표 논거는 추천 순, 같으면 먼저 쓴 순', () => {
@@ -97,27 +104,27 @@ describe('집계', () => {
     expect(representatives(args, 'a').map((a) => a.id)).toEqual(['2', '3', '1']);
   });
 
-  it('사람이 많은 유형이 투표를 좌우하지 않는다', () => {
-    const v = (voterMbti: VoteRecord['voterMbti'], side: VoteRecord['side']): VoteRecord => ({ voterMbti, side, argumentId: null });
+  const v = (voterDistrict: VoteRecord['voterDistrict'], side: VoteRecord['side']): VoteRecord => ({ voterDistrict, side, argumentId: null });
+
+  it('사람이 많은 지역이 판정을 좌우하지 않는다', () => {
     const votes: VoteRecord[] = [
-      ...Array.from({ length: 30 }, () => v('ISFJ', 'a')),
-      ...Array.from({ length: 3 }, () => v('INTJ', 'b')),
-      ...Array.from({ length: 3 }, () => v('ESTP', 'b')),
+      ...Array.from({ length: 30 }, () => v('earth', 'a')),
+      ...Array.from({ length: 3 }, () => v('metal', 'b')),
+      ...Array.from({ length: 3 }, () => v('water', 'b')),
     ];
-    const byType = voteScore(votes, 'byType');
+    const byDistrict = voteScore(votes, 'byDistrict');
     const raw = voteScore(votes, 'none');
     expect(raw.a).toBeGreaterThan(80);
-    expect(byType.a).toBeLessThan(50); // 세 유형 중 두 유형이 B
-    expect(byType.a + byType.b).toBeCloseTo(100);
+    expect(byDistrict.a).toBeLessThan(50); // 세 지역 중 두 지역이 B
+    expect(byDistrict.a + byDistrict.b).toBeCloseTo(100);
     expect(voteScore([])).toEqual({ a: 50, b: 50 });
   });
 
-  it('판정 점수가 높은 팀이 이기고, 같으면 표 수로, 그래도 같으면 무승부', () => {
-    const v = (voterMbti: VoteRecord['voterMbti'], side: VoteRecord['side']): VoteRecord => ({ voterMbti, side, argumentId: null });
+  it('판정 점수가 높은 지역이 이기고, 같으면 표 수로, 그래도 같으면 무승부', () => {
     expect(decideWinner([])).toBe('draw');
-    expect(decideWinner([v('INTJ', 'a'), v('ISFP', 'b'), v('ISFP', 'b')])).toBe('b');
-    expect(decideWinner([v('INTJ', 'a'), v('ISFP', 'b')])).toBe('draw');
-    expect(tallyByType([v('INTJ', 'a'), v('INTJ', 'b'), v('INTJ', 'a')])).toEqual({ INTJ: { a: 2, b: 1 } });
+    expect(decideWinner([v('metal', 'a'), v('water', 'b'), v('water', 'b')])).toBe('b');
+    expect(decideWinner([v('metal', 'a'), v('water', 'b')])).toBe('draw');
+    expect(tallyByDistrict([v('metal', 'a'), v('metal', 'b'), v('metal', 'a')])).toEqual({ metal: { a: 2, b: 1 } });
   });
 
   it('결정타 논거는 가장 많이 뽑힌 것, 같으면 추천 많은 것', () => {
