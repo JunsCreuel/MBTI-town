@@ -49,6 +49,8 @@ export interface JoinOptions {
   /** 들어갈 곳 (기본 본섬) */
   place?: RoomPlace;
   at?: TownPlace;
+  /** 화면이 서버를 기다리지 않고 먼저 세운 내 자리 (걸을 수 있는 곳이면 서버도 이 자리를 쓴다) */
+  start?: { x: number; z: number };
 }
 
 /** 클라이언트 → 서버 */

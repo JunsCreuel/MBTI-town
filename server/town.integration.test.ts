@@ -193,6 +193,26 @@ describe('새 동네 (2동·3동…)', () => {
     expect(inSpawn(r.state.players.get(r.sessionId), gateSpawnName('water'))).toBe(true);
   });
 
+  it('화면이 먼저 세운 자리(start)가 걸을 수 있는 곳이면 그 자리에서 시작하고, 아니면 원래 규칙을 따른다', async () => {
+    // 동네 쉼터 안의 걸을 수 있는 자리 하나
+    const sp = hood.spawns.spawn;
+    const start = { x: Math.floor(sp.x + sp.w / 2) + 0.5, z: Math.floor(sp.z + sp.h / 2) + 0.5 };
+    const ok = await join(pass({ name: '먼저' }), 'home', 'water.4');
+    const r1 = await connect({ token: signTownPass(pass({ name: '먼저2' })), place: 'water.4', start });
+    rooms.push(r1);
+    await until(() => !!r1.state.players?.get(r1.sessionId));
+    expect(near(r1.state.players.get(r1.sessionId), start, 0.01)).toBe(true);
+    // 바다 한가운데(맵 구석)나 맵 밖은 받지 않는다
+    for (const bad of [{ x: 0.5, z: 0.5 }, { x: -3, z: 5 }, { x: Number.NaN, z: 1 }]) {
+      const r = await connect({ token: signTownPass(pass()), place: 'water.5', start: bad });
+      rooms.push(r);
+      await until(() => !!r.state.players?.get(r.sessionId));
+      expect(inSpawn(r.state.players.get(r.sessionId), 'spawn', hood)).toBe(true);
+      await r.leave();
+    }
+    expect(ok.roomId).toBe(r1.roomId);
+  });
+
   it('없는 곳으로는 들어가지 못한다', async () => {
     for (const place of ['moon.2', 'water.1', 'water.0', 'water.100', 'water']) {
       await expect(connect({ token: signTownPass(pass()), place: place as JoinOptions['place'] })).rejects.toThrow();

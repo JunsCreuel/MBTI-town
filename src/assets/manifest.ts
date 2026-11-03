@@ -28,12 +28,16 @@ export function asset(key: string): AssetEntry {
   return entry;
 }
 
+/** 배포마다 에셋 내용으로 정한 버전 (next.config.ts). 개발 중에는 비어 있다. */
+const VERSION = process.env.NEXT_PUBLIC_ASSET_VERSION ?? '';
+const withVersion = (path: string) => (VERSION ? `${path}?v=${VERSION}` : path);
+
 export function assetUrl(key: string): string {
-  return `/assets/${asset(key).file}`;
+  return withVersion(`/assets/${asset(key).file}`);
 }
 
 /** 다른 형식 파일 주소 (없으면 null) */
 export function assetAltUrl(key: string): string | null {
   const alt = asset(key).alt;
-  return alt ? `/assets/${alt}` : null;
+  return alt ? withVersion(`/assets/${alt}`) : null;
 }

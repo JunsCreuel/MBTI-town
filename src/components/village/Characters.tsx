@@ -15,7 +15,7 @@ import { groundHeightAt } from '@/shared/townMap';
 import type { EmoteKind } from '@/shared/protocol';
 import { tagTexture } from './assets';
 import { useTown } from './context';
-import { now, type PlayerView, type TownSession } from './session';
+import { SELF_GESTURE, now, type TownSession } from './session';
 
 /** 화면에 그릴 캐릭터 상태. 소유 컴포넌트가 매 프레임 고친다. */
 export interface Actor {
@@ -149,32 +149,30 @@ function applyGesture(a: Actor, id: string, session: TownSession, walking: boole
 /** 방향 전환은 부드럽게 (초당 회전 비율) */
 const TURN_RATE = 12;
 
-/** 내 캐릭터. 서버 상태에 내가 들어오기 전에는 그리지 않는다 */
+/**
+ * 내 캐릭터. 실시간 서버를 기다리지 않고 화면이 정한 자리(spawn)에 바로 선다.
+ * 서버에 붙으면 움직임을 보내고, 서버가 자리를 바로잡으면(snap) 따른다.
+ */
 export function LocalPlayer() {
-  const { session, selfId } = useTown();
-  const me = session.player(selfId);
-  return me ? <LocalPlayerInner me={me} /> : null;
-}
-
-function LocalPlayerInner({ me }: { me: PlayerView }) {
-  const { session, selfId, map, input } = useTown();
+  const { session, map, input, spawn, look } = useTown();
   const actor = useRef<Actor>({
-    x: me.x, y: groundHeightAt(map, me.x, me.z), z: me.z, rot: me.rot, clip: 'idle', emote: null, emoteStart: 0,
+    x: spawn.x, y: groundHeightAt(map, spawn.x, spawn.z), z: spawn.z, rot: 0, clip: 'idle', emote: null, emoteStart: 0,
   });
-  const facing = useRef(me.rot);
+  const facing = useRef(0);
   const path = useRef<Point[] | null>(null);
-  const lastSent = useRef({ x: me.x, z: me.z, rot: me.rot, moving: false, at: 0 });
+  /** 서버에 마지막으로 보낸 상태 (아직 못 보냈으면 처음 자리와 다르게 둬서 붙자마자 한 번 보낸다) */
+  const lastSent = useRef({ x: Number.NaN, z: Number.NaN, rot: 0, moving: false, at: 0 });
 
   useEffect(() => {
-    input.self.x = me.x;
-    input.self.z = me.z;
+    input.self.x = actor.current.x;
+    input.self.z = actor.current.z;
     input.self.ready = true;
     return session.onSnap((s) => {
       actor.current.x = s.x;
       actor.current.z = s.z;
       path.current = null;
     });
-  }, [session, input, me]);
+  }, [session, input]);
 
   useFrame((_, rawDt) => {
     const a = actor.current;
@@ -226,7 +224,7 @@ function LocalPlayerInner({ me }: { me: PlayerView }) {
     const walking = Math.hypot(a.x - before.x, a.z - before.z) > 1e-4;
     a.rot = lerpAngle(a.rot, facing.current, 1 - Math.exp(-dt * TURN_RATE));
     a.y += (groundHeightAt(map, a.x, a.z) - a.y) * (1 - Math.exp(-dt * 15));
-    applyGesture(a, selfId, session, walking);
+    applyGesture(a, SELF_GESTURE, session, walking);
     input.self.x = a.x;
     input.self.z = a.z;
 
@@ -235,12 +233,13 @@ function LocalPlayerInner({ me }: { me: PlayerView }) {
     const t = performance.now();
     const changed = s.x !== a.x || s.z !== a.z || Math.abs(s.rot - facing.current) > 0.01 || s.moving !== walking;
     if (changed && t - s.at >= 1000 / townConfig.moveSendHz) {
-      session.sendMove({ x: a.x, z: a.z, rot: facing.current, moving: walking });
-      Object.assign(s, { x: a.x, z: a.z, rot: facing.current, moving: walking, at: t });
+      if (session.sendMove({ x: a.x, z: a.z, rot: facing.current, moving: walking })) {
+        Object.assign(s, { x: a.x, z: a.z, rot: facing.current, moving: walking, at: t });
+      }
     }
   });
 
-  return <Character actor={actor} look={me} self />;
+  return <Character actor={actor} look={look} self />;
 }
 
 export function RemotePlayer({ id }: { id: string }) {

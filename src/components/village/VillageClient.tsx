@@ -17,6 +17,8 @@ import { parseRoomPlace, type ActionKind, type EmoteKind, type RoomPlace, type T
 import { districtAt, lotDoor, parseTownMap, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
 import { lotKey, type TownCamera, type TownContextValue, type TownInput } from './context';
 import { currentView, cycleView, initialCamera, isTurned, resetCamera, rotateCamera, type CameraView } from './camera';
+import { placePoint } from '@/shared/spawn';
+import { wakeRealtime } from '@/lib/realtime';
 import { TownSession, now } from './session';
 import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
 
@@ -137,10 +139,13 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     };
   }, []);
 
+  // 입장 토큰을 받고, 잠들어 있을지 모를 실시간 서버를 미리 깨운다 (에셋을 받는 동안 같이)
   useEffect(() => {
-    session.connect();
+    void wakeRealtime();
+    void session.prepare();
     return () => session.dispose();
   }, [session]);
+
 
   useEffect(() => {
     if (!rendered) return;
@@ -161,6 +166,17 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     }),
     [],
   );
+
+  // 맵과 토큰이 오면 실시간 서버를 기다리지 않고 내 캐릭터를 세운다. 실시간 서버에는 뒤에서 붙는다.
+  const [spawn, setSpawn] = useState<{ x: number; z: number } | null>(null);
+  useEffect(() => {
+    if (!loaded || !snap.pass || spawn) return;
+    const p = placePoint(loaded.map, snap.pass, at, here);
+    input.self.x = p.x;
+    input.self.z = p.z;
+    setSpawn(p);
+    void session.join(() => ({ x: input.self.x, z: input.self.z }));
+  }, [loaded, snap.pass, spawn, at, here, input, session]);
   // 지금 동네에 선 집만 (본섬 = 다섯 지역의 1동)
   const houses = useMemo(
     () => new Map(town.houses.filter((h) => h.hood === hoodNo && (!here || h.district === here.district)).map((h) => [lotKey(h), h])),
@@ -195,13 +211,19 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     [input],
   );
 
-  const ready = snap.status === 'ready' && loaded !== null;
+  const passName = snap.pass?.name;
+  const passColor = snap.pass?.color;
+  const passAcc = snap.pass?.acc;
+  const look = useMemo(
+    () => (passName !== undefined && passColor && passAcc ? { name: passName, color: passColor, acc: passAcc } : null),
+    [passName, passColor, passAcc],
+  );
   const value = useMemo<TownContextValue | null>(
     () =>
-      ready
-        ? { session, selfId: snap.selfId, map: loaded.map, assets: loaded.assets, input, hood: hoodNo, houses, hidden, onHouse, onGate }
+      loaded && spawn && look
+        ? { session, selfId: snap.selfId, spawn, look, map: loaded.map, assets: loaded.assets, input, hood: hoodNo, houses, hidden, onHouse, onGate }
         : null,
-    [ready, session, snap.selfId, loaded, input, hoodNo, houses, hidden, onHouse, onGate],
+    [session, snap.selfId, spawn, look, loaded, input, hoodNo, houses, hidden, onHouse, onGate],
   );
 
   // 지금 서 있는 곳 이름과, 문 앞·아치 앞에 섰는지 (HUD)
@@ -250,10 +272,12 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
 
   const goTo = useCallback(
     (to: TownPlace) => {
-      session.sendWarp(to);
+      const pass = session.getSnapshot().pass;
+      if (!loaded || !pass) return;
+      session.sendWarp(to, () => placePoint(loaded.map, pass, to, here));
       openMap(false);
     },
-    [session, openMap],
+    [session, openMap, loaded, here],
   );
 
   // 카메라 단축키: Q/E 돌리기, V 시점 바꾸기, R 정면 (걷기 화면에서만, 글 쓰는 칸에서는 무시)
@@ -298,7 +322,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     setTimeout(() => setCooling(false), townConfig.emoteCooldownMs);
   }
 
-  const failed = loadError || snap.status === 'error' || snap.status === 'closed';
+  const failed = loadError || snap.status === 'error';
   const label = (key: string) => (el: HTMLElement | null) => {
     if (el) input.labels.set(key, el);
     else input.labels.delete(key);
@@ -383,9 +407,14 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
                 {area.district && <span className="pill__dot" aria-hidden />}
                 {area.label}
                 <span className="pill__sub">
-                  {snap.channel}채널 · {snap.playerIds.length}명
+                  {snap.status === 'ready' ? `${snap.channel}채널 · ${snap.playerIds.length}명` : snap.status === 'offline' ? '혼자 보는 중' : '이웃 연결 중…'}
                 </span>
               </div>
+              {snap.status === 'offline' && (
+                <button className="pill reconnect" onClick={() => void session.reconnect()} title={snap.error}>
+                  {snap.error ?? '연결이 끊겼어요'} · <b>다시 연결</b>
+                </button>
+              )}
               <Link className="pill debate-link" href="/debate">
                 <span className="debate-link__tag">이벤트</span>
                 <span className="debate-link__label">오늘의 토론</span> ›
@@ -570,7 +599,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       {failed && (
         <div className="overlay">
           <p className="overlay__title">
-            {snap.status === 'closed' ? '마을과 연결이 끊겼어요' : loadError ? '마을을 불러오지 못했어요' : snap.error}
+            {loadError ? '마을을 불러오지 못했어요' : snap.error}
           </p>
           <p className="overlay__sub">잠시 후 다시 들어와 주세요. 나의 방은 마을 없이도 열 수 있어요.</p>
           <button className="btn-secondary" onClick={() => window.location.reload()}>

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { CSSProperties, ReactNode } from 'react';
 import { assetUrl } from '@/assets/manifest';
+import { RealtimeWarmup } from '@/components/app/RealtimeWarmup';
 import { tokens, tokensToCssVars } from '@/design/tokens';
 import './globals.css';
 
@@ -22,7 +23,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {/* eslint-disable-next-line @next/next/no-css-tags -- 자체 호스팅 폰트 (manifest 키로 찾음) */}
         <link rel="stylesheet" href={assetUrl('font.pretendard')} />
       </head>
-      <body>{children}</body>
+      <body>
+        {children}
+        <RealtimeWarmup />
+      </body>
     </html>
   );
 }

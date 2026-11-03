@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { HouseView } from '@/server/scene/service';
+import type { AccessoryId, AvatarColor } from '@/shared/avatar';
 import type { Lot, PropPlacement, TownMap } from '@/shared/townMap';
 import type { TownSession } from './session';
 import type { TownAssets } from './assets';
@@ -38,9 +39,20 @@ export interface TownCamera {
 /** 집터 키: "wood.3" */
 export const lotKey = (l: { district: string; lot?: number; index?: number }) => `${l.district}.${l.lot ?? l.index}`;
 
+/** 내 캐릭터 모습 (입장 토큰에 적힌 것) */
+export interface SelfLook {
+  name: string;
+  color: AvatarColor;
+  acc: AccessoryId;
+}
+
 export interface TownContextValue {
   session: TownSession;
+  /** 실시간 서버에서 받은 내 번호 (아직 붙지 않았으면 '') */
   selfId: string;
+  /** 처음 설 자리 (실시간 서버를 기다리지 않고 화면이 정한다, src/shared/spawn.ts) */
+  spawn: { x: number; z: number };
+  look: SelfLook;
   map: TownMap;
   assets: TownAssets;
   input: TownInput;

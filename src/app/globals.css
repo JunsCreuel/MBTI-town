@@ -2691,6 +2691,19 @@ a:focus-visible {
   text-decoration: none;
   color: var(--color-text);
 }
+/* 실시간 서버에 못 붙었을 때: 혼자 걸을 수 있고, 눌러서 다시 붙는다 */
+.reconnect {
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-textSub);
+  cursor: pointer;
+}
+.reconnect b {
+  color: var(--color-accentInk);
+  font-weight: 800;
+}
 .debate-link__label {
   color: var(--color-accentInk);
   font-weight: 800;

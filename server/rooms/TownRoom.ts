@@ -4,7 +4,8 @@
 import { Room, matchMaker, type Client } from '@colyseus/core';
 import { townConfig } from '../../src/config/game';
 import { MOVE_BUDGET_MAX, isMoveAllowed, normalizeAngle, refillMoveBudget } from '../../src/shared/movement';
-import { gateSpawnName, lotDoor, randomSpawnPoint, spawnName, type TownMap } from '../../src/shared/townMap';
+import { isStartPoint, placePoint } from '../../src/shared/spawn';
+import type { TownMap } from '../../src/shared/townMap';
 import { verifyTownPass, type TownPass } from '../../src/shared/townToken';
 import {
   ACTIONS, EMOTES, MSG,
@@ -30,31 +31,8 @@ function isMoveMessage(v: unknown): v is MoveMessage {
   );
 }
 
-/**
- * 그곳에 들어설 자리.
- * - 내 집이 이 방(본섬 또는 그 동네)에 있으면 문 앞
- * - 본섬에서 내 집이 다른 동네에 있으면 내 지역 동네 길 아치 앞, 집이 없으면 내 지역 입구, 손님은 중앙광장
- * - 동네(2동·3동…)에서는 그 밖에는 모두 입구(아치 앞)
- */
-export function placePoint(
-  map: TownMap,
-  pass: Pick<TownPass, 'district' | 'hood' | 'lot'>,
-  place: TownPlace,
-  here: Hood | null,
-  rand = Math.random,
-) {
-  if (place === 'home') {
-    const home = pass.district && pass.hood === (here?.hood ?? 1) ? map.lots[pass.district].find((l) => l.index === pass.lot) : undefined;
-    if (home) {
-      const door = lotDoor(home);
-      return { x: door.x + (rand() - 0.5) * 0.4, z: door.z + (rand() - 0.5) * 0.4 };
-    }
-    if (here || !pass.district) return randomSpawnPoint(map, rand, spawnName('plaza'));
-    return randomSpawnPoint(map, rand, pass.lot >= 0 ? gateSpawnName(pass.district) : spawnName(pass.district));
-  }
-  if (here) return randomSpawnPoint(map, rand, spawnName('plaza'));
-  return randomSpawnPoint(map, rand, place.startsWith('gate.') ? place : spawnName(place as Parameters<typeof spawnName>[0]));
-}
+// 들어설 자리 규칙은 화면과 같이 쓴다 (src/shared/spawn.ts)
+export { placePoint };
 
 function kindOf<T extends string>(v: unknown, allowed: readonly T[]): T | null {
   const kind = (v as { kind?: unknown })?.kind;
@@ -118,7 +96,11 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
       if (p.pid === pass.pid) this.clients.find((c) => c.sessionId === id)?.leave(4001);
     }
     this.passes.set(client.sessionId, pass);
-    const spawn = placePoint(this.map, pass, isTownPlace(options?.at) ? options.at : 'home', this.here);
+    // 화면은 서버를 기다리지 않고 먼저 캐릭터를 세운다. 그 자리가 걸을 수 있는 곳이면 그대로 쓴다
+    // (지도에서 어디로든 바로 갈 수 있으므로 새로 생기는 권한은 없다)
+    const spawn = isStartPoint(this.map, options?.start)
+      ? { x: options.start.x, z: options.start.z }
+      : placePoint(this.map, pass, isTownPlace(options?.at) ? options.at : 'home', this.here);
     const player = new Player();
     player.pid = pass.pid;
     player.name = pass.name;
