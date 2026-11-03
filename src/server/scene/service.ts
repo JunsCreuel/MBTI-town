@@ -9,7 +9,7 @@ import { bgmTrack } from '@/shared/bgm';
 import { cleanTaste, isDistrict, type District, type Taste } from '@/shared/districts';
 import { moderate } from '@/shared/moderation';
 import {
-  canView, isVisibility, validateRecord, visibleLevels,
+  VISIBILITIES, canView, isVisibility, validateRecord, visibleLevels,
   type Emotion, type RecordKind, type Relation, type Visibility,
 } from '@/shared/records';
 import { framedPhotoIds, starterLayout, validateLayout, type RoomLayout } from '@/shared/room';
@@ -22,7 +22,7 @@ import {
   type FishDef, type FortuneFruit,
 } from '@/shared/play';
 import { playConfig } from '@/config/game';
-import type { ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
+import type { AdminCounts, ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
 
 export type SceneErrorCode =
   | 'login_required' | 'onboarding_required' | 'not_found' | 'forbidden' | 'bad_request' | 'conflict' | 'blocked' | 'rejected'
@@ -62,9 +62,40 @@ export interface PublicProfile {
   ilju: string | null;
 }
 
+/** 운영자 화면: 신고 하나 */
+export interface AdminReport {
+  id: string;
+  kind: 'guestbook' | 'record' | 'user';
+  targetId: string;
+  reason: string | null;
+  createdAt: string;
+  /** 처리했으면 어떻게 (dismissed = 문제없음, removed = 지움) */
+  resolved: 'dismissed' | 'removed' | null;
+  reporter: { handle: string; displayName: string } | null;
+  /** 신고된 글·기록 내용 또는 사용자 이름 */
+  preview: string | null;
+  /** 그 방(주인) 핸들: 방 보기 링크 */
+  roomHandle: string | null;
+  gone: boolean;
+}
+
+/** 운영자 화면: 주민 한 명 */
+export interface AdminUser {
+  id: string;
+  handle: string | null;
+  displayName: string;
+  district: District | null;
+  joinedAt: string | null;
+  lastSeenAt: string | null;
+  admin: boolean;
+  records: number;
+}
+
 /** 내 프로필 (설정 화면용) */
 export interface MyProfile extends PublicProfile {
   onboarded: boolean;
+  /** 운영자 (모든 방·기록을 보고 신고를 처리한다, /admin) */
+  admin: boolean;
   /** 가입한 날 (YYYY-MM-DD, 한국 날짜). 주민증에 쓴다 */
   joinedAt: string | null;
   /** 주민증 취미 한 줄 (선택) */
@@ -296,7 +327,12 @@ export class SceneService {
     await this.store.touch(viewer.id, this.now());
     const p = await this.ensureHouse((await this.store.getProfile(viewer.id))!);
     const room = await this.store.getRoom(viewer.id);
-    return { profile: this.toMine(p), room: room ? { layout: room.layout, bgm: room.bgm } : null };
+    return { profile: this.toMine(p, await this.store.isAdmin(viewer.id)), room: room ? { layout: room.layout, bgm: room.bgm } : null };
+  }
+
+  /** 운영자인지 (로그인하지 않았으면 아니다) */
+  private async isAdmin(viewer: Viewer | null): Promise<boolean> {
+    return !!viewer && (await this.store.isAdmin(viewer.id));
   }
 
   /** 가입을 마쳤는데 집이 없으면 (예전에 집터가 다 찼던 지역) 지금 빈 집터를 준다 */
@@ -306,10 +342,11 @@ export class SceneService {
     return (await this.store.getProfile(p.id))!;
   }
 
-  private toMine(p: ProfileRow): MyProfile {
+  private toMine(p: ProfileRow, admin = false): MyProfile {
     return {
       ...toPublic(p),
       onboarded: !!p.onboarded_at,
+      admin,
       joinedAt: p.onboarded_at ? localDate(new Date(p.onboarded_at)) : null,
       hobby: p.hobby ?? '',
       taste: cleanTaste(p.taste),
@@ -448,7 +485,7 @@ export class SceneService {
   private async ownerFor(viewer: Viewer | null, handle: string): Promise<ProfileRow> {
     const owner = HANDLE.test(handle) ? await this.store.getProfileByHandle(handle) : null;
     if (!owner?.onboarded_at) throw new SceneError('not_found', '방을 찾을 수 없어요.');
-    if (viewer && viewer.id !== owner.id && (await this.store.isBlockedEither(viewer.id, owner.id))) {
+    if (viewer && viewer.id !== owner.id && (await this.store.isBlockedEither(viewer.id, owner.id)) && !(await this.isAdmin(viewer))) {
       throw new SceneError('not_found', '방을 찾을 수 없어요.');
     }
     return owner;
@@ -466,13 +503,15 @@ export class SceneService {
   async roomView(viewer: Viewer | null, handle: string): Promise<RoomView> {
     const owner = await this.ownerFor(viewer, handle);
     const relation = await this.relationTo(viewer, owner);
-    const canSeeRoom = canView(owner.room_visibility, relation);
+    // 운영자는 공개 범위와 상관없이 다 본다 (방문 기록은 남기지 않는다)
+    const admin = relation !== 'self' && (await this.isAdmin(viewer));
+    const canSeeRoom = admin || canView(owner.room_visibility, relation);
     const room = canSeeRoom ? await this.store.getRoom(owner.id) : null;
-    const levels = visibleLevels(relation);
+    const levels = admin ? [...VISIBILITIES] : visibleLevels(relation);
     const records = canSeeRoom ? (await this.store.listRecords(owner.id, levels, 10)).map(toRecord) : [];
-    const guestbook = canSeeRoom ? await this.guestbookFor(viewer, owner, relation) : [];
+    const guestbook = canSeeRoom ? await this.guestbookFor(viewer, owner, relation, admin) : [];
     const now = this.now();
-    if (viewer && relation !== 'self' && canSeeRoom && owner.show_visits) {
+    if (viewer && relation !== 'self' && canSeeRoom && owner.show_visits && !admin) {
       await this.store.recordVisit(owner.id, viewer.id, now, now.toISOString().slice(0, 10));
     }
     // 방문 기록을 끄면 새로 남기지도, 보여 주지도 않는다
@@ -499,8 +538,8 @@ export class SceneService {
     };
   }
 
-  private async guestbookFor(viewer: Viewer | null, owner: ProfileRow, relation: Relation): Promise<GuestbookView[]> {
-    const levels = relation === 'other' ? (['public'] as Visibility[]) : (['public', 'friends'] as Visibility[]);
+  private async guestbookFor(viewer: Viewer | null, owner: ProfileRow, relation: Relation, admin = false): Promise<GuestbookView[]> {
+    const levels = relation === 'other' && !admin ? (['public'] as Visibility[]) : (['public', 'friends'] as Visibility[]);
     const rows = await this.store.listGuestbook(owner.id, levels, viewer?.id ?? null, socialConfig.guestbookPageSize);
     return rows.map((g) => ({
       id: g.id,
@@ -512,7 +551,7 @@ export class SceneService {
         displayName: g.author_name || g.author_handle || '이름 없는 주민',
         avatar: cleanAvatar(g.author_avatar),
       },
-      canDelete: !!viewer && (viewer.id === owner.id || viewer.id === g.author_id),
+      canDelete: !!viewer && (admin || viewer.id === owner.id || viewer.id === g.author_id),
     }));
   }
 
@@ -581,6 +620,7 @@ export class SceneService {
 
   private async canSeePhoto(viewer: Viewer | null, ownerId: string, photoId: string): Promise<boolean> {
     if (viewer?.id === ownerId) return true;
+    if (await this.isAdmin(viewer)) return true;
     if (viewer && (await this.store.isBlockedEither(viewer.id, ownerId))) return false;
     const owner = await this.store.getProfile(ownerId);
     if (!owner) return false;
@@ -643,7 +683,7 @@ export class SceneService {
     const owner = await this.ownerFor(viewer, handle);
     if (owner.id === me.id) throw new SceneError('bad_request', '내 방명록에는 쓸 수 없어요.');
     const relation = await this.relationTo(viewer, owner);
-    if (!canView(owner.room_visibility, relation)) throw new SceneError('forbidden', '이 방에는 방명록을 쓸 수 없어요.');
+    if (!canView(owner.room_visibility, relation) && !(await this.isAdmin(viewer))) throw new SceneError('forbidden', '이 방에는 방명록을 쓸 수 없어요.');
     const body = cleanText(input.body, socialConfig.guestbookMax, '방명록', true);
     if (!moderate(body).allowed) throw new SceneError('rejected', '거친 표현이나 링크·연락처는 남길 수 없어요.');
     const visibility = input.visibility === 'friends' ? 'friends' : 'public';
@@ -653,7 +693,7 @@ export class SceneService {
   async deleteGuestbook(viewer: Viewer | null, id: string): Promise<void> {
     const me = await this.requireOnboarded(viewer);
     const g = UUID.test(id) ? await this.store.getGuestbook(id) : null;
-    if (!g || (g.owner_id !== me.id && g.author_id !== me.id)) throw new SceneError('not_found', '글을 찾을 수 없어요.');
+    if (!g || (g.owner_id !== me.id && g.author_id !== me.id && !(await this.isAdmin(viewer)))) throw new SceneError('not_found', '글을 찾을 수 없어요.');
     await this.store.deleteGuestbook(id);
   }
 
@@ -694,6 +734,82 @@ export class SceneService {
       throw new SceneError('bad_request', '신고 대상이 올바르지 않아요.');
     }
     await this.store.report(me.id, kind, targetId, cleanText(input.reason, 300, '신고 이유') || null);
+  }
+
+  // ───────────────────────── 운영자 ─────────────────────────
+
+  private async requireAdmin(viewer: Viewer | null): Promise<string> {
+    if (!viewer) throw new SceneError('login_required', '로그인이 필요해요.');
+    if (!(await this.store.isAdmin(viewer.id))) throw new SceneError('forbidden', '운영자만 볼 수 있어요.');
+    return viewer.id;
+  }
+
+  /** 운영 요약: 주민 수, 오늘 가입·접속, 기록·사진·방명록 수, 처리 안 된 신고 */
+  async adminOverview(viewer: Viewer | null): Promise<AdminCounts> {
+    await this.requireAdmin(viewer);
+    // 오늘 = 한국 날짜 0시부터
+    const day = localDate(this.now());
+    return this.store.adminCounts(new Date(`${day}T00:00:00+09:00`));
+  }
+
+  async adminReports(viewer: Viewer | null): Promise<AdminReport[]> {
+    await this.requireAdmin(viewer);
+    const rows = await this.store.listReports(100);
+    return rows.map((r) => ({
+      id: r.id,
+      kind: r.target_kind,
+      targetId: r.target_id,
+      reason: r.reason,
+      createdAt: new Date(r.created_at).toISOString(),
+      resolved: r.resolved_at ? (r.resolution ?? 'dismissed') : null,
+      reporter: r.reporter_handle ? { handle: r.reporter_handle, displayName: r.reporter_name || r.reporter_handle } : null,
+      preview: r.preview,
+      roomHandle: r.room_handle,
+      // 이미 지워진 글·기록
+      gone: r.target_kind !== 'user' && r.preview === null,
+    }));
+  }
+
+  /**
+   * 신고 처리: dismiss = 문제없음으로 닫기, remove = 신고된 방명록·기록을 지우고 닫기.
+   * 같은 대상의 다른 신고도 함께 닫힌다. 사용자 신고를 지우려면 계정 삭제(adminDeleteUser)를 쓴다.
+   */
+  async adminResolveReport(viewer: Viewer | null, id: string, action: unknown): Promise<void> {
+    const by = await this.requireAdmin(viewer);
+    if (action !== 'dismiss' && action !== 'remove') throw new SceneError('bad_request', '처리 방법이 올바르지 않아요.');
+    const r = UUID.test(id) ? await this.store.getReport(id) : null;
+    if (!r) throw new SceneError('not_found', '신고를 찾을 수 없어요.');
+    if (action === 'remove') {
+      if (r.target_kind === 'guestbook') await this.store.deleteGuestbook(r.target_id);
+      else if (r.target_kind === 'record') await this.store.deleteRecord(r.target_id);
+      else throw new SceneError('bad_request', '사용자 신고는 주민 목록에서 계정을 지워 주세요.');
+    }
+    await this.store.resolveReports(r.target_kind, r.target_id, by, action === 'remove' ? 'removed' : 'dismissed', this.now());
+  }
+
+  async adminUsers(viewer: Viewer | null, q: unknown): Promise<AdminUser[]> {
+    await this.requireAdmin(viewer);
+    const query = typeof q === 'string' ? q.trim().slice(0, 30) : '';
+    const rows = await this.store.searchProfiles(query, 50);
+    return rows.map((u) => ({
+      id: u.id,
+      handle: u.handle,
+      displayName: u.display_name || u.handle || '이름 없는 주민',
+      district: u.district && isDistrict(u.district) ? u.district : null,
+      joinedAt: u.onboarded_at ? localDate(new Date(u.onboarded_at)) : null,
+      lastSeenAt: u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null,
+      admin: u.is_admin,
+      records: Number(u.records),
+    }));
+  }
+
+  /** 계정 삭제 (되돌릴 수 없다). 나와 다른 운영자는 지울 수 없다 */
+  async adminDeleteUser(viewer: Viewer | null, id: string): Promise<void> {
+    const me = await this.requireAdmin(viewer);
+    if (!UUID.test(id)) throw new SceneError('bad_request', '사용자가 올바르지 않아요.');
+    if (id === me || (await this.store.isAdmin(id))) throw new SceneError('forbidden', '운영자 계정은 여기서 지울 수 없어요.');
+    if (!(await this.store.getProfile(id))) throw new SceneError('not_found', '사용자를 찾을 수 없어요.');
+    await this.store.deleteAccount(id);
   }
 
   // ───────────────────────── 둘러보기 ─────────────────────────
@@ -793,7 +909,7 @@ export class SceneService {
   async houseTicket(viewer: Viewer | null, handle: string): Promise<HouseTicket> {
     const owner = await this.ownerFor(viewer, handle);
     const relation = await this.relationTo(viewer, owner);
-    if (!canView(owner.room_visibility, relation)) throw new SceneError('forbidden', '이 방에는 들어갈 수 없어요.');
+    if (!canView(owner.room_visibility, relation) && !(await this.isAdmin(viewer))) throw new SceneError('forbidden', '이 방에는 들어갈 수 없어요.');
     const base = await this.townTicket(viewer);
     const pass: TownPass = { ...base.pass, house: townPid(owner.id) };
     const hidden = viewer ? (await this.store.blockRelations(viewer.id)).map((id) => townPid(id)) : [];

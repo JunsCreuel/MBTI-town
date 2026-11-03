@@ -250,6 +250,17 @@ export class DebateStore {
     return toArgument(r);
   }
 
+  /** 운영자인지 (public.admins) */
+  async isAdmin(userId: string): Promise<boolean> {
+    const [r] = await this.sql.query<{ ok: number }>(`select 1 as ok from public.admins where user_id = $1`, [userId]);
+    return !!r;
+  }
+
+  /** 논거 지우기 (추천·투표에 걸린 것도 같이) */
+  async deleteArgument(id: string): Promise<void> {
+    await this.sql.query(`delete from public.arguments where id = $1`, [id]);
+  }
+
   async getArgument(id: string): Promise<Argument | null> {
     const rows = await this.sql.query<ArgumentRow>(
       `select a.id, a.match_id, a.author_id, a.author_district, a.author_mbti, a.side, a.body, a.created_at,

@@ -160,6 +160,18 @@ export function MyClient() {
         <h1>MY</h1>
       </header>
 
+      {profile.admin && (
+        <section className="section card">
+          <h2 className="section-title">
+            운영자 <span className="admin-badge">모든 권한</span>
+          </h2>
+          <p className="muted">모든 방·기록을 공개 범위와 상관없이 보고, 신고를 처리하고, 방명록·토론 논거·계정을 지울 수 있어요.</p>
+          <Link className="btn-primary" href="/admin">
+            운영 화면 열기
+          </Link>
+        </section>
+      )}
+
       {profile.district && profile.joinedAt && (
         <section className="section card" id="resident">
           <h2 className="section-title">내 주민증</h2>

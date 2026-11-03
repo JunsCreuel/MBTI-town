@@ -17,12 +17,12 @@ import type { DebateStore, Profile } from './store';
 export type DebateErrorCode =
   | 'login_required' | 'resident_required' | 'not_found' | 'wrong_phase' | 'not_team' | 'limit' | 'too_short' | 'too_long'
   | 'rejected' | 'own_argument' | 'other_team' | 'not_voter' | 'not_representative' | 'already_voted' | 'cooldown'
-  | 'bad_request';
+  | 'bad_request' | 'forbidden';
 
 const STATUS: Record<DebateErrorCode, number> = {
   login_required: 401, resident_required: 403, not_found: 404, wrong_phase: 409, not_team: 403, limit: 409, too_short: 400,
   too_long: 400, rejected: 422, own_argument: 409, other_team: 403, not_voter: 403, not_representative: 409,
-  already_voted: 409, cooldown: 429, bad_request: 400,
+  already_voted: 409, cooldown: 429, bad_request: 400, forbidden: 403,
 };
 
 export class DebateError extends Error {
@@ -71,6 +71,8 @@ export interface DebateView {
     /** 내가 고른 대표 논거 */
     vote: { side: Side; argumentId: string | null } | null;
     argumentsLeft: number;
+    /** 운영자 (논거를 지울 수 있다) */
+    admin: boolean;
   };
   arguments: ArgumentView[];
   result: MatchResult | null;
@@ -156,12 +158,13 @@ export class DebateService {
     const profile = viewer ? await this.store.getProfile(viewer.id) : null;
     const district = profile?.district ?? null;
     const side = sideOf(match, district);
-    const [args, recommended, vote, mine, recent] = await Promise.all([
+    const [args, recommended, vote, mine, recent, admin] = await Promise.all([
       this.store.listArguments(match.id),
       viewer ? this.store.recommendedBy(match.id, viewer.id) : Promise.resolve([]),
       viewer ? this.store.getVote(match.id, viewer.id) : Promise.resolve(null),
       viewer ? this.store.countArgumentsBy(match.id, viewer.id) : Promise.resolve(0),
       this.store.recentDone(6),
+      viewer ? this.store.isAdmin(viewer.id) : Promise.resolve(false),
     ]);
     // 대표 논거는 작성이 끝난 뒤에 정해진다
     const reps = new Set(
@@ -193,6 +196,7 @@ export class DebateService {
         canVote: !!viewer && canVote(match, district),
         vote,
         argumentsLeft: side ? Math.max(0, debateConfig.argumentsPerUser - mine) : 0,
+        admin,
       },
       arguments: args
         // 작성 중에는 추천 많은 순, 그 뒤로는 대표 논거가 먼저 (발표 뒤에는 많이 뽑힌 순)
@@ -256,6 +260,15 @@ export class DebateService {
     return this.store.insertArgument({
       matchId: match.id, authorId: viewer!.id, authorDistrict: district, authorMbti: mbti, side, body, at: this.now(),
     });
+  }
+
+  /** 운영자: 논거 지우기 (추천·대표 논거 투표도 같이 지워진다) */
+  async adminDeleteArgument(viewer: Viewer | null, argumentId: unknown): Promise<void> {
+    if (!viewer) throw new DebateError('login_required', '로그인이 필요해요.');
+    if (!(await this.store.isAdmin(viewer.id))) throw new DebateError('forbidden', '운영자만 지울 수 있어요.');
+    const a = typeof argumentId === 'string' ? await this.store.getArgument(argumentId).catch(() => null) : null;
+    if (!a) throw new DebateError('not_found', '논거를 찾을 수 없어요.');
+    await this.store.deleteArgument(a.id);
   }
 
   async recommend(viewer: Viewer | null, argumentId: unknown, on: unknown): Promise<void> {

@@ -163,6 +163,17 @@ Supabase **Authentication → URL Configuration**:
 Vercel 환경변수 `NEXT_PUBLIC_AUTH_PROVIDERS` 에 켠 것만 적고 Redeploy 합니다. 예: `kakao,google` (카카오만 켰다면 `kakao`)
 켜지 않은 로그인 버튼이 보이면 누를 때 오류가 나니, Supabase에서 켠 것만 적으세요.
 
+### 5-6. 운영자 등록
+
+운영자는 모든 방·기록을 보고 신고를 처리하고 글·계정을 지울 수 있습니다 (운영 화면 `/admin`).
+운영자로 쓸 이메일로 **먼저 가입(이메일 인증까지)** 한 뒤, Supabase **SQL Editor** 에서 한 줄 실행합니다:
+
+```sql
+insert into public.admins (user_id) select id from auth.users where email = '<운영자 이메일>' on conflict do nothing;
+```
+
+다시 로그인하거나 새로 고침하면 MY에 "운영 화면 열기"가 보입니다. 운영자를 빼려면 `delete from public.admins where user_id = (select id from auth.users where email = '<이메일>');`
+
 ---
 
 ## 6. 확인
