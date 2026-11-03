@@ -4,6 +4,7 @@ import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { assetUrl } from '@/assets/manifest';
 import { tokens } from '@/design/tokens';
 import { ACCESSORIES } from '@/shared/avatar';
+import { allFloraKeys } from '@/shared/flora';
 import type { TownMap } from '@/shared/townMap';
 import { EMOTES, type EmoteKind } from '@/shared/protocol';
 
@@ -70,7 +71,8 @@ async function emoteTexture(kind: EmoteKind): Promise<THREE.Texture> {
 export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) => void): Promise<TownAssets> {
   const loader = new GLTFLoader();
   const accessoryKeys = ACCESSORIES.filter((a) => a.key).map((a) => [a.id, a.key!] as const);
-  const propKeys = [...new Set([...map.props.map((p) => p.key), HOUSE_KEY, LOT_KEY])];
+  // 맵 소품 + 집 + 화면이 흩뿌리는 풀·꽃 (지역 식물 전부)
+  const propKeys = [...new Set([...map.props.map((p) => p.key), HOUSE_KEY, LOT_KEY, ...allFloraKeys()])];
   // 같은 파일을 여러 키가 쓰면 한 번만 받는다
   const urls = [...new Set(['char.base', ...accessoryKeys.map(([, k]) => k), ...propKeys].map(assetUrl))];
   let done = 0;

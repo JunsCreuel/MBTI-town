@@ -11,6 +11,10 @@ import { LocalPlayer, RemotePlayer } from './Characters';
 import { TownContext, useTown, type TownContextValue } from './context';
 import { DistrictOverlay, MapLabelSync } from './MapView';
 import { Houses, Props } from './Props';
+import { Decor } from './Decor';
+import { windUniforms } from './wind';
+import { currentHour, day, dayLookAt } from './daylight';
+import { Ambient } from './Ambient';
 import { now } from './session';
 import { Terrain } from './Terrain';
 
@@ -46,7 +50,11 @@ function Sky() {
       }),
     [],
   );
-  useFrame(({ camera }) => mesh.current?.position.copy(camera.position));
+  useFrame(({ camera }) => {
+    mesh.current?.position.copy(camera.position);
+    material.uniforms.top.value.copy(day.look.skyTop);
+    material.uniforms.horizon.value.copy(day.look.skyHorizon);
+  });
   return (
     <mesh ref={mesh} material={material} renderOrder={-1} frustumCulled={false}>
       <sphereGeometry args={[150, 32, 16]} />
@@ -83,11 +91,19 @@ function Clouds() {
     [map],
   );
   const o = useMemo(() => new THREE.Object3D(), []);
+  const cloudMat = useRef<THREE.MeshLambertMaterial>(null);
+  const cloudDay = useMemo(() => new THREE.Color(S.cloud), []);
   useFrame(() => {
     const m = ref.current;
     if (!m) return;
     // 전체 지도에서는 구름이 섬을 가리지 않게 숨긴다
     m.visible = input.mapBlend < 0.25;
+    // 밤에는 구름이 하늘빛을 띤다
+    const cm = cloudMat.current;
+    if (cm) {
+      cm.color.copy(cloudDay).lerp(day.look.skyHorizon, day.look.night * 0.7);
+      cm.emissiveIntensity = 0.55 * (1 - day.look.night * 0.75);
+    }
     if (!m.visible) return;
     const t = now();
     const span = 180;
@@ -102,7 +118,7 @@ function Clouds() {
   });
   return (
     <instancedMesh ref={ref} args={[geometry, undefined, clouds.length]} frustumCulled={false}>
-      <meshLambertMaterial color={S.cloud} emissive={S.cloud} emissiveIntensity={0.55} fog={false} />
+      <meshLambertMaterial ref={cloudMat} color={S.cloud} emissive={S.cloud} emissiveIntensity={0.55} fog={false} />
     </instancedMesh>
   );
 }
@@ -111,6 +127,7 @@ function Clouds() {
 function Lights() {
   const { input } = useTown();
   const sun = useRef<THREE.DirectionalLight>(null);
+  const hemi = useRef<THREE.HemisphereLight>(null);
   const mapSize = isSmallScreen() ? 1024 : 2048;
   useEffect(() => {
     const cam = sun.current!.shadow.camera;
@@ -127,10 +144,17 @@ function Lights() {
     l.target.position.set(input.self.x, 0, input.self.z);
     l.position.set(input.self.x - 8, 18, input.self.z + 10);
     l.target.updateMatrixWorld();
+    const look = day.look;
+    l.color.copy(look.sun);
+    l.intensity = look.sunIntensity;
+    const h = hemi.current!;
+    h.color.copy(look.hemiSky);
+    h.groundColor.copy(look.hemiGround);
+    h.intensity = look.hemiIntensity;
   });
   return (
     <>
-      <hemisphereLight args={[S.hemiSky, S.hemiGround, 1.55]} />
+      <hemisphereLight ref={hemi} args={[S.hemiSky, S.hemiGround, 1.55]} />
       <directionalLight
         ref={sun}
         color={S.sun}
@@ -267,6 +291,7 @@ function FogRig() {
     const f = scene.fog as THREE.Fog | null;
     if (!f) return;
     const b = input.mapBlend;
+    f.color.copy(day.look.fog);
     f.near = 30 + b * 900;
     f.far = 90 + b * 1800;
   });
@@ -371,6 +396,54 @@ function Ground() {
   return <Terrain onGroundClick={onClick} />;
 }
 
+/**
+ * 하루의 빛: 몇 초마다 한국 시각으로 하늘·빛을 다시 정하고, 밤이면 창문(glass)과 등(glow)을 켠다.
+ * 장면의 재질은 처음 한 번 모아 둔다 (같은 모델은 재질을 함께 쓴다).
+ */
+function DayCycle() {
+  const scene = useThree((st) => st.scene);
+  const state = useRef({ at: -100, mats: null as { m: THREE.MeshStandardMaterial; kind: 'glass' | 'glow'; base: number }[] | null });
+  const glow = useMemo(() => new THREE.Color(S.windowGlow), []);
+  useFrame(() => {
+    const st = state.current;
+    const t = now();
+    if (t - st.at < 4) return;
+    st.at = t;
+    day.hour = currentHour();
+    day.look = dayLookAt(day.hour);
+    if (!st.mats) {
+      const found = new Map<THREE.Material, { m: THREE.MeshStandardMaterial; kind: 'glass' | 'glow'; base: number }>();
+      scene.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        for (const m of [mesh.material].flat() as THREE.MeshStandardMaterial[]) {
+          if (!m || !('emissive' in m) || found.has(m)) continue;
+          if (m.name === 'glass' || m.name === 'glow') found.set(m, { m, kind: m.name, base: m.emissiveIntensity });
+        }
+      });
+      st.mats = [...found.values()];
+    }
+    const n = day.look.night;
+    for (const { m, kind, base } of st.mats) {
+      if (kind === 'glass') {
+        m.emissive.copy(glow);
+        m.emissiveIntensity = n * 0.9;
+      } else {
+        m.emissiveIntensity = base * (0.6 + n * 1.6);
+      }
+    }
+  });
+  return null;
+}
+
+/** 바람 시계: 잎·풀이 흔들리는 박자 */
+function WindClock() {
+  useFrame(() => {
+    windUniforms.uWindTime.value = now();
+  });
+  return null;
+}
+
 function FirstFrame({ onFrame }: { onFrame: () => void }) {
   useFrame(onFrame);
   return null;
@@ -397,6 +470,10 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <FogRig />
         <Ground />
         <Props />
+        <Decor />
+        <WindClock />
+        <DayCycle />
+        <Ambient />
         <Houses />
         <DistrictOverlay />
         <MapLabelSync />

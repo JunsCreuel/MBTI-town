@@ -15,6 +15,7 @@
 //   lots 이름은 "hood.번호", districts 레이어는 땅 전체가 1, 지역 색 소품은 district 속성(아무 지역)만 표시해 둔다.
 import { townConfig } from '../../src/config/game';
 import { DISTRICTS, type District } from '../../src/shared/districts';
+import { BEACH_TREES, FLORA, PLAZA_TREES, TEMPLATE_BUSH, TEMPLATE_ROCK, TEMPLATE_TREE, pickWeighted } from '../../src/shared/flora';
 
 export const TOWN_TILES = ['grass', 'grass2', 'stone', 'path', 'water', 'flowerbed', 'hedge', 'stoneEdge', 'sand'] as const;
 type TileName = (typeof TOWN_TILES)[number];
@@ -55,8 +56,18 @@ const LANDMARK: Record<District, string> = {
 /** 동네 길(본섬 ↔ 2동·3동…) 아치 */
 export const GATE_KEY = 'prop.hood.gate';
 
-/** 지역마다 나무를 얼마나 심을지 */
-const TREES: Record<District, number> = { wood: 46, fire: 16, earth: 20, metal: 12, water: 20 };
+/** 지역마다 심을 나무·덤불·큰 돌 수 (어떤 종류인지는 src/shared/flora.ts) */
+const PLANTING: Record<District, { trees: number; bushes: number; rocks: number }> = {
+  wood: { trees: 85, bushes: 35, rocks: 10 },
+  fire: { trees: 55, bushes: 25, rocks: 6 },
+  earth: { trees: 45, bushes: 25, rocks: 12 },
+  metal: { trees: 60, bushes: 15, rocks: 10 },
+  water: { trees: 55, bushes: 25, rocks: 6 },
+};
+/** 바닷가 야자수 */
+const BEACH_PALMS = 26;
+/** 심은 것 둘레에 비워 둘 거리 (칸) */
+const SPACING = { tree: 0.95, bush: 0.7, rock: 0.8 } as const;
 
 const gid = (name: TileName) => TOWN_TILES.indexOf(name) + 1;
 const TILE_HEIGHT: Partial<Record<TileName, number>> = { stone: 0.05, stoneEdge: 0.05, flowerbed: 0.18, hedge: 0.75 };
@@ -317,7 +328,7 @@ export function buildTownMap(tilesetFile: string) {
     taken.push({ x: fx + 1, y: fy + 1, r: 2 });
     for (const s of [-0.26, 0.26]) {
       const t = at(9.8, between(k) + s);
-      prop('prop.plaza.tree', snap(t.x), snap(t.y), [[Math.floor(t.x), Math.floor(t.y)]]);
+      prop(pickWeighted(PLAZA_TREES, rand()), snap(t.x), snap(t.y), [[Math.floor(t.x), Math.floor(t.y)]]);
       taken.push({ x: t.x, y: t.y, r: 1.2 });
     }
   }
@@ -375,21 +386,48 @@ export function buildTownMap(tilesetFile: string) {
     gate(g.x, g.y, facing(g.x, g.y, C, C), district);
   });
 
-  // 나무: 지역마다 정해진 수만큼 흩어 심는다 (길·집터·명소와 떨어뜨린다)
+  // 스폰 자리 (지역 입구, 동네 길 앞)는 비워 둔다
+  const spawnSpots = DISTRICTS.flatMap((_, i) => [at(16.2, districtAngle(i)), at(gateRadius(i) - 2.6, districtAngle(i))]);
+  const inSpawn = (x: number, y: number) => spawnSpots.some((p) => Math.abs(p.x - x) < 2.6 && Math.abs(p.y - y) < 2.6);
+  const onPathTile = (x: number, y: number) => get(ground, Math.floor(x), Math.floor(y)) === gid('path');
+
+  // 나무·덤불·큰 돌: 지역마다 그 지역 식물을 정해진 수만큼 흩어 심는다 (길·집터·명소와 떨어뜨린다)
   DISTRICTS.forEach((district, i) => {
-    let planted = 0;
-    for (let tries = 0; tries < 4000 && planted < TREES[district]; tries++) {
-      const a = districtAngle(i) + (rand() - 0.5) * (SECTOR - 0.08);
-      const d = TOWN_RADII.land + 1.5 + Math.sqrt(rand()) * (shoreAt(a) - TOWN_RADII.land - 2.5);
-      const x = snap(C + Math.cos(a) * d);
-      const y = snap(C + Math.sin(a) * d);
-      if (isBlocked(x, y) || onPath(x, y)) continue;
-      if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + 1.1)) continue;
-      prop('prop.plaza.tree', x, y, [[Math.floor(x), Math.floor(y)]], 0, district);
-      taken.push({ x, y, r: 1.1 });
-      planted++;
+    const f = FLORA[district];
+    for (const kind of ['tree', 'bush', 'rock'] as const) {
+      const want = PLANTING[district][kind === 'tree' ? 'trees' : kind === 'bush' ? 'bushes' : 'rocks'];
+      const list = kind === 'tree' ? f.trees : kind === 'bush' ? f.bushes : f.rocks;
+      let planted = 0;
+      for (let tries = 0; tries < 6000 && planted < want; tries++) {
+        const a = districtAngle(i) + (rand() - 0.5) * (SECTOR - 0.08);
+        const d = TOWN_RADII.land + 1.5 + Math.sqrt(rand()) * (shoreAt(a) - TOWN_RADII.land - 2.5);
+        const x = snap(C + Math.cos(a) * d);
+        const y = snap(C + Math.sin(a) * d);
+        // 나무는 길가에도 심는다 (가로수). 길 위와 스폰 자리는 비운다.
+        if (isBlocked(x, y) || (kind === 'tree' ? onPathTile(x, y) : onPath(x, y)) || inSpawn(x, y)) continue;
+        if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + SPACING[kind])) continue;
+        prop(pickWeighted(list, rand()), x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360), district);
+        taken.push({ x, y, r: SPACING[kind] });
+        planted++;
+      }
     }
   });
+
+  // 바닷가 야자수 (모래사장 위)
+  {
+    let planted = 0;
+    for (let tries = 0; tries < 3000 && planted < BEACH_PALMS; tries++) {
+      const a = rand() * 2 * Math.PI;
+      const d = shoreAt(a) + 0.4 + rand() * (TOWN_RADII.beach - 1.2);
+      const x = snap(C + Math.cos(a) * d);
+      const y = snap(C + Math.sin(a) * d);
+      if (get(ground, Math.floor(x), Math.floor(y)) !== gid('sand') || isBlocked(x, y) || onPath(x, y)) continue;
+      if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + 2)) continue;
+      prop(pickWeighted(BEACH_TREES, rand()), x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360));
+      taken.push({ x, y, r: 1.2 });
+      planted++;
+    }
+  }
 
   // 5. 스폰: 광장은 분수 남쪽, 지역은 큰길 입구, 동네 길은 아치 앞
   const spawns = [
@@ -426,7 +464,7 @@ export const HOOD_RADII = {
 const HOOD_ENTRANCE = Math.PI / 2;
 /** 가운데에서 둘레 길로 가는 길 넷 (북·동·남·서). 남쪽 길만 바닷가 아치까지 이어진다. */
 const HOOD_SPOKES = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
-const HOOD_TREES = 26;
+const HOOD_PLANTING = { trees: 30, bushes: 14, rocks: 5 } as const;
 
 function hoodShoreAt(angle: number): number {
   return HOOD_RADII.shore + Math.sin(angle * 3 + 0.4) * 0.8 + Math.sin(angle * 7 + 1.3) * 0.4;
@@ -469,7 +507,7 @@ export function buildHoodMap(tilesetFile: string) {
   }
 
   // 2. 동네 쉼터: 가운데 큰 나무, 벤치 둘, 가로등 둘
-  prop('prop.plaza.tree', c, c, square(c - 1, c - 1, 2, 2), 0, ANY);
+  prop(TEMPLATE_TREE, c, c, square(c - 1, c - 1, 2, 2), 0, ANY);
   taken.push({ x: c, y: c, r: 3.9 });
   for (const a of [-Math.PI / 4, (-3 * Math.PI) / 4]) {
     const b = at(2.6, a);
@@ -506,18 +544,24 @@ export function buildHoodMap(tilesetFile: string) {
   if (usable.length < townConfig.hoodLots) throw new Error(`동네 집터가 ${usable.length}개뿐입니다`);
   usable.slice(0, townConfig.hoodLots).forEach((cd, n) => lot(`hood.${n}`, cd.x, cd.y, cd.rot));
 
-  // 5. 나무: 바깥 집 줄과 바닷가 사이
-  let planted = 0;
-  for (let tries = 0; tries < 4000 && planted < HOOD_TREES; tries++) {
-    const a = rand() * 2 * Math.PI;
-    const d = HOOD_RADII.outer + 1.8 + rand() * (hoodShoreAt(a) - HOOD_RADII.outer - 2.8);
-    const x = snap(c + Math.cos(a) * d);
-    const y = snap(c + Math.sin(a) * d);
-    if (isBlocked(x, y) || onPath(x, y)) continue;
-    if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + 1.1)) continue;
-    prop('prop.plaza.tree', x, y, [[Math.floor(x), Math.floor(y)]], 0, ANY);
-    taken.push({ x, y, r: 1.1 });
-    planted++;
+  // 5. 나무·덤불·돌: 바깥 집 줄과 바닷가 사이. 자리표시 키로 심고, 지역을 입힐 때 그 지역 식물로 바뀐다.
+  for (const [kind, key, want] of [
+    ['tree', TEMPLATE_TREE, HOOD_PLANTING.trees],
+    ['bush', TEMPLATE_BUSH, HOOD_PLANTING.bushes],
+    ['rock', TEMPLATE_ROCK, HOOD_PLANTING.rocks],
+  ] as const) {
+    let planted = 0;
+    for (let tries = 0; tries < 4000 && planted < want; tries++) {
+      const a = rand() * 2 * Math.PI;
+      const d = HOOD_RADII.outer + 1.8 + rand() * (hoodShoreAt(a) - HOOD_RADII.outer - 2.8);
+      const x = snap(c + Math.cos(a) * d);
+      const y = snap(c + Math.sin(a) * d);
+      if (isBlocked(x, y) || onPath(x, y)) continue;
+      if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + SPACING[kind])) continue;
+      prop(key, x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360), ANY);
+      taken.push({ x, y, r: SPACING[kind] });
+      planted++;
+    }
   }
 
   // 6. 스폰: 아치 앞 (들어오는 곳)

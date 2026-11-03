@@ -3,6 +3,7 @@ import { townConfig } from '../config/game';
 import { findPath, hasLineOfSight } from './pathfinding';
 import { MOVE_BUDGET_MAX, isMoveAllowed, lerpAngle, moveWithCollision, refillMoveBudget, yawFromVector } from './movement';
 import { DISTRICTS } from './districts';
+import { FLORA } from './flora';
 import {
   districtAt, gateSpawnName, groundHeightAt, isBlockedAt, isBlockedTile, lotDoor, randomSpawnPoint, spawnName, withDistrict,
   type TownMap,
@@ -45,9 +46,13 @@ describe('마을 맵', () => {
       const own = map.props.filter((p) => p.district === d && p.key.startsWith('prop.district.'));
       expect(own).toHaveLength(1);
       expect(districtAt(map, own[0].x, own[0].z)).toBe(d);
-      // 지역 나무도 그 지역 땅에 있다
-      for (const t of map.props.filter((p) => p.district === d && p.key === 'prop.plaza.tree')) {
+      // 지역 나무는 그 지역 땅에, 그 지역 식물로 심겨 있다
+      const trees = map.props.filter((p) => p.district === d && p.key.startsWith('prop.nature.tree'));
+      expect(trees.length).toBeGreaterThan(30);
+      const kinds = new Set(FLORA[d].trees.map(([k]) => k));
+      for (const t of trees) {
         expect(districtAt(map, t.x, t.z)).toBe(d);
+        expect(kinds.has(t.key)).toBe(true);
       }
     }
   });
@@ -112,6 +117,11 @@ describe('새 동네 (2동·3동…)', () => {
     expect(hood.lots.wood).toEqual([]);
     expect(districtAt(hood, hood.width / 2 + 0.5, hood.height / 2 + 6.5)).toBe('fire');
     expect(hood.props.filter((p) => p.key === GATE).map((p) => p.district)).toEqual(['fire']);
+    // 자리표시 나무·덤불이 그 지역 식물로 바뀐다
+    const fireKinds = new Set([...FLORA.fire.trees, ...FLORA.fire.bushes, ...FLORA.fire.rocks].map(([k]) => k));
+    const plants = hood.props.filter((p) => p.district && p.key.startsWith('prop.nature.'));
+    expect(plants.length).toBeGreaterThan(20);
+    for (const p of plants) expect(fireKinds.has(p.key)).toBe(true);
     // 틀 맵은 그대로다
     expect(template.lots.fire).toEqual([]);
   });
@@ -193,11 +203,18 @@ describe('입체 타일', () => {
   it('타일셋 terrain·height 속성을 읽는다', () => {
     expect(Object.values(map.terrain)).toContain('stone');
     expect(Object.values(map.tileHeights)).toContain(0.75);
-    expect(groundHeightAt(map, C + 0.5, C + 3.5)).toBe(0.05); // 돌바닥
-    // 광장 둘레 순환로는 땅 높이 그대로
+    expect(groundHeightAt(map, C + 0.5, C + 3.5)).toBeCloseTo(0.05, 3); // 돌바닥
+    // 광장 둘레 순환로는 땅보다 살짝 낮다 (주변 칸과 섞여 매끈하게 이어진다)
     const ring = { x: C + 0.5, z: C - 12.5 };
     expect(map.terrain[map.ground[Math.floor(ring.z) * map.width + Math.floor(ring.x)]]).toBe('path');
-    expect(groundHeightAt(map, ring.x, ring.z)).toBe(0);
+    const h = groundHeightAt(map, ring.x, ring.z);
+    expect(h).toBeLessThan(0.001);
+    expect(h).toBeGreaterThan(-0.03);
+    // 바다 밑은 수면보다 낮고, 모래사장에서 바다로 갈수록 땅이 내려간다 (이어진 높이)
+    expect(map.terrain[map.ground[1 * map.width + 1]]).toBe('water');
+    expect(groundHeightAt(map, 1.5, 1.5)).toBeLessThan(-0.3);
+    expect(groundHeightAt(map, C + 0.5, 1.5)).toBeLessThan(groundHeightAt(map, C + 0.5, 6.5));
+    expect(Math.abs(groundHeightAt(map, 10.2, 40.5) - groundHeightAt(map, 10.3, 40.5))).toBeLessThan(0.05);
   });
 
   it('소품 방향을 읽는다: 광장 벤치는 모두 분수를 본다', () => {

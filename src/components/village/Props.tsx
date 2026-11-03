@@ -10,6 +10,7 @@ import { TINT_MATERIAL } from '@/shared/character';
 import { groundHeightAt, type Lot, type PropPlacement } from '@/shared/townMap';
 import { GATE_KEY, HOUSE_KEY, LOT_KEY, tagTexture, type TownAssets } from './assets';
 import { lotKey, useTown } from './context';
+import { FOLIAGE_MATERIAL, injectWind, softFoliage, withWind } from './wind';
 
 // 맵의 소품과 주민의 집을 세운다. 같은 소품(나무·집)이 수백 개라 종류마다 인스턴싱으로 한 번에 그린다.
 // 지역 소품과 집 지붕의 outfit 재질은 그 지역 색으로 칠한다.
@@ -30,7 +31,9 @@ function fadingMaterial(src: THREE.Material): THREE.Material {
   const m = src.clone();
   m.transparent = true;
   m.depthWrite = false;
+  const foliage = src.name === FOLIAGE_MATERIAL;
   m.onBeforeCompile = (shader) => {
+    if (foliage) injectWind(shader);
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float instanceOpacity;\nvarying float vInstanceOpacity;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvInstanceOpacity = instanceOpacity;');
@@ -38,7 +41,7 @@ function fadingMaterial(src: THREE.Material): THREE.Material {
       .replace('#include <common>', '#include <common>\nvarying float vInstanceOpacity;')
       .replace('#include <opaque_fragment>', 'diffuseColor.a *= vInstanceOpacity;\n#include <opaque_fragment>');
   };
-  m.customProgramCacheKey = () => 'fading-instance';
+  m.customProgramCacheKey = () => (foliage ? 'fading-instance-wind' : 'fading-instance');
   return m;
 }
 
@@ -63,7 +66,7 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
  * 같은 소품을 한 번에 그린다. 내 캐릭터를 가리는 소품은 불투명 묶음에서 빼서
  * 반투명 묶음(최대 MAX_FADING개)으로 옮겨 그린다. 다시 다 보이면 불투명 묶음으로 돌아간다.
  */
-function InstancedProps({ group, onPick }: { group: PropGroup; onPick?: (index: number) => void }) {
+export function InstancedProps({ group, onPick }: { group: PropGroup; onPick?: (index: number) => void }) {
   const { map, input } = useTown();
   const solidRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
   const fadeRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
@@ -76,7 +79,7 @@ function InstancedProps({ group, onPick }: { group: PropGroup; onPick?: (index: 
     const one = new THREE.Vector3(1, 1, 1);
     return group.placements.map((p) => {
       q.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, p.yaw);
-      placement.compose(pos.set(p.x, groundHeightAt(map, p.x, p.z), p.z), q, one);
+      placement.compose(pos.set(p.x, p.y ?? groundHeightAt(map, p.x, p.z), p.z), q, one);
       return {
         matrices: group.parts.map((part) => new THREE.Matrix4().multiplyMatrices(placement, part.local)),
         color: p.district ? new THREE.Color(tokens.district[p.district]) : WHITE,
@@ -279,8 +282,8 @@ function ClickableProp({ placement }: { placement: PropPlacement }) {
   );
 }
 
-/** 소품 모델을 인스턴싱용 조각으로 나눈다 */
-function buildGroup(key: string, placements: PropPlacement[], assets: TownAssets): PropGroup {
+/** 소품 모델을 인스턴싱용 조각으로 나눈다 (잎 재질은 바람에 흔들린다) */
+export function buildGroup(key: string, placements: PropPlacement[], assets: TownAssets): PropGroup {
   const root = assets.props[key];
   root.updateMatrixWorld(true);
   const parts: PropGroup['parts'] = [];
@@ -288,7 +291,12 @@ function buildGroup(key: string, placements: PropPlacement[], assets: TownAssets
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh) return;
     const material = mesh.material as THREE.Material;
-    parts.push({ geometry: mesh.geometry, material, local: mesh.matrixWorld.clone(), tint: material.name === TINT_MATERIAL });
+    parts.push({
+      geometry: softFoliage(mesh.geometry, material),
+      material: withWind(material),
+      local: mesh.matrixWorld.clone(),
+      tint: material.name === TINT_MATERIAL,
+    });
   });
   const box = new THREE.Box3().setFromObject(root);
   return { key, placements, parts, tall: box.max.y - box.min.y > FADE_MIN_HEIGHT, halfWidth: (box.max.x - box.min.x) / 2 };

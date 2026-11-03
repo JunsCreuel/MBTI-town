@@ -135,8 +135,32 @@ export const tokens = {
     hedge: '#6DB86A',
     leaf: '#7CC572',
     sea: '#8CCDEE',
+    /** 먼바다 */
+    seaDeep: '#5FAFDF',
+    /** 물가 얕은 물 */
+    seaShallow: '#A6E3E6',
+    /** 물거품 */
+    foam: '#F4FBFF',
     sand: '#F4E6BE',
     sandSide: '#DFCB98',
+    /** 하루의 빛 (새벽·노을·밤) */
+    dawnTop: '#9EC3EC',
+    dawnHorizon: '#FCD9C4',
+    dawnSun: '#FFD2A8',
+    duskTop: '#7E8FD0',
+    duskHorizon: '#FFB59A',
+    duskSun: '#FFB27E',
+    duskHemi: '#F7D6E0',
+    nightTop: '#1E2A55',
+    nightHorizon: '#4A5A92',
+    nightFog: '#33416F',
+    nightHemi: '#8D9ED8',
+    nightGround: '#3D4A6B',
+    moon: '#C6D3FF',
+    /** 밤에 켜지는 창문·가로등 빛 */
+    windowGlow: '#FFD58A',
+    firefly: '#E9FF8A',
+    butterfly: '#FFFFFF',
     /** 전체 지도의 지역 경계선 */
     mapBorder: '#FFFFFF',
     flowerPink: '#FFA9C6',

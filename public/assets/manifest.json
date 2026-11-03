@@ -322,5 +322,179 @@
   },
   "map.hood": {
     "file": "maps/hood.json"
+  },
+  "prop.nature.tree_round": {
+    "file": "props/nature/nature_tree_round.glb"
+  },
+  "prop.nature.tree_oak": {
+    "file": "props/nature/nature_tree_oak.glb"
+  },
+  "prop.nature.tree_fat": {
+    "file": "props/nature/nature_tree_fat.glb"
+  },
+  "prop.nature.tree_detailed": {
+    "file": "props/nature/nature_tree_detailed.glb"
+  },
+  "prop.nature.tree_tall": {
+    "file": "props/nature/nature_tree_tall.glb"
+  },
+  "prop.nature.tree_small": {
+    "file": "props/nature/nature_tree_small.glb"
+  },
+  "prop.nature.tree_fall": {
+    "file": "props/nature/nature_tree_fall.glb"
+  },
+  "prop.nature.tree_fall_oak": {
+    "file": "props/nature/nature_tree_fall_oak.glb"
+  },
+  "prop.nature.tree_blossom": {
+    "file": "props/nature/nature_tree_blossom.glb"
+  },
+  "prop.nature.tree_blossom_oak": {
+    "file": "props/nature/nature_tree_blossom_oak.glb"
+  },
+  "prop.nature.tree_olive": {
+    "file": "props/nature/nature_tree_olive.glb"
+  },
+  "prop.nature.tree_olive_fat": {
+    "file": "props/nature/nature_tree_olive_fat.glb"
+  },
+  "prop.nature.tree_pine_round": {
+    "file": "props/nature/nature_tree_pine_round.glb"
+  },
+  "prop.nature.tree_pine_round_b": {
+    "file": "props/nature/nature_tree_pine_round_b.glb"
+  },
+  "prop.nature.tree_pine_tall": {
+    "file": "props/nature/nature_tree_pine_tall.glb"
+  },
+  "prop.nature.tree_pine_tall_b": {
+    "file": "props/nature/nature_tree_pine_tall_b.glb"
+  },
+  "prop.nature.tree_silver": {
+    "file": "props/nature/nature_tree_silver.glb"
+  },
+  "prop.nature.tree_silver_tall": {
+    "file": "props/nature/nature_tree_silver_tall.glb"
+  },
+  "prop.nature.tree_dark": {
+    "file": "props/nature/nature_tree_dark.glb"
+  },
+  "prop.nature.tree_dark_tall": {
+    "file": "props/nature/nature_tree_dark_tall.glb"
+  },
+  "prop.nature.tree_palm": {
+    "file": "props/nature/nature_tree_palm.glb"
+  },
+  "prop.nature.tree_palm_bend": {
+    "file": "props/nature/nature_tree_palm_bend.glb"
+  },
+  "prop.nature.bush": {
+    "file": "props/nature/nature_bush.glb"
+  },
+  "prop.nature.bush_large": {
+    "file": "props/nature/nature_bush_large.glb"
+  },
+  "prop.nature.bush_detailed": {
+    "file": "props/nature/nature_bush_detailed.glb"
+  },
+  "prop.nature.bush_small": {
+    "file": "props/nature/nature_bush_small.glb"
+  },
+  "prop.nature.fern": {
+    "file": "props/nature/nature_fern.glb"
+  },
+  "prop.nature.grass": {
+    "file": "props/nature/nature_grass.glb"
+  },
+  "prop.nature.grass_large": {
+    "file": "props/nature/nature_grass_large.glb"
+  },
+  "prop.nature.grass_leafs": {
+    "file": "props/nature/nature_grass_leafs.glb"
+  },
+  "prop.nature.grass_reed": {
+    "file": "props/nature/nature_grass_reed.glb"
+  },
+  "prop.nature.flower_red": {
+    "file": "props/nature/nature_flower_red.glb"
+  },
+  "prop.nature.flower_red_b": {
+    "file": "props/nature/nature_flower_red_b.glb"
+  },
+  "prop.nature.flower_pink": {
+    "file": "props/nature/nature_flower_pink.glb"
+  },
+  "prop.nature.flower_yellow": {
+    "file": "props/nature/nature_flower_yellow.glb"
+  },
+  "prop.nature.flower_yellow_b": {
+    "file": "props/nature/nature_flower_yellow_b.glb"
+  },
+  "prop.nature.flower_purple": {
+    "file": "props/nature/nature_flower_purple.glb"
+  },
+  "prop.nature.flower_purple_b": {
+    "file": "props/nature/nature_flower_purple_b.glb"
+  },
+  "prop.nature.mushroom_red": {
+    "file": "props/nature/nature_mushroom_red.glb"
+  },
+  "prop.nature.mushroom_tan": {
+    "file": "props/nature/nature_mushroom_tan.glb"
+  },
+  "prop.nature.rock_small": {
+    "file": "props/nature/nature_rock_small.glb"
+  },
+  "prop.nature.rock_small_b": {
+    "file": "props/nature/nature_rock_small_b.glb"
+  },
+  "prop.nature.rock_flat": {
+    "file": "props/nature/nature_rock_flat.glb"
+  },
+  "prop.nature.rock_large": {
+    "file": "props/nature/nature_rock_large.glb"
+  },
+  "prop.nature.rock_large_b": {
+    "file": "props/nature/nature_rock_large_b.glb"
+  },
+  "prop.nature.stone_tall": {
+    "file": "props/nature/nature_stone_tall.glb"
+  },
+  "prop.nature.stone_tall_b": {
+    "file": "props/nature/nature_stone_tall_b.glb"
+  },
+  "prop.nature.stump": {
+    "file": "props/nature/nature_stump.glb"
+  },
+  "prop.nature.stump_old": {
+    "file": "props/nature/nature_stump_old.glb"
+  },
+  "prop.nature.log": {
+    "file": "props/nature/nature_log.glb"
+  },
+  "prop.nature.log_stack": {
+    "file": "props/nature/nature_log_stack.glb"
+  },
+  "prop.nature.lily": {
+    "file": "props/nature/nature_lily.glb"
+  },
+  "prop.nature.lily_small": {
+    "file": "props/nature/nature_lily_small.glb"
+  },
+  "prop.nature.pumpkin": {
+    "file": "props/nature/nature_pumpkin.glb"
+  },
+  "prop.nature.wheat": {
+    "file": "props/nature/nature_wheat.glb"
+  },
+  "prop.nature.corn": {
+    "file": "props/nature/nature_corn.glb"
+  },
+  "prop.nature.pot": {
+    "file": "props/nature/nature_pot.glb"
+  },
+  "prop.nature.sign": {
+    "file": "props/nature/nature_sign.glb"
   }
 }

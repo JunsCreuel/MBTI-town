@@ -1,6 +1,7 @@
 // Tiled JSON 마을 맵(가운데 중앙광장 + 둘레 다섯 지역)을 읽어 충돌·소품·스폰·집터·지역 정보로 바꾼다. 서버와 클라이언트가 함께 쓴다.
 // 좌표: 타일 한 칸 = 월드 1단위. 월드 x = 타일 열, 월드 z = 타일 행 (북쪽이 z=0).
 import { DISTRICTS, isDistrict, type District } from './districts';
+import { themedKey } from './flora';
 /** Tiled 맵의 타일 크기 (px). 타일 한 칸 = 월드 1단위. */
 export const TILE_PX = 32;
 
@@ -50,6 +51,8 @@ export interface PropPlacement {
   yaw: number;
   /** 지역 소품이면 그 지역 (지역 색으로 칠한다) */
   district?: District;
+  /** 놓을 높이 (없으면 땅 높이). 물 위 연잎처럼 땅이 아닌 곳에 놓을 때 쓴다 */
+  y?: number;
 }
 
 /** 집터: 주민의 집이 서는 자리. 빈 집터는 울타리만 있다. 집터는 늘 막혀 있다. */
@@ -186,7 +189,8 @@ export function withDistrict(map: TownMap, d: District): TownMap {
     ...map,
     lots,
     districtGrid: map.districtGrid.map((v) => (v >= 0 ? di : -1)),
-    props: map.props.map((p) => (p.district ? { ...p, district: d } : p)),
+    // 지역 색 소품은 그 지역 색으로, 자리표시 식물은 그 지역 식물로
+    props: map.props.map((p) => (p.district ? { ...p, district: d, key: themedKey(d, p.key, p.x, p.z) } : p)),
   };
 }
 
@@ -215,12 +219,45 @@ export function isBlockedTile(map: TownMap, tx: number, tz: number): boolean {
   return map.blocked[tz * map.width + tx] === 1;
 }
 
-/** 발밑 땅 높이 (걸을 수 있는 칸은 돌바닥 정도만 살짝 솟아 있다) */
+/** 바다·호수 수면 높이 */
+export const WATER_LEVEL = -0.14;
+/** 땅 종류별 바닥 높이. 섞어서 부드러운 지형을 만든다 (산울타리·화단은 그 위에 따로 세운다) */
+const TERRAIN_HEIGHT: Record<string, number> = { stone: 0.05, stoneEdge: 0.05, path: -0.02, sand: -0.04, water: -0.6 };
+/** 땅 높이·색을 섞는 반지름 (칸). 칸 경계가 둥글게 이어진다 */
+export const GROUND_BLEND_RADIUS = 1.15;
+
+const baseHeights = new WeakMap<TownMap, Float32Array>();
+function baseHeightGrid(map: TownMap): Float32Array {
+  let g = baseHeights.get(map);
+  if (!g) {
+    g = Float32Array.from(map.ground, (gid) => TERRAIN_HEIGHT[map.terrain[gid] ?? 'grass'] ?? 0);
+    baseHeights.set(map, g);
+  }
+  return g;
+}
+
+/** 칸 가운데에서 떨어진 거리로 섞는 무게 */
+export const blendWeight = (d: number) => (d >= GROUND_BLEND_RADIUS ? 0 : (1 - d / GROUND_BLEND_RADIUS) ** 2);
+
+/**
+ * 발밑 땅 높이. 주변 칸 바닥 높이를 거리로 섞어서, 화면의 땅과 캐릭터가 같은 높이를 쓴다.
+ * 모래사장은 물 쪽으로 완만하게 내려가고, 중앙광장 돌바닥은 살짝 솟아 있다.
+ */
 export function groundHeightAt(map: TownMap, x: number, z: number): number {
-  const tx = Math.floor(x);
-  const tz = Math.floor(z);
-  if (tx < 0 || tz < 0 || tx >= map.width || tz >= map.height) return 0;
-  return map.tileHeights[map.ground[tz * map.width + tx]] ?? 0;
+  const g = baseHeightGrid(map);
+  let sum = 0;
+  let wsum = 0;
+  const r = GROUND_BLEND_RADIUS;
+  for (let tz = Math.floor(z - r - 0.5); tz <= Math.floor(z + r - 0.5) + 1; tz++) {
+    for (let tx = Math.floor(x - r - 0.5); tx <= Math.floor(x + r - 0.5) + 1; tx++) {
+      const w = blendWeight(Math.hypot(tx + 0.5 - x, tz + 0.5 - z));
+      if (!w) continue;
+      const inside = tx >= 0 && tz >= 0 && tx < map.width && tz < map.height;
+      sum += w * (inside ? g[tz * map.width + tx] : TERRAIN_HEIGHT.water);
+      wsum += w;
+    }
+  }
+  return wsum ? sum / wsum : 0;
 }
 
 /** 월드 좌표의 발 위치가 막힌 칸인지 */

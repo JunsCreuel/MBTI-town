@@ -101,34 +101,67 @@ export function treeParts(): Part[] {
 
 const TINT = '#FFFFFF';
 
-/** 주민의 집: 크림색 벽 + 지역 색 지붕(outfit). 바닥 2.4×2.2, 정면(+Z)에 문. */
+/**
+ * 주민의 집: 돌 기초 + 둥근 크림색 벽 + 처마 깊은 지붕(지역 색, outfit). 바닥 2.4×2.2, 정면(+Z)에 문.
+ * 아치 문과 차양(지역 색), 창틀과 꽃 상자, 벽등(밤에 빛남), 우편함(지역 색), 굴뚝, 문 앞 디딤돌.
+ */
 export function houseParts(): Part[] {
-  const roofSlope = 32;
+  const roofSlope = 30;
+  // 둥근 모서리는 한 단계만 (집은 마을에 수십 채라 가볍게)
+  const rb = (w: number, h: number, d: number, r = 0.06) =>
+    new RoundedBoxGeometry(w, h, d, 1, Math.min(r, w / 2 - 1e-3, h / 2 - 1e-3, d / 2 - 1e-3));
   const roof = (side: 1 | -1) =>
-    part(box(1.62, 0.16, 2.7), TINT, {
-      pos: [side * 0.66, 2.02, 0],
-      rot: [0, 0, -side * roofSlope],
-      mat: 'outfit',
-    });
+    part(rb(1.68, 0.2, 2.75, 0.08), TINT, { pos: [side * 0.68, 2.08, 0], rot: [0, 0, -side * roofSlope], mat: 'outfit' });
   const gable = new THREE.BufferGeometry();
-  gable.setAttribute('position', new THREE.Float32BufferAttribute([-1.2, 0, 0, 1.2, 0, 0, 0, 0.78, 0], 3));
+  gable.setAttribute('position', new THREE.Float32BufferAttribute([-1.15, 0, 0, 1.15, 0, 0, 0, 0.7, 0], 3));
   gable.setIndex([0, 1, 2]);
   gable.computeVertexNormals();
-  return [
-    part(box(2.5, 0.16, 2.3), W.stoneDark, { pos: [0, 0.08, 0] }),
-    part(box(2.3, 1.5, 2.1), W.paper, { pos: [0, 0.9, 0] }),
-    part(gable, W.paper, { pos: [0, 1.65, 1.05] }),
-    part(gable, W.paper, { pos: [0, 1.65, -1.05], rot: [0, 180, 0] }),
+  const parts: Part[] = [
+    // 기초와 벽
+    part(rb(2.55, 0.22, 2.35, 0.06), W.stoneDark, { pos: [0, 0.11, 0] }),
+    part(rb(2.3, 1.52, 2.1, 0.12), W.paper, { pos: [0, 0.96, 0] }),
+    part(gable, W.paper, { pos: [0, 1.7, 1.02] }),
+    part(gable, W.paper, { pos: [0, 1.7, -1.02], rot: [0, 180, 0] }),
+    // 지붕과 용마루
     roof(1),
     roof(-1),
-    part(box(0.62, 0.98, 0.08), W.woodDark, { pos: [0, 0.65, 1.07] }),
-    part(sphere(0.04, 8, 6), W.gold, { pos: [0.2, 0.66, 1.12] }),
-    part(box(0.5, 0.46, 0.06), W.waterLight, { pos: [-0.75, 1.0, 1.06] }),
-    part(box(0.5, 0.46, 0.06), W.waterLight, { pos: [0.75, 1.0, 1.06] }),
-    part(box(0.58, 0.08, 0.1), W.wood, { pos: [-0.75, 0.74, 1.1] }),
-    part(box(0.58, 0.08, 0.1), W.wood, { pos: [0.75, 0.74, 1.1] }),
-    part(box(0.3, 0.7, 0.3), W.stoneDark, { pos: [0.62, 2.25, -0.45] }),
+    part(cyl(0.09, 0.09, 2.8, 10), TINT, { pos: [0, 2.5, 0], rot: [90, 0, 0], mat: 'outfit' }),
+    // 굴뚝
+    part(rb(0.32, 0.72, 0.32, 0.05), W.stoneDark, { pos: [0.66, 2.36, -0.5] }),
+    part(rb(0.4, 0.08, 0.4, 0.03), W.stone, { pos: [0.66, 2.74, -0.5] }),
+    // 아치 문: 문짝 + 둥근 윗부분 + 손잡이
+    part(rb(0.64, 0.86, 0.08, 0.03), W.woodDark, { pos: [0, 0.65, 1.07] }),
+    part(cyl(0.32, 0.32, 0.08, 18, ), W.woodDark, { pos: [0, 1.08, 1.07], rot: [90, 0, 0], scale: [1, 1, 0.9] }),
+    part(sphere(0.045, 8, 6), W.gold, { pos: [0.2, 0.68, 1.13] }),
+    // 문 위 차양 (지역 색)
+    part(rb(0.98, 0.07, 0.42, 0.03), TINT, { pos: [0, 1.5, 1.24], rot: [18, 0, 0], mat: 'outfit' }),
+    // 문 앞 디딤돌
+    part(rb(0.8, 0.1, 0.36, 0.04), W.stone, { pos: [0, 0.05, 1.42] }),
+    // 벽등 (밤에 빛남)
+    part(rb(0.14, 0.2, 0.12, 0.03), W.glow, { pos: [-0.52, 1.18, 1.12], mat: 'glow' }),
+    part(box(0.18, 0.04, 0.16), W.metal, { pos: [-0.52, 1.3, 1.12] }),
   ];
+  // 문 오른쪽 창: 유리 + 창틀 + 꽃 상자 (왼쪽에는 벽등)
+  {
+    const x = 0.78;
+    parts.push(part(box(0.46, 0.44, 0.04), W.waterLight, { pos: [x, 1.05, 1.07], mat: 'glass' }));
+    parts.push(part(box(0.56, 0.06, 0.08), W.paper, { pos: [x, 1.3, 1.09] }));
+    parts.push(part(box(0.04, 0.44, 0.06), W.paper, { pos: [x, 1.05, 1.09] }));
+    parts.push(part(rb(0.6, 0.14, 0.18, 0.03), W.wood, { pos: [x, 0.78, 1.15] }));
+    for (const [dx, c] of [[-0.18, '#F6A9C2'], [0, '#FFDE7A'], [0.18, '#F6A9C2']] as const) {
+      parts.push(part(sphere(0.07, 8, 6), W.leafLight, { pos: [x + dx, 0.88, 1.15] }));
+      parts.push(part(sphere(0.055, 8, 6), c, { pos: [x + dx, 0.95, 1.17] }));
+    }
+  }
+  // 옆 창 (양쪽 벽)
+  for (const side of [-1, 1]) {
+    parts.push(part(box(0.04, 0.42, 0.44), W.waterLight, { pos: [side * 1.16, 1.05, 0.2], mat: 'glass' }));
+    parts.push(part(box(0.06, 0.06, 0.52), W.paper, { pos: [side * 1.17, 1.29, 0.2] }));
+  }
+  // 우편함 (지역 색) — 문 오른쪽 앞
+  parts.push(part(box(0.07, 0.62, 0.07), W.woodDark, { pos: [0.92, 0.31, 1.45] }));
+  parts.push(part(rb(0.26, 0.2, 0.34, 0.06), TINT, { pos: [0.92, 0.7, 1.45], mat: 'outfit' }));
+  return parts;
 }
 
 export function lampParts(): Part[] {
@@ -154,17 +187,26 @@ export const PROP_MATERIALS: Record<string, MaterialSpec> = {
 const rbox = (w: number, h: number, d: number, r = 0.04) =>
   new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2 - 1e-3, h / 2 - 1e-3, d / 2 - 1e-3));
 
-/** 빈 집터: 낮은 울타리와 '입주 대기' 팻말 (집과 같은 자리를 차지한다) */
+/**
+ * 빈 집터: 풍경을 가리지 않게 낮게. 둥근 흙 자리 + 모서리 말뚝 넷 + 정면의 작은 팻말 + 풀 몇 포기.
+ * (집과 같은 자리를 차지하고 늘 막혀 있다)
+ */
 export function lotParts(): Part[] {
-  const parts: Part[] = [part(box(2.3, 0.04, 2.1), '#B7D99A', { pos: [0, 0.02, 0] })];
-  for (const [x, z, w, d] of [[0, -1.05, 2.4, 0.06], [0, 1.05, 2.4, 0.06], [-1.15, 0, 0.06, 2.1], [1.15, 0, 0.06, 2.1]] as const) {
-    parts.push(part(box(w, 0.06, d), W.paper, { pos: [x, 0.3, z] }));
-    parts.push(part(box(w, 0.06, d), W.paper, { pos: [x, 0.16, z] }));
+  const parts: Part[] = [part(cyl(1.05, 1.1, 0.04, 20), '#D8C29C', { pos: [0, 0.02, 0], scale: [1.08, 1, 0.98] })];
+  // 모서리 말뚝과 이어진 낮은 끈
+  for (const [x, z] of [[-1.05, -0.95], [1.05, -0.95], [-1.05, 0.95], [1.05, 0.95]] as const) {
+    parts.push(part(cyl(0.045, 0.05, 0.36, 8), W.woodDark, { pos: [x, 0.18, z] }));
   }
-  for (const x of [-1.15, -0.4, 0.4, 1.15]) for (const z of [-1.05, 1.05]) parts.push(part(box(0.08, 0.42, 0.08), W.paper, { pos: [x, 0.21, z] }));
-  parts.push(part(box(0.06, 0.7, 0.06), W.woodDark, { pos: [0.6, 0.35, 0.9] }));
-  parts.push(part(box(0.5, 0.3, 0.04), W.wood, { pos: [0.6, 0.7, 0.92] }));
-  parts.push(part(sphere(0.18, 10, 8), W.leafLight, { pos: [-0.5, 0.15, -0.3] }));
+  for (const [x, z, w, d] of [[0, -0.95, 2.1, 0.02], [0, 0.95, 2.1, 0.02], [-1.05, 0, 0.02, 1.9], [1.05, 0, 0.02, 1.9]] as const) {
+    parts.push(part(box(w, 0.02, d), W.paper, { pos: [x, 0.3, z] }));
+  }
+  // 정면 팻말
+  parts.push(part(box(0.05, 0.62, 0.05), W.woodDark, { pos: [0.55, 0.31, 1.0] }));
+  parts.push(part(rbox(0.5, 0.3, 0.05, 0.03), W.wood, { pos: [0.55, 0.62, 1.03] }));
+  // 풀 몇 포기
+  for (const [x, z, r] of [[-0.5, -0.3, 0.16], [0.3, -0.5, 0.12], [-0.2, 0.45, 0.13]] as const) {
+    parts.push(part(sphere(r, 10, 8), W.leafLight, { pos: [x, r * 0.5, z], scale: [1, 0.7, 1] }));
+  }
   return parts;
 }
 
