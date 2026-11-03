@@ -57,6 +57,19 @@ export const cameraConfig = {
   maxDistance: 26,
   /** 전체 지도: 위에서 내려다보는 각도 (도, 90이면 바로 위) */
   mapPitchDeg: 72,
+  /**
+   * 시점 버튼(단축키 V)이 차례로 고르는 거리. 기본 → 가까이 → 멀리 → 기본…
+   * 'normal'의 거리는 화면 방향에 따라 distance / portraitDistance를 쓴다. 가까울수록 낮게 봐서 하늘이 보인다.
+   */
+  views: [
+    { id: 'normal', label: '기본', distance: 0 },
+    { id: 'near', label: '가까이', distance: 9 },
+    { id: 'far', label: '멀리', distance: 24 },
+  ],
+  /** 회전 버튼·단축키(Q/E) 한 번에 카메라가 도는 각도 (도) */
+  rotateStepDeg: 45,
+  /** 화면을 옆으로 끌어서 돌릴 때 1px당 각도 (도) */
+  dragRotateDegPerPx: 0.3,
 } as const;
 
 // 나의 방 = 마을 속 내 집의 안 (PROJECT_GUIDE.md 6장)

@@ -15,6 +15,7 @@ import { Decor } from './Decor';
 import { windUniforms } from './wind';
 import { currentHour, day, dayLookAt } from './daylight';
 import { Ambient } from './Ambient';
+import { normalDistance, saveCamera } from './camera';
 import { now } from './session';
 import { Terrain } from './Terrain';
 
@@ -178,11 +179,17 @@ const pinchState = {
   },
 };
 
-/** 내 캐릭터를 따라가는 카메라. 휠과 두 손가락으로 거리를 바꾼다. 전체 지도에서는 섬 전체를 위에서 본다. */
+/**
+ * 내 캐릭터를 따라가는 카메라. 휠과 두 손가락으로 거리를, 한 손가락(마우스)으로 옆으로 끌면 방향을 바꾼다.
+ * 시점 버튼·회전 버튼(VillageClient)은 input.camera의 목표값만 바꾼다. 전체 지도에서는 섬 전체를 위에서 본다.
+ */
 function CameraRig() {
   const { input, map } = useTown();
   const { camera, gl, size } = useThree();
-  const distance = useRef<number>(size.width < size.height ? cameraConfig.portraitDistance : cameraConfig.distance);
+  const cam = input.camera;
+  if (!cam.distance) cam.distance = normalDistance(size.width, size.height);
+  /** 지금 거리 (목표 거리로 부드럽게 다가간다) */
+  const distNow = useRef(cam.distance);
   const target = useRef(new THREE.Vector3(input.self.x, 0, input.self.z));
   /** 내 캐릭터 자리를 처음 알았을 때 카메라를 바로 옮긴다 (맵 구석에서 날아오지 않게) */
   const placed = useRef(false);
@@ -198,7 +205,9 @@ function CameraRig() {
     const el = gl.domElement;
     const pointers = new Map<number, { x: number; y: number }>();
     let pinchStart = 0;
-    let distStart = distance.current;
+    let distStart = cam.distance;
+    /** 한 손가락 끌기: 시작점과 지난 위치 */
+    let drag: { id: number; x0: number; y0: number; x: number; rotating: boolean } | null = null;
     const clamp = (d: number) => THREE.MathUtils.clamp(d, cameraConfig.minDistance, cameraConfig.maxDistance);
     const spread = () => {
       const [a, b] = [...pointers.values()];
@@ -207,26 +216,57 @@ function CameraRig() {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       if (input.view !== 'walk') return;
-      distance.current = clamp(distance.current * Math.exp(e.deltaY * 0.0012));
+      cam.distance = clamp(cam.distance * Math.exp(e.deltaY * 0.0012));
+      // 휠은 바로 따라간다 (부드럽게 하면 굴린 만큼 늦게 움직여 답답하다)
+      distNow.current = cam.distance;
+      cam.onChange?.();
     };
     const onDown = (e: PointerEvent) => {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 1) drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, rotating: false };
       if (pointers.size === 2) {
+        drag = null;
         pinchState.active = true;
         pinchStart = spread();
-        distStart = distance.current;
+        distStart = cam.distance;
       }
     };
     const onMove = (e: PointerEvent) => {
       if (!pointers.has(e.pointerId)) return;
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 2 && pinchStart > 0 && input.view === 'walk') distance.current = clamp((distStart * pinchStart) / spread());
+      if (pointers.size === 2 && pinchStart > 0 && input.view === 'walk') {
+        cam.distance = clamp((distStart * pinchStart) / spread());
+        distNow.current = cam.distance;
+        cam.onChange?.();
+        return;
+      }
+      if (!drag || drag.id !== e.pointerId || input.view !== 'walk') return;
+      // 바닥 누르기(걷기)와 헷갈리지 않게, 옆으로 조금 끈 뒤부터 돌린다
+      if (!drag.rotating && Math.abs(e.clientX - drag.x0) > 12 && Math.abs(e.clientX - drag.x0) > Math.abs(e.clientY - drag.y0)) {
+        drag.rotating = true;
+        drag.x = e.clientX;
+      }
+      if (drag.rotating) {
+        // 세상을 잡고 끄는 느낌: 오른쪽으로 끌면 풍경이 오른쪽으로 돈다
+        const turn = THREE.MathUtils.degToRad((e.clientX - drag.x) * cameraConfig.dragRotateDegPerPx);
+        cam.yaw -= turn;
+        cam.yawNow -= turn;
+        drag.x = e.clientX;
+      }
     };
     const onUp = (e: PointerEvent) => {
       pointers.delete(e.pointerId);
+      if (drag?.id === e.pointerId) {
+        if (drag.rotating) {
+          saveCamera(cam);
+          cam.onChange?.();
+        }
+        drag = null;
+      }
       if (pinchState.active && pointers.size === 0) {
         pinchState.active = false;
         pinchState.endedAt = now();
+        saveCamera(cam);
       }
     };
     el.addEventListener('wheel', onWheel, { passive: false });
@@ -241,7 +281,7 @@ function CameraRig() {
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
     };
-  }, [gl, input]);
+  }, [gl, input, cam]);
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.1);
@@ -252,22 +292,32 @@ function CameraRig() {
       placed.current = true;
     }
     target.current.lerp(goal, k);
-    const d = distance.current;
+    // 시점·방향 버튼으로 바꾼 목표로 부드럽게 옮긴다
+    const ease = 1 - Math.exp(-dt * 7);
+    cam.yawNow += (cam.yaw - cam.yawNow) * ease;
+    if (Math.abs(cam.yaw - cam.yawNow) < 1e-4) cam.yawNow = cam.yaw;
+    distNow.current += (cam.distance - distNow.current) * ease;
+    const d = distNow.current;
     const zoom = (d - cameraConfig.minDistance) / (cameraConfig.maxDistance - cameraConfig.minDistance);
     const pitch = THREE.MathUtils.degToRad(THREE.MathUtils.lerp(cameraConfig.pitchNearDeg, cameraConfig.pitchFarDeg, zoom));
-    v.walkPos.set(target.current.x, target.current.y + 0.8 + Math.sin(pitch) * d, target.current.z + Math.cos(pitch) * d);
+    const flat = Math.cos(pitch) * d;
+    v.walkPos.set(
+      target.current.x + Math.sin(cam.yawNow) * flat,
+      target.current.y + 0.8 + Math.sin(pitch) * d,
+      target.current.z + Math.cos(cam.yawNow) * flat,
+    );
     v.walkLook.set(target.current.x, target.current.y + 0.8, target.current.z);
 
-    // 걷기 ↔ 전체 지도 사이를 부드럽게 오간다
+    // 걷기 ↔ 전체 지도 사이를 부드럽게 오간다 (지도는 항상 북쪽이 위)
     const goalBlend = input.view === 'map' ? 1 : 0;
     blend.current += (goalBlend - blend.current) * (1 - Math.exp(-dt * 3.2));
     if (Math.abs(goalBlend - blend.current) < 0.002) blend.current = goalBlend;
     input.mapBlend = blend.current;
     const e = THREE.MathUtils.smootherstep(blend.current, 0, 1);
     if (e > 0) {
-      const cam = camera as THREE.PerspectiveCamera;
-      const vfov = THREE.MathUtils.degToRad(cam.fov);
-      const hfov = 2 * Math.atan(Math.tan(vfov / 2) * cam.aspect);
+      const pc = camera as THREE.PerspectiveCamera;
+      const vfov = THREE.MathUtils.degToRad(pc.fov);
+      const hfov = 2 * Math.atan(Math.tan(vfov / 2) * pc.aspect);
       // 섬 전체(반지름)가 화면에 들어오는 거리
       const fit = ((map.width / 2) / Math.tan(Math.min(vfov, hfov) / 2)) * 1.06;
       const mp = THREE.MathUtils.degToRad(cameraConfig.mapPitchDeg);

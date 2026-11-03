@@ -15,7 +15,8 @@ import type { HouseView, TownView } from '@/server/scene/service';
 import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
 import { parseRoomPlace, type ActionKind, type EmoteKind, type RoomPlace, type TownPlace } from '@/shared/protocol';
 import { districtAt, lotDoor, parseTownMap, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
-import { lotKey, type TownContextValue, type TownInput } from './context';
+import { lotKey, type TownCamera, type TownContextValue, type TownInput } from './context';
+import { currentView, cycleView, initialCamera, isTurned, resetCamera, rotateCamera, type CameraView } from './camera';
 import { TownSession, now } from './session';
 import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
 
@@ -156,6 +157,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       view: 'walk',
       mapBlend: 0,
       labels: new Map(),
+      camera: initialCamera(),
     }),
     [],
   );
@@ -253,6 +255,26 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     },
     [session, openMap],
   );
+
+  // 카메라 단축키: Q/E 돌리기, V 시점 바꾸기, R 정면 (걷기 화면에서만, 글 쓰는 칸에서는 무시)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (view !== 'walk' || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const cam = input.camera;
+      if (e.code === 'KeyQ') rotateCamera(cam, -1);
+      else if (e.code === 'KeyE') rotateCamera(cam, 1);
+      else if (e.code === 'KeyR') resetCamera(cam);
+      else if (e.code === 'KeyV') cycleView(cam, window.innerWidth, window.innerHeight);
+      else return;
+      e.preventDefault();
+      cam.onChange?.();
+      setHint(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [view, input]);
 
   // Esc로 지도·집 카드를 닫는다
   useEffect(() => {
@@ -369,18 +391,21 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
                 <span className="debate-link__label">오늘의 토론</span> ›
               </Link>
             </div>
-            <div className="hud__right">
-              {hasHome && (
-                <button className="icon-btn" onClick={goHome} aria-label="내 집 앞으로 가기">
-                  <Icon name="home" />
+            <div className="hud__right hud__right--stack">
+              <div className="hud__icons">
+                {hasHome && (
+                  <button className="icon-btn" onClick={goHome} aria-label="내 집 앞으로 가기">
+                    <Icon name="home" />
+                  </button>
+                )}
+                <Link className="icon-btn" href="/explore" aria-label="이웃 방 둘러보기">
+                  <Icon name="friends" />
+                </Link>
+                <button className="icon-btn icon-btn--accent" onClick={() => openMap(true)} aria-label="전체 지도 보기">
+                  <Icon name="map" />
                 </button>
-              )}
-              <Link className="icon-btn" href="/explore" aria-label="이웃 방 둘러보기">
-                <Icon name="friends" />
-              </Link>
-              <button className="icon-btn icon-btn--accent" onClick={() => openMap(true)} aria-label="전체 지도 보기">
-                <Icon name="map" />
-              </button>
+              </div>
+              <CameraControls cam={input.camera} onUse={() => setHint(false)} />
             </div>
           </div>
 
@@ -397,7 +422,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
 
           <div className="hud__bottom">
             <div className="hud__hint" style={{ opacity: hint && !showWelcome ? 1 : 0 }} aria-hidden={!hint}>
-              바닥을 눌러 걸어요 · 집을 누르면 그 집 앞으로 가요
+              바닥을 눌러 걸어요 · 옆으로 끌면 화면이 돌아요
             </div>
 
             {picked && (
@@ -555,6 +580,62 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
             {guest ? '처음으로' : '나의 방으로'}
           </Link>
         </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * 카메라 버튼: ⟲ 돌리기 · 시점(기본/가까이/멀리) · ⟳ 돌리기, 돌려 놓았으면 '정면'.
+ * 단축키 Q · V · E · R 과 같다. 카메라 값은 장면이 매 프레임 읽는 input.camera에 쓴다.
+ */
+function CameraControls({ cam, onUse }: { cam: TownCamera; onUse: () => void }) {
+  const size = () => [window.innerWidth, window.innerHeight] as const;
+  const [current, setCurrent] = useState<CameraView | null>(null);
+  const [turned, setTurned] = useState(false);
+
+  useEffect(() => {
+    const sync = () => {
+      setCurrent(currentView(cam, ...size()));
+      setTurned(isTurned(cam));
+    };
+    sync();
+    // 휠·두 손가락 확대, 끌어서 돌리기, 단축키로 바뀐 것도 글자에 맞춘다
+    cam.onChange = sync;
+    window.addEventListener('resize', sync);
+    return () => {
+      cam.onChange = undefined;
+      window.removeEventListener('resize', sync);
+    };
+  }, [cam]);
+
+  function run(change: () => void) {
+    change();
+    setCurrent(currentView(cam, ...size()));
+    setTurned(isTurned(cam));
+    onUse();
+  }
+
+  return (
+    <div className="cam-ctrl" role="toolbar" aria-label="카메라 시점">
+      <button onClick={() => run(() => rotateCamera(cam, -1))} aria-label="화면 왼쪽으로 돌리기" title="왼쪽으로 돌리기 (Q)">
+        <Icon name="rotate" size={18} className="icon--flip" />
+      </button>
+      <button
+        className="cam-ctrl__view"
+        onClick={() => run(() => cycleView(cam, ...size()))}
+        aria-label={`시점 바꾸기, 지금 ${current?.label ?? '기본'}`}
+        title="시점 바꾸기 (V)"
+      >
+        {current?.label ?? '기본'}
+      </button>
+      <button onClick={() => run(() => rotateCamera(cam, 1))} aria-label="화면 오른쪽으로 돌리기" title="오른쪽으로 돌리기 (E)">
+        <Icon name="rotate" size={18} />
+      </button>
+      {turned && (
+        <button className="cam-ctrl__reset" onClick={() => run(() => resetCamera(cam))} aria-label="정면으로 돌아가기" title="정면 (R)">
+          정면
+        </button>
       )}
     </div>
   );

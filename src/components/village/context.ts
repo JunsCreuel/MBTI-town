@@ -20,6 +20,19 @@ export interface TownInput {
   mapBlend: number;
   /** 전체 지도 이름표 DOM. 장면이 매 프레임 화면 위치를 옮긴다. 키 = 지역 id, 'plaza', 'home'. */
   labels: Map<string, HTMLElement>;
+  /** 카메라 목표값. 버튼·단축키·휠·끌기가 바꾸고, 카메라가 매 프레임 부드럽게 따라간다. */
+  camera: TownCamera;
+}
+
+export interface TownCamera {
+  /** 바라보는 방향 (라디안). 0 = 남쪽에서 북쪽을 본다. 한 바퀴를 넘어도 그대로 더한다 (되감기지 않게) */
+  yaw: number;
+  /** 지금 카메라 방향. 방향키로 걸을 때 이 방향을 기준으로 위·아래·왼쪽·오른쪽을 정한다 */
+  yawNow: number;
+  /** 캐릭터와의 거리 (0 = 아직 안 정함 → 화면 방향에 맞는 기본 거리) */
+  distance: number;
+  /** 휠·두 손가락·끌기·단축키로 값이 바뀌면 부른다 (시점 버튼 글자를 맞춘다) */
+  onChange?: () => void;
 }
 
 /** 집터 키: "wood.3" */
