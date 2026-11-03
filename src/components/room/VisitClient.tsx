@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { tokens } from '@/design/tokens';
 import { ApiError, call, errorMessage } from '@/lib/api';
 import type { RoomView } from '@/server/scene/service';
+import { DEFAULT_AVATAR, type Avatar } from '@/shared/avatar';
 import { DISTRICT } from '@/shared/districts';
 import type { FurnitureAction } from '@/shared/room';
 import { RecordCard } from '../archive/RecordCard';
@@ -18,8 +19,9 @@ import { Sheet } from '../app/Sheet';
 import { TabBar } from '../app/TabBar';
 import { loadRoomAssets, type RoomAssets } from './assets';
 import { Guestbook } from './Guestbook';
-
+import { useHousePresence } from './useHousePresence';
 import { useHudInsets } from './useHudInsets';
+
 const RoomScene = dynamic(() => import('./RoomScene'), { ssr: false });
 
 const VISIBILITY_NOTE = { friends: '이 방은 친구에게만 열려 있어요.', private: '이 방은 지금 주인만 볼 수 있어요.', public: '' };
@@ -94,6 +96,14 @@ export function VisitClient({ handle }: { handle: string }) {
 
   // HUD 사이에 방이 오게 (HUD가 처음 그려지면 다시 잰다)
   const insets = useHudInsets(!!view, { top: 104, bottom: 250 });
+  // 방을 볼 수 있으면 같은 방에 들어간다: 내 캐릭터로 걷고, 주인·다른 손님이 있으면 함께 보인다
+  const { presence, snap: presenceSnap, others } = useHousePresence(view?.room ? handle : null);
+  const pass = presenceSnap?.pass;
+  const myAvatar: Avatar | null = pass
+    ? { color: pass.color, accessory: pass.acc }
+    : presenceSnap?.status === 'denied'
+      ? DEFAULT_AVATAR
+      : null;
 
   if (missing) {
     return (
@@ -119,12 +129,14 @@ export function VisitClient({ handle }: { handle: string }) {
   return (
     <main className="room-page" style={{ '--district': tokens.district[district] } as CSSProperties}>
       <div className="room-page__stage">
-        {view.room && assets && (
+        {view.room && assets && myAvatar && (
           <RoomScene
             assets={assets}
             layout={view.room.layout}
             district={district}
-            avatar={owner.avatar}
+            avatar={myAvatar}
+            selfName={pass?.name}
+            presence={presence}
             mode="view"
             onAction={onAction}
             playing={playing}
@@ -152,7 +164,7 @@ export function VisitClient({ handle }: { handle: string }) {
           <span className="owner-card__dot" style={{ background: tokens.avatar[owner.avatar.color] }} aria-hidden />
           <div className="owner-card__text">
             <strong>{owner.displayName}의 방</strong>
-            <span>{owner.bio || `@${owner.handle}`}</span>
+            <span>{others > 0 ? `지금 ${others + 1}명이 함께 있어요` : owner.bio || `@${owner.handle}`}</span>
           </div>
           <span className="district-chip">{DISTRICT[district].name}</span>
         </div>

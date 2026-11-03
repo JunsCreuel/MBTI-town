@@ -27,6 +27,7 @@ import { useMe } from '../app/useMe';
 import { loadRoomAssets, type RoomAssets } from '../room/assets';
 import { Guestbook } from '../room/Guestbook';
 
+import { useHousePresence } from '../room/useHousePresence';
 import { useHudInsets } from '../room/useHudInsets';
 const RoomScene = dynamic(() => import('../room/RoomScene'), { ssr: false });
 const AvatarPreview = dynamic(() => import('../room/AvatarPreview'), { ssr: false });
@@ -196,6 +197,9 @@ export function HomeClient() {
     }
   }
 
+  // 내 방에 들어온 친구·손님과 함께 있는다
+  const { presence, others } = useHousePresence(profile?.handle ?? null);
+
   // HUD 사이에 방이 오게 (모드가 바뀌거나 HUD가 처음 그려지면 다시 잰다)
   const insets = useHudInsets(`${mode}:${!!(me && profile && shown)}`, mode === 'edit' ? { top: 70, bottom: 190 } : { top: 104, bottom: 250 });
 
@@ -221,6 +225,8 @@ export function HomeClient() {
             layout={shown}
             district={district}
             avatar={profile.avatar}
+            selfName={profile.displayName}
+            presence={presence}
             mode={mode}
             selectedId={selected}
             onSelect={setSelected}
@@ -249,7 +255,7 @@ export function HomeClient() {
               <span className="owner-card__dot" style={{ background: tokens.avatar[profile.avatar.color] }} aria-hidden />
               <div className="owner-card__text">
                 <strong>{profile.displayName}의 방</strong>
-                <span>{profile.bio || '프로필 문구를 MY에서 적어 보세요'}</span>
+                <span>{others > 0 ? `${others}명이 놀러 와 있어요` : profile.bio || '프로필 문구를 MY에서 적어 보세요'}</span>
               </div>
               <span className="district-chip">{DISTRICT[district].name}</span>
             </div>

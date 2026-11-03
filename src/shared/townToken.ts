@@ -22,6 +22,11 @@ export interface TownPass {
   acc: AccessoryId;
   /** 만료 (유닉스 초) */
   exp: number;
+  /**
+   * 들어갈 수 있는 집 (집 주인의 pid). 웹 서버가 방을 볼 수 있는 사람(공개 범위·차단 검사)에게만 담아 준다.
+   * 실시간 서버의 집 방은 이 값이 있는 토큰만 받는다. 마을 토큰에는 없다.
+   */
+  house?: string;
 }
 
 const DEV_SECRET = 'scene-dev-town-secret';
@@ -77,5 +82,6 @@ export function verifyTownPass(token: unknown, nowSec = Math.floor(Date.now() / 
     color: avatar.color,
     acc: avatar.accessory,
     exp: raw.exp,
+    ...(typeof raw.house === 'string' && raw.house ? { house: raw.house.slice(0, 32) } : {}),
   };
 }

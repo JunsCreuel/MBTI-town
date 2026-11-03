@@ -4,6 +4,7 @@ import { cleanAvatar } from './avatar';
 import { cleanTaste } from './districts';
 import { canView, validateRecord, visibleLevels } from './records';
 import {
+  canStandInRoom, moveInRoom,
   FURNITURE, STARTER_ROOMS, blockedCells, canPlace, findFreeSpot, findRoomPath, footprint, starterLayout, validateLayout,
   type PlacedItem,
 } from './room';
@@ -75,6 +76,33 @@ describe('방 배치', () => {
     expect(path.at(-1)).toEqual({ x: 2.5, z: 0.5 });
     const blocked = blockedCells(items);
     for (const p of path) expect(blocked[Math.floor(p.z) * roomConfig.width + Math.floor(p.x)]).toBe(0);
+  });
+});
+
+describe('방에서 방향키로 걷기', () => {
+  // 가운데 칸(2,2)만 막힌 방
+  const blocked = new Uint8Array(roomConfig.width * roomConfig.depth);
+  blocked[2 * roomConfig.width + 2] = 1;
+
+  it('벽과 가구에는 들어가지 않는다', () => {
+    expect(canStandInRoom(blocked, 0.5, 0.5)).toBe(true);
+    expect(canStandInRoom(blocked, 0.1, 0.5)).toBe(false); // 왼쪽 벽
+    expect(canStandInRoom(blocked, 2.5, 2.5)).toBe(false); // 가구
+    expect(canStandInRoom(blocked, 1.85, 2.5)).toBe(false); // 가구에 몸이 걸친다
+    expect(canStandInRoom(blocked, roomConfig.width - 0.1, 3)).toBe(false); // 오른쪽 벽
+  });
+
+  it('막히면 벽·가구를 따라 미끄러진다', () => {
+    // 가구 바로 아래에서 오른쪽 위로 가면, 위는 막혀 옆으로만 간다
+    const p = moveInRoom(blocked, 2.5, 3.5, 0.2, -0.4);
+    expect(p.x).toBeCloseTo(2.7);
+    expect(p.z).toBeCloseTo(3.5);
+    // 가구 왼쪽에서 오른쪽 아래로 가면, 오른쪽은 막혀 아래로만 간다
+    const q = moveInRoom(blocked, 1.7, 2.5, 0.3, 0.3);
+    expect(q.x).toBeCloseTo(1.7);
+    expect(q.z).toBeCloseTo(2.8);
+    // 완전히 막히면 그대로
+    expect(moveInRoom(blocked, 0.3, 0.3, -0.2, -0.2)).toEqual({ x: 0.3, z: 0.3 });
   });
 });
 

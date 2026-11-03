@@ -342,6 +342,24 @@ describe('마을 집터', () => {
     const fresh = await user();
     expect((await service.townTicket(fresh)).guest).toBe(true);
   });
+
+  it('집 안 입장 토큰: 방을 볼 수 있는 사람만 받고, 주인과 손님이 같은 집 번호를 받는다', async () => {
+    const hp = (await service.me(p)).profile.handle;
+    const own = await service.houseTicket(p, hp);
+    expect(own.house).toBe(own.pass.pid);
+    expect(verifyTownPass(own.token)?.house).toBe(own.house);
+    const guest = await service.houseTicket(null, hp);
+    expect(guest).toMatchObject({ house: own.house, guest: true });
+    // 마을 토큰에는 집 번호가 없다
+    expect(verifyTownPass((await service.townTicket(p)).token)?.house).toBeUndefined();
+    // 차단 관계면 집을 찾을 수 없다
+    await expectError(service.houseTicket(q, hp), 'not_found');
+    // 나만 보기면 주인만 들어간다
+    await service.updateProfile(p, { roomVisibility: 'private' });
+    await expectError(service.houseTicket(null, hp), 'forbidden');
+    expect((await service.houseTicket(p, hp)).house).toBe(own.house);
+    await service.updateProfile(p, { roomVisibility: 'public' });
+  });
 });
 
 describe('사주로 사는 지역 정하기', () => {

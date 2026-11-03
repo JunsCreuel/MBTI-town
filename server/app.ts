@@ -2,7 +2,8 @@ import { defineRoom, defineServer } from '@colyseus/core';
 import { RedisDriver } from '@colyseus/redis-driver';
 import { RedisPresence } from '@colyseus/redis-presence';
 import { WebSocketTransport } from '@colyseus/ws-transport';
-import { townConfig } from '../src/config/game';
+import { roomConfig, townConfig } from '../src/config/game';
+import { HouseRoom } from './rooms/HouseRoom';
 import { TownRoom } from './rooms/TownRoom';
 
 /**
@@ -16,6 +17,8 @@ export function createRealtimeServer(redisUrl = process.env.REDIS_URL) {
     rooms: {
       // 본섬과 동네(2동·3동…)마다 따로 방을 연다. 같은 곳끼리만 채널이 나뉜다.
       [townConfig.roomName]: defineRoom(TownRoom).filterBy(['place']),
+      // 집 안(방)은 집마다 하나. 주인과 손님이 같은 방에 들어온다.
+      [roomConfig.realtimeRoomName]: defineRoom(HouseRoom).filterBy(['house']),
     },
   });
 }

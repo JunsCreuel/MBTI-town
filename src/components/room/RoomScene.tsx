@@ -5,20 +5,22 @@
 //       바닥을 누르면 캐릭터가 걸어가고, 기능 소품을 누르면 onAction.
 // 꾸미기: 방 전체가 보이게 더 높이서 본다. 소품을 눌러 고르고, 끌어서 칸에 맞춰 옮긴다 (놓을 수 있는 자리로만).
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { roomConfig } from '@/config/game';
+import { roomConfig, townConfig } from '@/config/game';
 import { shiftLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import type { Avatar } from '@/shared/avatar';
-import { CHARACTER_CLIPS, HEAD_SOCKET, TINT_MATERIAL, type ClipName } from '@/shared/character';
+import { CHARACTER_CLIPS, CHARACTER_HEIGHT, HEAD_SOCKET, TINT_MATERIAL, type ClipName } from '@/shared/character';
 import type { District } from '@/shared/districts';
 import {
-  blockedCells, canPlace, findRoomPath, footprintSize, furnitureDef, itemCenter,
+  blockedCells, canPlace, findRoomPath, footprintSize, furnitureDef, itemCenter, moveInRoom,
   type FurnitureAction, type PlacedItem, type Point, type RoomLayout,
 } from '@/shared/room';
+import { tagTexture } from '../village/assets';
 import type { RoomAssets } from './assets';
+import type { HousePresence } from './presence';
 import { floorTexture, wallTexture } from './textures';
 
 const W = roomConfig.width;
@@ -37,7 +39,12 @@ export interface RoomSceneProps {
   assets: RoomAssets;
   layout: RoomLayout;
   district: District;
+  /** 내 캐릭터 모습 (내 방이면 주인, 놀러 가면 나) */
   avatar: Avatar;
+  /** 내 이름 (다른 사람이 함께 있을 때 머리 위에 보인다) */
+  selfName?: string;
+  /** 같은 방에 있는 사람들 (주인·손님). 없으면 혼자 본다 */
+  presence?: HousePresence | null;
   mode: RoomMode;
   /** 기본: 보기는 inside, 꾸미기는 overview */
   framing?: RoomFraming;
@@ -595,18 +602,10 @@ function startSpot(blocked: Uint8Array): Point {
   return best;
 }
 
-function RoomAvatar({
-  assets, avatar, layout, walkTo, focus,
-}: {
-  assets: RoomAssets;
-  avatar: Avatar;
-  layout: RoomLayout;
-  walkTo: React.RefObject<Point | null>;
-  /** 카메라가 따라갈 캐릭터 자리 */
-  focus: React.RefObject<Point>;
-}) {
-  const color = tokens.avatar[avatar.color];
-  const { model, mixer, actions } = useMemo(() => {
+/** 캐릭터 모델: 몸 색을 입히고 머리 소품을 단다 */
+function useAvatarModel(assets: RoomAssets, colorKey: string, accessory: string) {
+  const color = tokens.avatar[colorKey as Avatar['color']] ?? tokens.avatar.mint;
+  const built = useMemo(() => {
     const model = SkeletonUtils.clone(assets.avatar.scene);
     const tint = (root: THREE.Object3D, c: string) =>
       root.traverse((o) => {
@@ -620,7 +619,7 @@ function RoomAvatar({
         }
       });
     tint(model, color);
-    const acc = assets.accessories[avatar.accessory];
+    const acc = assets.accessories[accessory];
     if (acc) {
       const a = acc.clone();
       tint(a, shiftLightness(color, -0.18));
@@ -632,15 +631,95 @@ function RoomAvatar({
       CHARACTER_CLIPS.map((name) => [name, mixer.clipAction(assets.avatar.animations.find((c) => c.name === name)!)]),
     ) as Record<ClipName, THREE.AnimationAction>;
     actions.idle.play();
-    return { model, mixer, actions };
-  }, [assets, avatar.accessory, color]);
-
-  const blocked = useMemo(() => blockedCells(layout.items), [layout.items]);
-  const state = useRef({ pos: startSpot(blocked), rot: 0, facing: 0, path: null as Point[] | null, clip: 'idle' as ClipName });
-
+    return { model, mixer, actions, clip: { current: 'idle' as ClipName } };
+  }, [assets, accessory, color]);
   useEffect(() => () => {
-    mixer.stopAllAction();
-  }, [mixer]);
+    built.mixer.stopAllAction();
+  }, [built]);
+  return { ...built, color };
+}
+
+/** 걷기·서기 동작을 부드럽게 바꾼다 */
+function playClip(m: ReturnType<typeof useAvatarModel>, clip: ClipName) {
+  if (clip === m.clip.current) return;
+  const next = m.actions[clip].reset().play();
+  m.actions[m.clip.current].crossFadeTo(next, 0.18, false);
+  m.clip.current = clip;
+}
+
+/** 머리 위 이름표 */
+function NameTag({ label, color, self = false }: { label: string; color: string; self?: boolean }) {
+  const tag = useMemo(() => tagTexture(self ? `나 · ${label}` : label, color, self), [label, color, self]);
+  return (
+    <sprite position-y={CHARACTER_HEIGHT * AVATAR_SCALE + 0.28} scale={[0.26 * tag.aspect, 0.26, 1]} renderOrder={1000}>
+      <spriteMaterial map={tag.texture} depthTest={false} depthWrite={false} transparent />
+    </sprite>
+  );
+}
+
+const MOVE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
+
+/**
+ * 내 캐릭터: 바닥을 누르면 길을 찾아 걷고, 방향키(WASD)로도 걷는다. 카메라가 방 앞에서 보므로 위쪽 키 = 방 안쪽.
+ * 같은 방에 다른 사람이 있으면 내 위치를 보낸다.
+ */
+function RoomAvatar({
+  assets, avatar, layout, walkTo, focus, mode, presence, name, together,
+}: {
+  assets: RoomAssets;
+  avatar: Avatar;
+  layout: RoomLayout;
+  walkTo: React.RefObject<Point | null>;
+  /** 카메라가 따라갈 캐릭터 자리 */
+  focus: React.RefObject<Point>;
+  mode: RoomMode;
+  presence?: HousePresence | null;
+  name?: string;
+  /** 다른 사람이 함께 있는지 (이름표를 띄운다) */
+  together: boolean;
+}) {
+  const m = useAvatarModel(assets, avatar.color, avatar.accessory);
+  const blocked = useMemo(() => blockedCells(layout.items), [layout.items]);
+  const state = useRef({ pos: startSpot(blocked), rot: 0, facing: 0, path: null as Point[] | null });
+  const keys = useRef(new Set<string>());
+  const sent = useRef({ x: Number.NaN, z: Number.NaN, rot: 0, moving: false, at: 0 });
+
+  // 방향키: 꾸미기 중이거나 글을 쓰는 중에는 받지 않는다
+  useEffect(() => {
+    const held = keys.current;
+    if (mode !== 'view') {
+      held.clear();
+      return;
+    }
+    const down = (e: KeyboardEvent) => {
+      if (!MOVE_KEYS.includes(e.code) || e.metaKey || e.ctrlKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName))) return;
+      e.preventDefault();
+      held.add(e.code);
+    };
+    const up = (e: KeyboardEvent) => held.delete(e.code);
+    const clear = () => held.clear();
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', clear);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', clear);
+      held.clear();
+    };
+  }, [mode]);
+
+  // 서버가 자리를 바로잡으면 따른다
+  useEffect(
+    () =>
+      presence?.onSnap((p) => {
+        state.current.pos = { x: p.x, z: p.z };
+        state.current.path = null;
+      }),
+    [presence],
+  );
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.1);
@@ -655,13 +734,23 @@ function RoomAvatar({
       s.path = findRoomPath(blocked, s.pos, walkTo.current);
       walkTo.current = null;
     }
+    const step = roomConfig.walkSpeed * dt;
     let walking = false;
-    if (s.path?.length) {
+    const k = keys.current;
+    const kx = (k.has('ArrowRight') || k.has('KeyD') ? 1 : 0) - (k.has('ArrowLeft') || k.has('KeyA') ? 1 : 0);
+    const kz = (k.has('ArrowDown') || k.has('KeyS') ? 1 : 0) - (k.has('ArrowUp') || k.has('KeyW') ? 1 : 0);
+    if (kx || kz) {
+      s.path = null;
+      const len = Math.hypot(kx, kz);
+      const next = moveInRoom(blocked, s.pos.x, s.pos.z, (kx / len) * step, (kz / len) * step);
+      walking = Math.hypot(next.x - s.pos.x, next.z - s.pos.z) > 1e-4;
+      s.pos = next;
+      s.facing = Math.atan2(kx, kz);
+    } else if (s.path?.length) {
       const next = s.path[0];
       const dx = next.x - s.pos.x;
       const dz = next.z - s.pos.z;
       const dist = Math.hypot(dx, dz);
-      const step = roomConfig.walkSpeed * dt;
       if (dist <= step) {
         s.pos = { ...next };
         s.path.shift();
@@ -672,22 +761,111 @@ function RoomAvatar({
       walking = true;
     }
     s.rot += Math.atan2(Math.sin(s.facing - s.rot), Math.cos(s.facing - s.rot)) * (1 - Math.exp(-dt * TURN_RATE));
-    const clip: ClipName = walking ? 'walk' : 'idle';
-    if (clip !== s.clip) {
-      const next = actions[clip].reset().play();
-      actions[s.clip].crossFadeTo(next, 0.18, false);
-      s.clip = clip;
-    }
-    mixer.update(dt);
-    model.position.set(s.pos.x, 0, s.pos.z);
-    model.rotation.y = s.rot;
+    playClip(m, walking ? 'walk' : 'idle');
+    m.mixer.update(dt);
+    m.model.position.set(s.pos.x, 0, s.pos.z);
+    m.model.rotation.y = s.rot;
     focus.current = s.pos;
+
+    // 같은 방 사람들에게 내 자리를 보낸다 (초당 moveSendHz회 이하, 바뀐 것만)
+    if (presence) {
+      const last = sent.current;
+      const t = performance.now();
+      const changed = last.x !== s.pos.x || last.z !== s.pos.z || Math.abs(last.rot - s.facing) > 0.01 || last.moving !== walking;
+      if (changed && t - last.at >= 1000 / townConfig.moveSendHz) {
+        if (presence.sendMove({ x: s.pos.x, z: s.pos.z, rot: s.facing, moving: walking })) {
+          Object.assign(last, { x: s.pos.x, z: s.pos.z, rot: s.facing, moving: walking, at: t });
+        }
+      }
+    }
   });
 
-  return <primitive object={model} />;
+  return (
+    <group>
+      <primitive object={m.model} />
+      {together && name && <FollowTag model={m.model} label={name} color={m.color} self />}
+    </group>
+  );
+}
+
+/** 모델을 따라다니는 이름표 */
+function FollowTag({ model, label, color, self = false }: { model: THREE.Object3D; label: string; color: string; self?: boolean }) {
+  const g = useRef<THREE.Group>(null);
+  useFrame(() => {
+    g.current?.position.copy(model.position);
+  });
+  return (
+    <group ref={g}>
+      <NameTag label={label} color={color} self={self} />
+    </group>
+  );
+}
+
+/**
+ * 같은 방의 다른 사람. 받은 위치를 remoteDelaySec만큼 늦게 두 위치 사이로 고르게 그린다 (마을과 같다).
+ */
+function RemoteAvatar({ presence, id, assets }: { presence: HousePresence; id: string; assets: RoomAssets }) {
+  const p = presence.player(id);
+  const m = useAvatarModel(assets, p?.color ?? 'mint', p?.acc ?? 'none');
+  const samples = useRef<{ t: number; x: number; z: number }[]>(p ? [{ t: performance.now() / 1000, x: p.x, z: p.z }] : []);
+  const pose = useRef({ x: p?.x ?? W / 2, z: p?.z ?? D - 1.5, rot: p?.rot ?? 0 });
+
+  useFrame((_, rawDt) => {
+    const s = presence.player(id);
+    if (!s) return;
+    const dt = Math.min(rawDt, 0.1);
+    const t = performance.now() / 1000;
+    const buf = samples.current;
+    const last = buf[buf.length - 1];
+    if (!last || last.x !== s.x || last.z !== s.z) {
+      if (last && t - last.t > 0.25) buf.push({ t: t - townConfig.patchRateMs / 1000, x: last.x, z: last.z });
+      buf.push({ t, x: s.x, z: s.z });
+    }
+    const at = t - townConfig.remoteDelaySec;
+    while (buf.length > 2 && buf[1].t <= at) buf.shift();
+    const a = pose.current;
+    const bx = a.x;
+    const bz = a.z;
+    if (buf.length >= 2 && buf[0].t <= at) {
+      const [p0, p1] = buf;
+      const u = Math.min(1, (at - p0.t) / Math.max(1e-3, p1.t - p0.t));
+      a.x = p0.x + (p1.x - p0.x) * u;
+      a.z = p0.z + (p1.z - p0.z) * u;
+    } else if (buf.length) {
+      a.x = buf[0].x;
+      a.z = buf[0].z;
+    }
+    a.rot += Math.atan2(Math.sin(s.rot - a.rot), Math.cos(s.rot - a.rot)) * (1 - Math.exp(-dt * TURN_RATE));
+    playClip(m, s.moving || Math.hypot(a.x - bx, a.z - bz) > 0.002 ? 'walk' : 'idle');
+    m.mixer.update(dt);
+    m.model.position.set(a.x, 0, a.z);
+    m.model.rotation.y = a.rot;
+  });
+
+  if (!p) return null;
+  return (
+    <>
+      <primitive object={m.model} />
+      <FollowTag model={m.model} label={p.name} color={m.color} />
+    </>
+  );
+}
+
+function RemoteAvatars({ presence, assets }: { presence: HousePresence; assets: RoomAssets }) {
+  const snap = useSyncExternalStore(presence.subscribe, presence.getSnapshot, presence.getSnapshot);
+  const ids = useMemo(() => presence.others(snap), [presence, snap]);
+  return (
+    <>
+      {ids.map((id) => (
+        <RemoteAvatar key={id} presence={presence} id={id} assets={assets} />
+      ))}
+    </>
+  );
 }
 
 // ───────────────────────── 장면 ─────────────────────────
+
+const noopSubscribe = () => () => {};
 
 function FirstFrame({ onFrame }: { onFrame?: () => void }) {
   const done = useRef(false);
@@ -701,11 +879,20 @@ function FirstFrame({ onFrame }: { onFrame?: () => void }) {
 }
 
 function SceneContent(props: RoomSceneProps) {
-  const { assets, layout, district, avatar, mode, selectedId = null, onSelect, onMove, onAction, playing = false, photoUrl } = props;
+  const { assets, layout, district, avatar, mode, selectedId = null, onSelect, onMove, onAction, playing = false, photoUrl, presence } = props;
   const framing: RoomFraming = mode === 'edit' ? 'overview' : (props.framing ?? 'inside');
   const time = useMemo(timeOfDay, []);
   const walkTo = useRef<Point | null>(null);
   const focus = useRef<Point>({ x: W / 2, z: D - 1.5 });
+  // 같은 방에 들어간다 (화면은 먼저 뜨고, 붙는 순간의 내 자리를 알린다)
+  useEffect(() => {
+    if (presence) void presence.join(() => ({ ...focus.current }));
+  }, [presence]);
+  const together = useSyncExternalStore(
+    presence?.subscribe ?? noopSubscribe,
+    () => (presence ? presence.others().length > 0 : false),
+    () => false,
+  );
   const drag = useRef<{ id: string; pointerId: number } | null>(null);
   const itemsRef = useRef(layout.items);
   itemsRef.current = layout.items;
@@ -742,7 +929,18 @@ function SceneContent(props: RoomSceneProps) {
           }}
         />
       ))}
-      <RoomAvatar assets={assets} avatar={avatar} layout={layout} walkTo={walkTo} focus={focus} />
+      <RoomAvatar
+        assets={assets}
+        avatar={avatar}
+        layout={layout}
+        walkTo={walkTo}
+        focus={focus}
+        mode={mode}
+        presence={presence}
+        name={props.selfName}
+        together={together}
+      />
+      {presence && <RemoteAvatars presence={presence} assets={assets} />}
       {mode === 'edit' && <DragController drag={drag} items={itemsRef} onMove={onMoveRef} />}
       <FirstFrame onFrame={props.onReady} />
     </>

@@ -53,6 +53,16 @@ export interface JoinOptions {
   start?: { x: number; z: number };
 }
 
+/** 집 안 방에 들어갈 때 보내는 값 */
+export interface HouseJoinOptions {
+  /** /api/house/token 으로 받은 입장 토큰 (house가 담겨 있다) */
+  token: string;
+  /** 들어갈 집 (주인의 pid). 토큰의 house와 같아야 한다 */
+  house: string;
+  /** 화면이 먼저 세운 내 자리 (방 안이면 그대로 쓴다) */
+  start?: { x: number; z: number };
+}
+
 /** 클라이언트 → 서버 */
 export interface MoveMessage {
   x: number;

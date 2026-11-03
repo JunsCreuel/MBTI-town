@@ -238,3 +238,42 @@ describe('이동 예산', () => {
     expect(moved).toBeGreaterThan(2);
   });
 });
+
+describe('집 안 (방)', () => {
+  const ownerPid = townPid('user-house-owner');
+  const enter = (p: TownPass, house: string, start?: { x: number; z: number }) =>
+    new Client(`http://localhost:${PORT}`).joinOrCreate('house', { token: signTownPass(p), house, start });
+
+  it('같은 집 토큰을 가진 주인과 손님이 같은 방에서 서로 보인다', async () => {
+    const owner = await enter(pass({ pid: ownerPid, name: '주인', house: ownerPid }), ownerPid);
+    rooms.push(owner);
+    const friend = await enter(pass({ name: '친구', color: 'peach', house: ownerPid }), ownerPid, { x: 2.5, z: 4.5 });
+    rooms.push(friend);
+    expect(friend.roomId).toBe(owner.roomId);
+    await until(() => owner.state.players.size === 2 && friend.state.players.size === 2);
+    const seen = owner.state.players.get(friend.sessionId);
+    expect(seen).toMatchObject({ name: '친구', color: 'peach' });
+    expect(near(seen, { x: 2.5, z: 4.5 }, 0.01)).toBe(true);
+    // 걸으면 주인 화면에도 보인다
+    friend.send(MSG.move, { x: 2.8, z: 4.5, rot: 1, moving: true });
+    await until(() => Math.abs(owner.state.players.get(friend.sessionId).x - 2.8) < 0.01);
+  });
+
+  it('다른 집 토큰이나 마을 토큰으로는 들어가지 못한다', async () => {
+    await expect(enter(pass({ house: 'someone-else' }), ownerPid)).rejects.toThrow();
+    await expect(enter(pass(), ownerPid)).rejects.toThrow();
+  });
+
+  it('방 밖 자리는 받지 않는다 (시작 자리, 이동 모두)', async () => {
+    const r = await enter(pass({ house: ownerPid }), ownerPid, { x: -5, z: 99 });
+    rooms.push(r);
+    await until(() => !!r.state.players?.get(r.sessionId));
+    const me = r.state.players.get(r.sessionId);
+    expect(me.x).toBeGreaterThan(0);
+    expect(me.z).toBeLessThan(6);
+    const before = { x: me.x, z: me.z };
+    r.send(MSG.move, { x: 30, z: 2, rot: 0, moving: true });
+    await new Promise((res) => setTimeout(res, 300));
+    expect(near(r.state.players.get(r.sessionId), before, 0.01)).toBe(true);
+  });
+});

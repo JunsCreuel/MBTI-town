@@ -97,6 +97,14 @@ export interface TownTicket {
   guest: boolean;
 }
 
+/** 집 안 입장 토큰: 그 방을 볼 수 있는 사람에게만 준다 */
+export interface HouseTicket extends TownTicket {
+  /** 들어갈 집 (주인의 pid) */
+  house: string;
+  /** 내 화면에서 숨길 사람 번호 (차단 관계) */
+  hidden: string[];
+}
+
 export interface RecordView {
   id: string;
   kind: RecordKind;
@@ -713,6 +721,20 @@ export class SceneService {
       };
     }
     return { token: signTownPass(pass), pass, guest: pass.district === '' };
+  }
+
+  /**
+   * 집 안(방) 실시간 입장 토큰. 방을 볼 수 있는 사람(공개 범위, 차단)에게만 준다.
+   * 주인과 손님이 같은 집 방에 들어가 서로 보인다. 내 모습은 마을 토큰과 같다 (손님은 손님 모습).
+   */
+  async houseTicket(viewer: Viewer | null, handle: string): Promise<HouseTicket> {
+    const owner = await this.ownerFor(viewer, handle);
+    const relation = await this.relationTo(viewer, owner);
+    if (!canView(owner.room_visibility, relation)) throw new SceneError('forbidden', '이 방에는 들어갈 수 없어요.');
+    const base = await this.townTicket(viewer);
+    const pass: TownPass = { ...base.pass, house: townPid(owner.id) };
+    const hidden = viewer ? (await this.store.blockRelations(viewer.id)).map((id) => townPid(id)) : [];
+    return { token: signTownPass(pass), pass, guest: base.guest, house: pass.house!, hidden };
   }
 
   // ───────────────────────── 내보내기·삭제 ─────────────────────────

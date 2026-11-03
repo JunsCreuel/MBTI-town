@@ -301,6 +301,30 @@ export interface Point {
   z: number;
 }
 
+/** 캐릭터 몸 반지름 (칸). 벽과 가구에서 이만큼 떨어져 선다 */
+export const ROOM_BODY_RADIUS = 0.22;
+
+/** 이 자리에 설 수 있는지: 방 안이고, 몸 둘레가 막힌 칸에 걸치지 않는다 */
+export function canStandInRoom(blocked: Uint8Array, x: number, z: number, r = ROOM_BODY_RADIUS): boolean {
+  const W = roomConfig.width;
+  const D = roomConfig.depth;
+  if (x < r || z < r || x > W - r || z > D - r) return false;
+  for (const [ox, oz] of [[-r, -r], [r, -r], [-r, r], [r, r]]) {
+    const cx = Math.floor(x + ox);
+    const cz = Math.floor(z + oz);
+    if (blocked[cz * W + cx]) return false;
+  }
+  return true;
+}
+
+/** 방향키 이동: 막히면 x, z를 따로 시도해 벽·가구를 따라 미끄러진다 */
+export function moveInRoom(blocked: Uint8Array, x: number, z: number, dx: number, dz: number): Point {
+  if (canStandInRoom(blocked, x + dx, z + dz)) return { x: x + dx, z: z + dz };
+  if (dx && canStandInRoom(blocked, x + dx, z)) return { x: x + dx, z };
+  if (dz && canStandInRoom(blocked, x, z + dz)) return { x, z: z + dz };
+  return { x, z };
+}
+
 /** 칸 가운데를 잇는 8방향 길 (start 제외, goal 포함). 막힌 칸을 누르면 가장 가까운 빈 칸으로 간다. */
 export function findRoomPath(blocked: Uint8Array, start: Point, goal: Point): Point[] | null {
   const W = roomConfig.width;
