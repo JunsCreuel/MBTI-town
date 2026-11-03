@@ -180,6 +180,21 @@ describe('이동', () => {
     expect(isMoveAllowed(map, from, { x: NaN, z: C }, 1)).toBe(false);
   });
 
+  it('휴대폰 네트워크가 0.8초 멈췄다가 위치가 몰려 와도 되돌리지 않는다', () => {
+    // 0.1초마다 보낸 위치 8개(걷는 속도)가 0.8초 뒤 한꺼번에 도착한다
+    // 광장 북쪽 길을 따라 걷는다 (막힌 칸 없음)
+    const from = { x: C + 0.5, z: C - 7.5 };
+    let budget = MOVE_BUDGET_MAX;
+    budget = refillMoveBudget(budget, 800);
+    let pos = { ...from };
+    for (let i = 1; i <= 8; i++) {
+      const to = { x: from.x, z: from.z - 0.35 * i };
+      expect(isMoveAllowed(map, pos, to, budget)).toBe(true);
+      budget -= Math.hypot(to.x - pos.x, to.z - pos.z);
+      pos = to;
+    }
+  });
+
   it('이동 예산은 걷는 속도만큼 차고 상한이 있다', () => {
     expect(refillMoveBudget(0, 100)).toBeGreaterThan(0.3);
     expect(refillMoveBudget(0, 100)).toBeLessThan(0.7);

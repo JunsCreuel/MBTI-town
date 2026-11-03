@@ -242,33 +242,55 @@ export function LocalPlayer() {
   return <Character actor={actor} look={look} self />;
 }
 
+/**
+ * 다른 사람. 서버 위치는 0.1초마다 띄엄띄엄(휴대폰 네트워크에서는 몰려서) 도착하므로,
+ * 받은 위치를 시각과 함께 쌓아 두고 remoteDelaySec만큼 지난 시점을 두 위치 사이에서 고르게 그린다.
+ */
 export function RemotePlayer({ id }: { id: string }) {
   const { session, map } = useTown();
   const p = session.player(id);
   const actor = useRef<Actor>({
-    x: p?.x ?? 0, y: 0, z: p?.z ?? 0, rot: p?.rot ?? 0, clip: 'idle', emote: null, emoteStart: 0,
+    x: p?.x ?? 0, y: p ? groundHeightAt(map, p.x, p.z) : 0, z: p?.z ?? 0, rot: p?.rot ?? 0, clip: 'idle', emote: null, emoteStart: 0,
   });
+  const samples = useRef<{ t: number; x: number; z: number }[]>(p ? [{ t: now(), x: p.x, z: p.z }] : []);
 
   useFrame((_, rawDt) => {
     const s = session.player(id);
     if (!s) return;
     const a = actor.current;
     const dt = Math.min(rawDt, 0.1);
-    const dx = s.x - a.x;
-    const dz = s.z - a.z;
-    const dist = Math.hypot(dx, dz);
-    if (dist > 4) {
-      a.x = s.x;
-      a.z = s.z;
-    } else {
-      // 서버 위치를 부드럽게 따라간다 (초당 10회 갱신 사이를 메운다)
-      const k = 1 - Math.exp(-dt * 12);
-      a.x += dx * k;
-      a.z += dz * k;
+    const t = now();
+    const buf = samples.current;
+    const last = buf[buf.length - 1];
+    if (!last || last.x !== s.x || last.z !== s.z) {
+      if (last && Math.hypot(s.x - last.x, s.z - last.z) > 4) {
+        // 지도 이동 같은 순간이동은 이어 그리지 않는다
+        buf.length = 0;
+        a.x = s.x;
+        a.z = s.z;
+      } else if (last && t - last.t > 0.25) {
+        // 서 있다가 다시 걸으면, 마지막 자리에서 한 주기 전에 출발한 것으로 친다
+        buf.push({ t: t - townConfig.patchRateMs / 1000, x: last.x, z: last.z });
+      }
+      buf.push({ t, x: s.x, z: s.z });
     }
+    const at = t - townConfig.remoteDelaySec;
+    while (buf.length > 2 && buf[1].t <= at) buf.shift();
+    const bx = a.x;
+    const bz = a.z;
+    if (buf.length >= 2 && buf[0].t <= at) {
+      const [p0, p1] = buf;
+      const u = Math.min(1, (at - p0.t) / Math.max(1e-3, p1.t - p0.t));
+      a.x = p0.x + (p1.x - p0.x) * u;
+      a.z = p0.z + (p1.z - p0.z) * u;
+    } else if (buf.length) {
+      a.x = buf[0].x;
+      a.z = buf[0].z;
+    }
+    const moved = Math.hypot(a.x - bx, a.z - bz);
     a.rot = lerpAngle(a.rot, s.rot, 1 - Math.exp(-dt * TURN_RATE));
     a.y += (groundHeightAt(map, a.x, a.z) - a.y) * (1 - Math.exp(-dt * 15));
-    applyGesture(a, id, session, s.moving || dist > 0.08);
+    applyGesture(a, id, session, s.moving || moved > 0.002);
   });
 
   if (!p) return null;

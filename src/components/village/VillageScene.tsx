@@ -494,6 +494,38 @@ function WindClock() {
   return null;
 }
 
+/**
+ * 휴대폰에서 프레임이 밀리면(끊겨 보이면) 해상도를 한 단계씩 낮춘다. 다시 올리지는 않는다 (오르내리며 깜빡이지 않게).
+ * 처음 몇 초는 셰이더 준비로 느리므로 세지 않는다.
+ */
+function AdaptiveResolution() {
+  const setDpr = useThree((st) => st.setDpr);
+  const viewport = useThree((st) => st.viewport);
+  const state = useRef({ frames: 0, time: 0, skip: 3, dpr: 0 });
+  useFrame((_, dt) => {
+    const st = state.current;
+    if (!st.dpr) st.dpr = viewport.dpr;
+    if (document.hidden || dt > 1) return;
+    if (st.skip > 0) {
+      st.skip -= dt;
+      return;
+    }
+    st.frames++;
+    st.time += dt;
+    if (st.time < 2) return;
+    const fps = st.frames / st.time;
+    st.frames = 0;
+    st.time = 0;
+    if (fps < townConfig.minFps && st.dpr > 1) {
+      st.dpr = Math.max(1, Math.round((st.dpr - 0.25) * 100) / 100);
+      setDpr(st.dpr);
+      // 바뀐 해상도가 자리 잡을 때까지 잠깐 쉰다
+      st.skip = 1;
+    }
+  });
+  return null;
+}
+
 function FirstFrame({ onFrame }: { onFrame: () => void }) {
   useFrame(onFrame);
   return null;
@@ -531,6 +563,7 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <TapMarker />
         <CameraRig />
         <KeyboardInput />
+        <AdaptiveResolution />
         <FirstFrame
           onFrame={() => {
             if (!firstFrame.current) {

@@ -125,8 +125,9 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       try {
         const res = await fetch('/api/town', { cache: 'no-store' });
         if (!res.ok) return;
-        const data = (await res.json()) as TownView;
-        if (alive) setTown(data);
+        const text = await res.text();
+        // 바뀐 게 없으면 그대로 둔다 (집·이름표를 다시 만들지 않게)
+        if (alive) setTown((cur) => (JSON.stringify(cur) === text ? cur : (JSON.parse(text) as TownView)));
       } catch {
         // 다음 주기에 다시 받는다
       }

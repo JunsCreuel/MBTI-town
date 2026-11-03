@@ -226,14 +226,15 @@ describe('이동 예산', () => {
     const start = { ...room.state.players.get(room.sessionId) };
     let snaps = 0;
     room.onMessage(MSG.snap, () => snaps++);
-    // 0.3초 동안 0.25씩 20번 = 5칸 (걷는 속도라면 1칸 남짓)
-    for (let i = 1; i <= 20; i++) {
+    // 0.6초 동안 0.25씩 40번 = 10칸 (걷는 속도라면 2칸 남짓, 몰려 오는 것을 감안한 상한은 예산 3.5 + 0.6초 × 5.6)
+    for (let i = 1; i <= 40; i++) {
       room.send(MSG.move, { x: start.x, z: start.z - 0.25 * i, rot: Math.PI, moving: true });
       await new Promise((r) => setTimeout(r, 15));
     }
     await until(() => snaps > 0);
     await new Promise((r) => setTimeout(r, 200));
     const moved = start.z - room.state.players.get(room.sessionId).z;
-    expect(moved).toBeLessThan(2.6);
+    expect(moved).toBeLessThan(7.5);
+    expect(moved).toBeGreaterThan(2);
   });
 });
