@@ -11,6 +11,7 @@ import type { MyProfile, RoomCard } from '@/server/scene/service';
 import { DISTRICT } from '@/shared/districts';
 import type { SajuReading } from '@/shared/saju';
 import { VISIBILITY_LABEL, type Visibility } from '@/shared/records';
+import { ResidentCard } from '../app/ResidentCard';
 import { Icon } from '../app/Icon';
 import { TabBar } from '../app/TabBar';
 import { useMe } from '../app/useMe';
@@ -41,6 +42,7 @@ export function MyClient() {
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
+  const [hobby, setHobby] = useState('');
   const [handle, setHandle] = useState('');
   const [friends, setFriends] = useState<Friends | null>(null);
   const [blocked, setBlocked] = useState<{ handle: string; displayName: string }[]>([]);
@@ -55,6 +57,7 @@ export function MyClient() {
     setProfile(me.profile);
     setName(me.profile.displayName);
     setBio(me.profile.bio);
+    setHobby(me.profile.hobby);
     setHandle(me.profile.handle);
   }, [me]);
 
@@ -147,6 +150,25 @@ export function MyClient() {
         <h1>MY</h1>
       </header>
 
+      {profile.district && profile.joinedAt && (
+        <section className="section card" id="resident">
+          <h2 className="section-title">내 주민증</h2>
+          <ResidentCard
+            info={{
+              name: profile.displayName,
+              district: profile.district,
+              hood: profile.houseHood,
+              joinedAt: profile.joinedAt,
+              mbti: profile.mbti,
+              hobby: profile.hobby,
+              avatarColor: profile.avatar.color,
+              handle: profile.handle,
+            }}
+          />
+          <p className="muted">닉네임·취미·MBTI를 고치면 주민증도 바뀌어요.</p>
+        </section>
+      )}
+
       <section className="section card">
         <h2 className="section-title">프로필</h2>
         <label className="field">
@@ -158,6 +180,10 @@ export function MyClient() {
           <input value={bio} maxLength={socialConfig.bioMax} onChange={(e) => setBio(e.target.value)} />
         </label>
         <label className="field">
+          <span>취미 (주민증에 보여요)</span>
+          <input value={hobby} maxLength={socialConfig.hobbyMax} onChange={(e) => setHobby(e.target.value)} placeholder="예: 비 오는 날 산책, 필름 카메라" />
+        </label>
+        <label className="field">
           <span>방 주소</span>
           <div className="field__prefix">
             <span>/r/</span>
@@ -165,7 +191,7 @@ export function MyClient() {
           </div>
           <small className="muted">영문 소문자·숫자·밑줄 3~20자</small>
         </label>
-        <button className="btn-primary" onClick={() => patch({ displayName: name, bio, handle })}>프로필 저장</button>
+        <button className="btn-primary" onClick={() => patch({ displayName: name, bio, hobby, handle })}>프로필 저장</button>
       </section>
 
       <section className="section card">

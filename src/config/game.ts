@@ -143,6 +143,8 @@ export const recordConfig = {
 export const socialConfig = {
   displayNameMax: 20,
   bioMax: 80,
+  /** 주민증 취미 한 줄 */
+  hobbyMax: 30,
   guestbookMax: 300,
   /** 마을 지도에서 지역마다 보여 줄 방 수 */
   exploreLimit: 24,

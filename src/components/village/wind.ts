@@ -52,7 +52,8 @@ export function softFoliage(geometry: THREE.BufferGeometry, material: THREE.Mate
   let g = smoothCache.get(geometry);
   if (!g) {
     const c = geometry.clone();
-    for (const name of Object.keys(c.attributes)) if (name !== 'position') c.deleteAttribute(name);
+    // 위치와 꼭짓점 색(코드로 만든 나무는 색을 꼭짓점에 칠한다)만 남기고 합친다
+    for (const name of Object.keys(c.attributes)) if (name !== 'position' && name !== 'color') c.deleteAttribute(name);
     g = mergeVertices(c, 1e-4);
     g.computeVertexNormals();
     smoothCache.set(geometry, g);

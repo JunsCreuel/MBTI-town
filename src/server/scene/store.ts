@@ -26,6 +26,8 @@ export interface ProfileRow {
   show_visits: boolean;
   discoverable: boolean;
   onboarded_at: Date | null;
+  /** 주민증 취미 (선택) */
+  hobby: string | null;
   /** 집이 있는 동네 번호 (1 = 본섬 1동) */
   house_hood: number;
   /** 동네 안 집터 번호 (가입 전이면 null) */
@@ -84,7 +86,7 @@ export interface RoomCardRow {
 }
 
 const PROFILE_COLS = `id, handle, display_name, bio, district, to_char(birth_date, 'YYYY-MM-DD') as birth_date, birth, saju, taste, avatar, mbti,
-  room_visibility, show_visits, discoverable, onboarded_at, house_hood, house_lot`;
+  room_visibility, show_visits, discoverable, onboarded_at, house_hood, house_lot, hobby`;
 const RECORD_COLS = `id, owner_id, kind, emotion, body, photo_id, visibility, created_at`;
 const CARD_COLS = `p.id, p.handle, p.display_name, p.bio, p.district, p.avatar, r.bgm`;
 
@@ -106,11 +108,12 @@ export type ProfilePatch = Partial<{
   show_visits: boolean;
   discoverable: boolean;
   onboarded_at: Date;
+  hobby: string;
 }>;
 const JSON_COLS = new Set(['taste', 'avatar', 'birth', 'saju']);
 const PATCH_COLS = new Set([
   'handle', 'display_name', 'bio', 'district', 'birth_date', 'birth', 'saju', 'taste', 'avatar', 'room_visibility', 'show_visits', 'discoverable',
-  'onboarded_at',
+  'onboarded_at', 'hobby',
 ]);
 
 export class SceneStore {

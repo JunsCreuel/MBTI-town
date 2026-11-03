@@ -17,7 +17,9 @@ import { FLOORS, STARTER_ROOMS, WALLPAPERS, starterLayout, type FloorId, type Wa
 import { call, errorMessage } from '@/lib/api';
 import { BgmPlayer } from '../app/BgmPlayer';
 import { Guide } from '../app/Guide';
+import { ResidentCard } from '../app/ResidentCard';
 import { Icon } from '../app/Icon';
+import type { MyProfile } from '@/server/scene/service';
 import { useMe } from '../app/useMe';
 import { loadRoomAssets, type RoomAssets } from '../room/assets';
 import { BirthForm, birthFromDraft, emptyBirthDraft, type BirthDraft } from '../saju/BirthForm';
@@ -43,6 +45,9 @@ export function OnboardingClient() {
   const [bgm, setBgm] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
+  const [hobby, setHobby] = useState('');
+  /** 가입을 마치면 나오는 주민증 */
+  const [issued, setIssued] = useState<MyProfile | null>(null);
   const [assets, setAssets] = useState<RoomAssets | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,8 +58,8 @@ export function OnboardingClient() {
   const birthInput = birthFromDraft(birth);
 
   useEffect(() => {
-    if (me?.profile?.onboarded) router.replace('/village');
-  }, [me, router]);
+    if (me?.profile?.onboarded && !issued) router.replace('/village');
+  }, [me, router, issued]);
 
   // 3D 모델은 캐릭터 단계 전에 미리 받아 둔다
   useEffect(() => {
@@ -89,7 +94,7 @@ export function OnboardingClient() {
     setBusy(true);
     setError(null);
     try {
-      await call('POST', '/api/onboarding', {
+      const done = await call<MyProfile>('POST', '/api/onboarding', {
         birth: birthInput,
         mbti: mbti || undefined,
         avatar,
@@ -99,9 +104,12 @@ export function OnboardingClient() {
         bgm: bgm ?? recommendedBgm,
         displayName: name,
         bio,
+        hobby,
       });
-      // 첫 화면은 마을의 내 집 문 앞이다
-      router.replace('/village?welcome=1');
+      // 지역을 배정받고 집이 생겼다: 주민증이 나온다. 그다음 마을의 내 집 문 앞으로 간다
+      setIssued(done);
+      setBusy(false);
+      window.scrollTo({ top: 0 });
     } catch (e) {
       setError(errorMessage(e));
       setBusy(false);
@@ -265,13 +273,37 @@ export function OnboardingClient() {
         </section>
       )}
 
-      {step === 5 && (
+      {issued?.district && issued.joinedAt && (
+        <section className="onboarding__body">
+          <Guide>주민증이 나왔어요! 이제 {DISTRICT[issued.district].short} 지역 주민이에요. 친구에게 자랑하고 마을로 가 볼까요?</Guide>
+          <ResidentCard
+            info={{
+              name: issued.displayName,
+              district: issued.district,
+              hood: issued.houseHood,
+              joinedAt: issued.joinedAt,
+              mbti: issued.mbti,
+              hobby: issued.hobby,
+              avatarColor: issued.avatar.color,
+              handle: issued.handle,
+            }}
+          />
+          <button className="btn-primary" onClick={() => router.replace('/village?welcome=1')}>
+            마을로 가기
+          </button>
+        </section>
+      )}
+      {!issued && step === 5 && (
         <section className="onboarding__body">
           <Guide>마지막이에요! 마을에서 보일 이름과 한 줄 소개를 적으면 내 집이 생겨요.</Guide>
           <label className="field">
             <span>마을에서 보일 이름</span>
             <input value={name} maxLength={socialConfig.displayNameMax} onChange={(e) => setName(e.target.value)} placeholder="방과 이름표에 보일 이름" />
             <small className="muted">다른 주민에게 보여요. 실명이 싫으면 별명으로 바꿔도 돼요.</small>
+          </label>
+          <label className="field">
+            <span>취미 (선택, 주민증에 보여요)</span>
+            <input value={hobby} maxLength={socialConfig.hobbyMax} onChange={(e) => setHobby(e.target.value)} placeholder="예: 비 오는 날 산책, 필름 카메라" />
           </label>
           <label className="field">
             <span>프로필 문구 (선택)</span>

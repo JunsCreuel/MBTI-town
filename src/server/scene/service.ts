@@ -65,6 +65,10 @@ export interface PublicProfile {
 /** 내 프로필 (설정 화면용) */
 export interface MyProfile extends PublicProfile {
   onboarded: boolean;
+  /** 가입한 날 (YYYY-MM-DD, 한국 날짜). 주민증에 쓴다 */
+  joinedAt: string | null;
+  /** 주민증 취미 한 줄 (선택) */
+  hobby: string;
   taste: Taste;
   /** 넣은 생일 그대로 (본인만 본다) */
   birth: BirthInput | null;
@@ -203,6 +207,8 @@ export interface OnboardingInput {
   bgm: unknown;
   displayName: unknown;
   bio?: unknown;
+  /** 주민증 취미 (선택) */
+  hobby?: unknown;
 }
 
 function displayNameOf(p: Pick<ProfileRow, 'display_name' | 'handle'>): string {
@@ -242,6 +248,13 @@ function toRecord(r: RecordRow): RecordView {
     visibility: r.visibility,
     createdAt: new Date(r.created_at).toISOString(),
   };
+}
+
+/** 주민증 취미: 짧게, 거친 말·링크는 안 된다 */
+function cleanHobby(v: unknown): string {
+  const s = cleanText(v, socialConfig.hobbyMax, '취미');
+  if (s && !moderate(s).allowed) throw new SceneError('rejected', '취미에는 거친 표현이나 링크·연락처를 넣을 수 없어요.');
+  return s;
 }
 
 function cleanText(v: unknown, max: number, what: string, required = false): string {
@@ -297,6 +310,8 @@ export class SceneService {
     return {
       ...toPublic(p),
       onboarded: !!p.onboarded_at,
+      joinedAt: p.onboarded_at ? localDate(new Date(p.onboarded_at)) : null,
+      hobby: p.hobby ?? '',
       taste: cleanTaste(p.taste),
       birth: p.birth,
       saju: p.saju,
@@ -335,6 +350,7 @@ export class SceneService {
     if (!bgm) throw new SceneError('bad_request', '대표 BGM을 골라 주세요.');
     const displayName = cleanText(input.displayName, socialConfig.displayNameMax, '이름', true);
     const bio = cleanText(input.bio, socialConfig.bioMax, '프로필 문구');
+    const hobby = cleanHobby(input.hobby);
     const layout = starterLayout(String(input.starter ?? ''), String(input.wallpaper ?? ''), String(input.floor ?? ''));
     await this.store.updateProfile(viewer.id, {
       handle: p.handle ?? (await this.newHandle(viewer.id)),
@@ -345,6 +361,7 @@ export class SceneService {
       saju,
       taste: cleanTaste(input.taste),
       avatar: cleanAvatar(input.avatar),
+      hobby,
       onboarded_at: p.onboarded_at ?? now,
     });
     // 사주로 정해진 지역의 빈 집터에 집이 선다 (1동이 다 찼으면 2동, 3동… 새 동네가 열린다)
@@ -364,6 +381,7 @@ export class SceneService {
     const next: Parameters<SceneStore['updateProfile']>[1] = {};
     if ('displayName' in patch) next.display_name = cleanText(patch.displayName, socialConfig.displayNameMax, '이름', true);
     if ('bio' in patch) next.bio = cleanText(patch.bio, socialConfig.bioMax, '프로필 문구');
+    if ('hobby' in patch) next.hobby = cleanHobby(patch.hobby);
     if ('handle' in patch) {
       const h = String(patch.handle ?? '').trim().toLowerCase();
       if (!HANDLE.test(h)) throw new SceneError('bad_request', '주소는 영문 소문자·숫자·밑줄 3~20자로 정해 주세요.');

@@ -418,3 +418,16 @@ describe('놀거리: 열매·운세 열매·낚시', () => {
     expect(Object.values(state.fish).reduce((a, b) => a + b, 0)).toBe(total);
   });
 });
+
+describe('주민증', () => {
+  it('가입하면 가입한 날과 취미가 담기고, 취미는 MY에서 고친다 (거친 말은 안 된다)', async () => {
+    const v = await user();
+    const me = await onboard(v, '주민증', { hobby: '  필름 카메라  ' });
+    expect(me.hobby).toBe('필름 카메라');
+    expect(me.joinedAt).toBe('2026-11-02');
+    expect((await service.updateProfile(v, { hobby: '뜨개질' })).hobby).toBe('뜨개질');
+    await expectError(service.updateProfile(v, { hobby: '가'.repeat(31) }), 'bad_request');
+    await expectError(service.updateProfile(v, { hobby: 'https://spam.example' }), 'rejected');
+    expect((await service.updateProfile(v, { hobby: '' })).hobby).toBe('');
+  });
+});
