@@ -98,6 +98,8 @@ export const tokens = {
     floorLine: 'rgb(60 40 20 / 0.12)',
     /** 벽 윗면과 걸레받이 */
     trim: '#FFFFFF',
+    /** 일주 동물 펫 몸 색: 천간 오행의 전통 색 (청·적·황·백·흑) */
+    pet: { wood: '#4FAE8C', fire: '#E86F5E', earth: '#E9BC4E', metal: '#F1EFE8', water: '#46507A' },
     /** 집 안에서 벽 너머(방 밖)의 어둠. 방이 무대처럼 떠 보이게 따뜻한 어두운 색 */
     outside: '#2B2731',
     /** 방 밖 배경 */

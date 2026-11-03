@@ -22,6 +22,7 @@ import { BgmPlayer, type BgmHandle } from '../app/BgmPlayer';
 import { GesturePicker } from '../app/GesturePicker';
 import { FortuneLetter, fortuneRead, markFortuneRead } from './FortuneLetter';
 import type { DailyFortune } from '@/shared/fortune';
+import { petOf } from '@/shared/pet';
 import { Guide } from '../app/Guide';
 import { Icon } from '../app/Icon';
 import { Sheet } from '../app/Sheet';
@@ -225,6 +226,10 @@ export function HomeClient() {
   // 내 방에 들어온 친구·손님과 함께 있는다
   const { presence, others } = useHousePresence(profile?.handle ?? null);
 
+  // 내 일주 동물 펫
+  const iljuKo = profile?.saju?.day.ko;
+  const pet = useMemo(() => petOf(iljuKo), [iljuKo]);
+
   // HUD 사이에 방이 오게 (모드가 바뀌거나 HUD가 처음 그려지면 다시 잰다)
   const insets = useHudInsets(`${mode}:${!!(me && profile && shown)}`, mode === 'edit' ? { top: 70, bottom: 190 } : { top: 104, bottom: 250 });
 
@@ -254,6 +259,7 @@ export function HomeClient() {
             selfTag={profileTag(profile.mbti, profile.saju?.day.ko)}
             presence={presence}
             mailUnread={!!fortune && !letterRead}
+            pet={pet}
             mode={mode}
             selectedId={selected}
             onSelect={setSelected}

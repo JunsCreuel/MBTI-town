@@ -164,3 +164,15 @@ AI로 생성한 이미지·모델은 출처 칸에 사용한 도구를 적는다
 | ui/ui_icon_dance_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
 | ui/ui_icon_jump_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
 | ui/ui_icon_think_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_rat_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_ox_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_tiger_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_rabbit_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_dragon_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_snake_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_horse_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_sheep_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_monkey_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_rooster_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_dog_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| pets/pet_pig_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |

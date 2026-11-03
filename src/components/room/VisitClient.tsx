@@ -9,6 +9,7 @@ import { tokens } from '@/design/tokens';
 import { ApiError, call, errorMessage } from '@/lib/api';
 import type { RoomView } from '@/server/scene/service';
 import { DEFAULT_AVATAR, profileTag, type Avatar } from '@/shared/avatar';
+import { petOf } from '@/shared/pet';
 import { DISTRICT } from '@/shared/districts';
 import type { FurnitureAction } from '@/shared/room';
 import { RecordCard } from '../archive/RecordCard';
@@ -136,6 +137,7 @@ export function VisitClient({ handle }: { handle: string }) {
             layout={view.room.layout}
             district={district}
             avatar={myAvatar}
+            pet={petOf(owner.ilju)}
             selfName={pass?.name}
             selfTag={profileTag(pass?.mbti, pass?.ilju)}
             presence={presence}

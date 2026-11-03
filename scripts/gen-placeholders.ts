@@ -14,6 +14,8 @@ import { encodeTrack, TRACKS } from './lib/bgm';
 import { Bitmap, hex, type RGBA } from './lib/bitmap';
 import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
 import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
+import { petParts } from './lib/pets';
+import { PET_ANIMALS } from '../src/shared/pet';
 import { TOWN_TILES, buildHoodMap, buildTownMap } from './lib/town-map';
 import {
   PROP_MATERIALS, benchParts, boardParts, flagParts, fountainParts, gateParts, greenhouseParts, houseParts, lampParts, lotParts,
@@ -63,6 +65,17 @@ async function genAvatar() {
     const f = `characters/char_acc_${name}_ph.glb`;
     save(f, await buildStatic(`acc_${name}`, groupPropParts(group), { base: { roughness: 0.6 }, outfit: { roughness: 0.7 } }));
     register(`char.acc.${name}`, { file: f });
+    record(f);
+  }
+}
+
+// ───────────────────────── 일주 동물 펫 (띠 동물 12종) ─────────────────────────
+
+async function genPets() {
+  for (const animal of PET_ANIMALS) {
+    const f = `pets/pet_${animal}_ph.glb`;
+    save(f, await buildStatic(`pet_${animal}`, petParts(animal), { base: { roughness: 0.6 }, outfit: { roughness: 0.75 } }));
+    register(`pet.${animal}`, { file: f });
     record(f);
   }
 }
@@ -439,6 +452,7 @@ function writeLicenses() {
 
 cleanManifest();
 await genAvatar();
+await genPets();
 genGuides();
 await genFurniture();
 await genTownProps();

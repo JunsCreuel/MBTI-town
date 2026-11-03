@@ -53,6 +53,8 @@ export interface PublicProfile {
   district: District | null;
   avatar: Avatar;
   mbti: MbtiType | null;
+  /** 사주 일주 한글 (예: 갑자). 이름표와 일주 동물 펫에 쓴다. 생일·다른 기둥은 담지 않는다 */
+  ilju: string | null;
 }
 
 /** 내 프로필 (설정 화면용) */
@@ -178,6 +180,7 @@ function toPublic(p: ProfileRow): PublicProfile {
     district: p.district,
     avatar: cleanAvatar(p.avatar),
     mbti: p.mbti,
+    ilju: p.saju?.day?.ko ?? null,
   };
 }
 

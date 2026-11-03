@@ -511,5 +511,41 @@
   },
   "ui.icon.think": {
     "file": "ui/ui_icon_think_ph.svg"
+  },
+  "pet.rat": {
+    "file": "pets/pet_rat_ph.glb"
+  },
+  "pet.ox": {
+    "file": "pets/pet_ox_ph.glb"
+  },
+  "pet.tiger": {
+    "file": "pets/pet_tiger_ph.glb"
+  },
+  "pet.rabbit": {
+    "file": "pets/pet_rabbit_ph.glb"
+  },
+  "pet.dragon": {
+    "file": "pets/pet_dragon_ph.glb"
+  },
+  "pet.snake": {
+    "file": "pets/pet_snake_ph.glb"
+  },
+  "pet.horse": {
+    "file": "pets/pet_horse_ph.glb"
+  },
+  "pet.sheep": {
+    "file": "pets/pet_sheep_ph.glb"
+  },
+  "pet.monkey": {
+    "file": "pets/pet_monkey_ph.glb"
+  },
+  "pet.rooster": {
+    "file": "pets/pet_rooster_ph.glb"
+  },
+  "pet.dog": {
+    "file": "pets/pet_dog_ph.glb"
+  },
+  "pet.pig": {
+    "file": "pets/pet_pig_ph.glb"
   }
 }
