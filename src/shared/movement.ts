@@ -37,7 +37,7 @@ export function moveWithCollision(map: TownMap, x: number, z: number, dx: number
  * 서버 속도 검사는 "이동 예산"으로 한다. 시간이 지나면 걷는 속도만큼 예산이 차고, 움직인 거리만큼 줄어든다.
  * 지연으로 메시지가 몰려 와도 통과하고, 메시지를 잘게 쪼개 보내도 더 빨리 갈 수 없다.
  */
-export const MOVE_BUDGET_MAX = townConfig.moveBurstTiles;
+export const MOVE_BUDGET_MAX: number = townConfig.moveBurstTiles;
 
 export function refillMoveBudget(budget: number, elapsedMs: number): number {
   const gain = (townConfig.walkSpeed * townConfig.speedTolerance * Math.max(0, elapsedMs)) / 1000;

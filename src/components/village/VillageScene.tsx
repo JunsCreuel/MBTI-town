@@ -16,6 +16,7 @@ import { windUniforms } from './wind';
 import { currentHour, day, dayLookAt } from './daylight';
 import { Ambient } from './Ambient';
 import { normalDistance, saveCamera } from './camera';
+import { pointerState } from './pointer';
 import { now } from './session';
 import { Terrain } from './Terrain';
 
@@ -170,14 +171,6 @@ function Lights() {
   );
 }
 
-/** 두 손가락 확대 상태. 확대 직후의 손가락 떼기가 이동 탭으로 잡히지 않게 한다. */
-const pinchState = {
-  active: false,
-  endedAt: 0,
-  recent() {
-    return this.active || now() - this.endedAt < 0.3;
-  },
-};
 
 /**
  * 내 캐릭터를 따라가는 카메라. 휠과 두 손가락으로 거리를, 한 손가락(마우스)으로 옆으로 끌면 방향을 바꾼다.
@@ -223,10 +216,13 @@ function CameraRig() {
     };
     const onDown = (e: PointerEvent) => {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 1) drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, rotating: false };
+      if (pointers.size === 1) {
+        drag = { id: e.pointerId, x0: e.clientX, y0: e.clientY, x: e.clientX, rotating: false };
+        pointerState.down(e.clientX, e.clientY);
+      }
       if (pointers.size === 2) {
         drag = null;
-        pinchState.active = true;
+        pointerState.pinching = true;
         pinchStart = spread();
         distStart = cam.distance;
       }
@@ -240,32 +236,35 @@ function CameraRig() {
         cam.onChange?.();
         return;
       }
-      if (!drag || drag.id !== e.pointerId || input.view !== 'walk') return;
+      if (!drag || drag.id !== e.pointerId) return;
+      pointerState.move(e.clientX, e.clientY);
+      if (input.view !== 'walk') return;
       // 바닥 누르기(걷기)와 헷갈리지 않게, 옆으로 조금 끈 뒤부터 돌린다
       if (!drag.rotating && Math.abs(e.clientX - drag.x0) > 12 && Math.abs(e.clientX - drag.x0) > Math.abs(e.clientY - drag.y0)) {
         drag.rotating = true;
         drag.x = e.clientX;
       }
       if (drag.rotating) {
-        // 세상을 잡고 끄는 느낌: 오른쪽으로 끌면 풍경이 오른쪽으로 돈다
+        // 세상을 잡고 끄는 느낌: 오른쪽으로 끌면 풍경이 오른쪽으로 돈다. 목표만 바꾸고 카메라가 부드럽게 따라간다.
         const turn = THREE.MathUtils.degToRad((e.clientX - drag.x) * cameraConfig.dragRotateDegPerPx);
         cam.yaw -= turn;
-        cam.yawNow -= turn;
         drag.x = e.clientX;
+        pointerState.rotated = true;
       }
     };
     const onUp = (e: PointerEvent) => {
       pointers.delete(e.pointerId);
       if (drag?.id === e.pointerId) {
+        pointerState.up();
         if (drag.rotating) {
           saveCamera(cam);
           cam.onChange?.();
         }
         drag = null;
       }
-      if (pinchState.active && pointers.size === 0) {
-        pinchState.active = false;
-        pinchState.endedAt = now();
+      if (pointerState.pinching && pointers.size === 0) {
+        pointerState.pinching = false;
+        pointerState.pinchEndedAt = now();
         saveCamera(cam);
       }
     };
@@ -439,7 +438,8 @@ function Ground() {
   const { input } = useTown();
   function onClick(e: ThreeEvent<MouseEvent>) {
     // 끌거나 두 손가락으로 확대한 직후의 클릭, 전체 지도에서의 클릭은 무시한다
-    if (e.delta > 10 || pinchState.recent() || input.view !== 'walk') return;
+    // 꾹 누르거나 끌었으면(카메라 돌리기) 걷지 않는다
+    if (!pointerState.tapped() || input.view !== 'walk') return;
     input.tapTarget = { x: e.point.x, z: e.point.z };
     input.marker = { x: e.point.x, z: e.point.z, at: now() };
   }

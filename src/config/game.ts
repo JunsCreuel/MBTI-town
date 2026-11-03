@@ -77,8 +77,8 @@ export const cameraConfig = {
   ],
   /** 회전 버튼·단축키(Q/E) 한 번에 카메라가 도는 각도 (도) */
   rotateStepDeg: 45,
-  /** 화면을 옆으로 끌어서 돌릴 때 1px당 각도 (도) */
-  dragRotateDegPerPx: 0.3,
+  /** 화면을 옆으로 끌어서 돌릴 때 1px당 각도 (도). 화면 너비만큼 끌면 반 바퀴 남짓 */
+  dragRotateDegPerPx: 0.15,
 } as const;
 
 // 나의 방 = 마을 속 내 집의 안 (PROJECT_GUIDE.md 6장)

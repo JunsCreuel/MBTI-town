@@ -10,6 +10,7 @@ import { TINT_MATERIAL } from '@/shared/character';
 import { groundHeightAt, type Lot, type PropPlacement } from '@/shared/townMap';
 import { GATE_KEY, HOUSE_KEY, LOT_KEY, tagTexture, type TownAssets } from './assets';
 import { lotKey, useTown } from './context';
+import { pointerState } from './pointer';
 import { FOLIAGE_MATERIAL, injectWind, softFoliage, withWind } from './wind';
 
 // 맵의 소품과 주민의 집을 세운다. 같은 소품(나무·집)이 수백 개라 종류마다 인스턴싱으로 한 번에 그린다.
@@ -196,7 +197,7 @@ export function InstancedProps({ group, onPick }: { group: PropGroup; onPick?: (
         onClick: (e: ThreeEvent<MouseEvent>) => {
           // 집 뒤 바닥으로 걸어가지 않게 막는다
           e.stopPropagation();
-          if (e.delta <= 10 && input.view === 'walk' && e.instanceId !== undefined) onPick(e.instanceId);
+          if (pointerState.tapped() && input.view === 'walk' && e.instanceId !== undefined) onPick(e.instanceId);
         },
         onPointerOver: () => (document.body.style.cursor = 'pointer'),
         onPointerOut: () => (document.body.style.cursor = ''),
@@ -278,7 +279,7 @@ function ClickableProp({ placement }: { placement: PropPlacement }) {
       onClick={(e: ThreeEvent<MouseEvent>) => {
         // 소품 뒤 바닥으로 걸어가지 않게 막는다
         e.stopPropagation();
-        if (e.delta > 10 || input.view !== 'walk') return;
+        if (!pointerState.tapped() || input.view !== 'walk') return;
         if (placement.key === GATE_KEY) onGate(placement);
         else router.push('/debate');
       }}
