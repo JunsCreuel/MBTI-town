@@ -152,7 +152,8 @@ export class HousePresence {
   private applyAction(id: string, kind: ActionKind) {
     const g = this.gesture(id);
     g.action = kind;
-    g.actionUntil = now() + townConfig.actionDurationMs / 1000;
+    g.actionStart = now();
+    g.actionUntil = g.actionStart + (kind === 'fish' ? townConfig.fishActionMs : townConfig.actionDurationMs) / 1000;
     if (kind === 'clap') this.applyEmote(id, 'clap');
   }
 

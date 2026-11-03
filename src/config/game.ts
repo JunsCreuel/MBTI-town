@@ -27,6 +27,8 @@ export const townConfig = {
   minFps: 45,
   /** 응원·박수 동작 길이 (ms) */
   actionDurationMs: 2000,
+  /** 낚시 동작 길이 (ms): 던지고 기다렸다가 낚아 올릴 때까지 낚싯대를 들고 있다 (걸으면 끝난다) */
+  fishActionMs: 9000,
   /** 동작·이모티콘 재사용 대기 (ms) */
   emoteCooldownMs: 1200,
   /** 머리 위 이모티콘 표시 시간 (ms) */

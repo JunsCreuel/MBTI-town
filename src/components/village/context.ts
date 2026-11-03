@@ -25,6 +25,18 @@ export interface TownInput {
   camera: TownCamera;
   /** 나무에서 떨어지는 열매 (따기 연출). 장면이 그리고 시간이 지나면 지운다 */
   drops: { x: number; z: number; color: string; at: number }[];
+  /** 내 낚시 (낚시 판이 열려 있는 동안). 화면이 찌·낚싯줄·물보라를 그린다 */
+  fishing: FishingState | null;
+}
+
+/** 낚시 한 번: 던진 시각, 찌가 떨어질 물 위 자리, 입질·낚아 올린 시각과 잡은 것 */
+export interface FishingState {
+  castAt: number;
+  tx: number;
+  tz: number;
+  biteAt?: number;
+  caughtAt?: number;
+  fishId?: string;
 }
 
 export interface TownCamera {

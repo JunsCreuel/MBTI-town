@@ -34,6 +34,8 @@ export interface PlayerView {
 
 export interface Gesture {
   action?: ActionKind;
+  /** 동작을 시작한 시각 (같은 동작을 다시 해도 처음부터 다시 그린다) */
+  actionStart?: number;
   actionUntil: number;
   emote?: EmoteKind;
   emoteStart: number;
@@ -245,6 +247,12 @@ export class TownSession {
     this.room?.send(MSG.action, { kind });
   }
 
+  /** 내 동작을 멈춘다 (낚시를 그만둘 때). 다른 사람 화면에서는 동작 시간이 끝나면 멈춘다 */
+  endAction() {
+    const g = this.gestures.get(SELF_GESTURE);
+    if (g) g.actionUntil = 0;
+  }
+
   sendEmote(kind: EmoteKind) {
     this.applyEmote(SELF_GESTURE, kind);
     this.room?.send(MSG.emote, { kind });
@@ -262,7 +270,8 @@ export class TownSession {
   private applyAction(id: string, kind: ActionKind) {
     const g = this.gesture(id);
     g.action = kind;
-    g.actionUntil = now() + townConfig.actionDurationMs / 1000;
+    g.actionStart = now();
+    g.actionUntil = g.actionStart + (kind === 'fish' ? townConfig.fishActionMs : townConfig.actionDurationMs) / 1000;
     // 박수 동작에는 박수 이모티콘을 같이 띄운다
     if (kind === 'clap') this.applyEmote(id, 'clap');
   }

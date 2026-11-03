@@ -697,5 +697,8 @@
   },
   "item.fish.bottle": {
     "file": "items/item_fish_bottle_ph.svg"
+  },
+  "prop.tool.rod": {
+    "file": "props/prop_tool_rod_ph.glb"
   }
 }

@@ -1,6 +1,7 @@
 // 놀거리 소품 임시 3D 모델: 열매 나무, 운세 나무, 광장 비콘(낚시터·클럽), 클럽 무대 소품.
 // 원점 = 바닥 가운데, 정면 = +Z. 1 = 한 칸. 잎은 'foliage'(바람에 흔들림), 빛나는 곳은 'glow'(밤에 켜짐).
 import * as THREE from 'three';
+import { ROD_TIP } from '../../src/shared/character';
 import { part, type Part } from './models';
 
 type Vec3 = [number, number, number];
@@ -187,5 +188,21 @@ export function clubSofaParts(): Part[] {
     part(box(2.2, 0.14, 0.72), CLUB.velvet, { pos: [0, 0.49, 0.06] }),
     part(box(2.4, 0.66, 0.24), CLUB.velvet, { pos: [0, 0.75, -0.33] }),
     ...[-1.1, 1.1].map((x) => part(box(0.22, 0.6, 0.9), CLUB.velvetDark, { pos: [x, 0.42, 0] })),
+  ];
+}
+
+// ───────────────────────── 낚싯대 ─────────────────────────
+
+
+/** 낚싯대: 원점 = 손잡이 아래 끝, +Y로 뻗는다. 코르크 손잡이, 릴, 가늘어지는 대, 끝 고리 */
+export function rodParts(): Part[] {
+  return [
+    part(cyl(0.032, 0.036, 0.24, 10), '#C9A36A', { pos: [0, 0.12, 0] }),
+    part(cyl(0.02, 0.02, 0.06, 8), C.metal, { pos: [0, 0.27, 0] }),
+    // 릴: 손잡이 위 옆에 붙은 작은 바퀴
+    part(cyl(0.055, 0.055, 0.04, 16), '#E2483D', { pos: [0.06, 0.22, 0], rot: [0, 0, 90] }),
+    part(cyl(0.012, 0.012, 0.05, 6), C.metal, { pos: [0.03, 0.22, 0], rot: [0, 0, 90] }),
+    part(cyl(0.007, 0.018, 1.12, 8), '#3B3F4A', { pos: [0, 0.86, 0] }),
+    part(new THREE.TorusGeometry(0.014, 0.004, 6, 12), C.gold, { pos: ROD_TIP }),
   ];
 }

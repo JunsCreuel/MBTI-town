@@ -273,6 +273,42 @@ export function nearWater(map: TownMap, x: number, z: number, r = 1.7): boolean 
   return false;
 }
 
+const isWaterTile = (map: TownMap, tx: number, tz: number) => {
+  if (tx < 0 || tz < 0 || tx >= map.width || tz >= map.height) return true;
+  const g = map.ground[tz * map.width + tx];
+  return !g || map.terrain[g] === 'water';
+};
+
+/**
+ * 낚시 찌를 던질 물 위 자리: 둘레 물 칸 중 약 2.8칸 떨어진 곳 (너무 가깝거나 먼 곳은 피한다).
+ * yaw(바라보는 방향)를 주면 그쪽에 가까운 물을 먼저 고른다 (다른 사람이 던진 찌 자리를 짐작할 때).
+ */
+export function castTarget(map: TownMap, x: number, z: number, yaw?: number): { x: number; z: number } | null {
+  const R = 4.5;
+  let best: { x: number; z: number } | null = null;
+  let bestScore = Infinity;
+  for (let tz = Math.floor(z - R); tz <= Math.floor(z + R); tz++) {
+    for (let tx = Math.floor(x - R); tx <= Math.floor(x + R); tx++) {
+      const cx = tx + 0.5;
+      const cz = tz + 0.5;
+      const d = Math.hypot(cx - x, cz - z);
+      if (d < 1.4 || d > R || !isWaterTile(map, tx, tz)) continue;
+      let score = Math.abs(d - 2.8);
+      // 물가 가장자리 칸보다 물 안쪽 칸 (둘레도 물)
+      if (!isWaterTile(map, tx + 1, tz) || !isWaterTile(map, tx - 1, tz) || !isWaterTile(map, tx, tz + 1) || !isWaterTile(map, tx, tz - 1)) score += 0.6;
+      if (yaw !== undefined) {
+        const diff = Math.abs(Math.atan2(Math.sin(Math.atan2(cx - x, cz - z) - yaw), Math.cos(Math.atan2(cx - x, cz - z) - yaw)));
+        score += diff * 1.5;
+      }
+      if (score < bestScore) {
+        bestScore = score;
+        best = { x: cx, z: cz };
+      }
+    }
+  }
+  return best;
+}
+
 /** 월드 좌표의 발 위치가 막힌 칸인지 */
 export function isBlockedAt(map: TownMap, x: number, z: number): boolean {
   return isBlockedTile(map, Math.floor(x), Math.floor(z));

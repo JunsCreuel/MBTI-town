@@ -4,7 +4,8 @@ import { townConfig } from '../config/game';
 import { isDistrict, type District } from './districts';
 
 /** 몸짓 (캐릭터 동작). 이름은 캐릭터 애니메이션 클립과 같다 (shared/character.ts) */
-export const ACTIONS = ['cheer', 'clap', 'wave', 'bow', 'dance', 'jump', 'think'] as const;
+/** 몸짓. fish(낚시)는 낚시터에서 낚싯대를 던질 때만 쓰고 몸짓 고르기에는 없다 */
+export const ACTIONS = ['cheer', 'clap', 'wave', 'bow', 'dance', 'jump', 'think', 'fish'] as const;
 export type ActionKind = (typeof ACTIONS)[number];
 
 /** 머리 위 이모티콘 (clap은 박수 동작에 같이 뜬다) */

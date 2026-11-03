@@ -22,6 +22,8 @@ export interface TownAssets {
   /** manifest 키 → 마을 소품 모델 (집·빈 집터 포함) */
   props: Record<string, THREE.Object3D>;
   emotes: Record<EmoteKind, THREE.Texture>;
+  /** 낚싯대 (낚시할 때 오른손에 든다) */
+  rod: THREE.Object3D;
 }
 
 function canvas(w: number, h: number) {
@@ -92,13 +94,15 @@ export function loadEmoteTextures(): Promise<Record<EmoteKind, THREE.Texture>> {
   return emoteCache;
 }
 
+const ROD_KEY = 'prop.tool.rod';
+
 export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) => void): Promise<TownAssets> {
   const loader = new GLTFLoader();
   const accessoryKeys = ACCESSORIES.filter((a) => a.key).map((a) => [a.id, a.key!] as const);
   // 맵 소품 + 집 + 화면이 흩뿌리는 풀·꽃 (지역 식물 전부)
   const propKeys = [...new Set([...map.props.map((p) => p.key), HOUSE_KEY, LOT_KEY, ...allFloraKeys()])];
   // 같은 파일을 여러 키가 쓰면 한 번만 받는다
-  const urls = [...new Set(['char.base', ...accessoryKeys.map(([, k]) => k), ...propKeys].map(assetUrl))];
+  const urls = [...new Set(['char.base', ROD_KEY, ...accessoryKeys.map(([, k]) => k), ...propKeys].map(assetUrl))];
   let done = 0;
   const models = new Map(
     await Promise.all(
@@ -116,6 +120,7 @@ export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) =
     accessories: Object.fromEntries(accessoryKeys.map(([id, key]) => [id, models.get(assetUrl(key))!.scene])),
     props: Object.fromEntries(propKeys.map((k) => [k, models.get(assetUrl(k))!.scene])),
     emotes,
+    rod: models.get(assetUrl(ROD_KEY))!.scene,
   };
 }
 

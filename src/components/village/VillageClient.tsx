@@ -18,7 +18,7 @@ import { TabBar } from '@/components/app/TabBar';
 import type { HouseView, TownView } from '@/server/scene/service';
 import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
 import { SPOT_NAME, parseRoomPlace, parseSpot, type RoomPlace, type Spot, type TownPlace } from '@/shared/protocol';
-import { districtAt, lotDoor, nearWater, parseTownMap, randomSpawnPoint, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
+import { castTarget, districtAt, lotDoor, nearWater, parseTownMap, randomSpawnPoint, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
 import { lotKey, type TownCamera, type TownContextValue, type TownInput } from './context';
 import { currentView, cycleView, initialCamera, isTurned, resetCamera, rotateCamera, type CameraView } from './camera';
 import { placePoint } from '@/shared/spawn';
@@ -179,6 +179,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       labels: new Map(),
       camera: initialCamera(),
       drops: [],
+      fishing: null,
     }),
     [],
   );
@@ -740,15 +741,33 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       {fishing && (
         <FishingPanel
           onCast={async () => {
-            const r = await call<FishResult>('POST', '/api/play/fish');
-            refreshPlay();
-            return r;
+            // 낚싯대를 휘둘러 물 위로 찌를 던진다 (화면 연출). 결과는 서버가 정한다
+            const t = loaded ? castTarget(loaded.map, input.self.x, input.self.z) : null;
+            input.fishing = t ? { castAt: now(), tx: t.x, tz: t.z } : null;
+            if (t) session.sendAction('fish');
+            try {
+              const r = await call<FishResult>('POST', '/api/play/fish');
+              refreshPlay();
+              return r;
+            } catch (e) {
+              input.fishing = null;
+              session.endAction();
+              throw e;
+            }
+          }}
+          onBite={() => {
+            if (input.fishing) input.fishing.biteAt = now();
           }}
           onCaught={(r) => {
-            session.sendAction(r.fish.rarity === 'junk' ? 'think' : 'cheer');
-            session.sendEmote(r.fish.rarity === 'legend' ? 'sparkle' : r.fish.rarity === 'junk' ? 'question' : 'joy');
+            if (input.fishing) Object.assign(input.fishing, { caughtAt: now(), fishId: r.fish.id });
+            // 잡은 물고기를 머리 위로 들어 보인 뒤에 이모티콘
+            setTimeout(() => session.sendEmote(r.fish.rarity === 'legend' ? 'sparkle' : r.fish.rarity === 'junk' ? 'question' : 'joy'), 2600);
           }}
-          onClose={() => setFishing(false)}
+          onClose={() => {
+            input.fishing = null;
+            session.endAction();
+            setFishing(false);
+          }}
         />
       )}
       {toast && (

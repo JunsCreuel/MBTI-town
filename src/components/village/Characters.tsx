@@ -10,8 +10,10 @@ import { tokens } from '@/design/tokens';
 import { profileTag, type AccessoryId, type AvatarColor } from '@/shared/avatar';
 import { CHARACTER_CLIPS, CHARACTER_HEIGHT, HEAD_SOCKET, TINT_MATERIAL, type ClipName } from '@/shared/character';
 import { lerpAngle, moveWithCollision, yawFromVector } from '@/shared/movement';
+import { FishingRig } from './FishingRig';
+import type { FishingState } from './context';
 import { findPath, type Point } from '@/shared/pathfinding';
-import { groundHeightAt } from '@/shared/townMap';
+import { castTarget, groundHeightAt } from '@/shared/townMap';
 import type { EmoteKind } from '@/shared/protocol';
 import { tagTexture } from './assets';
 import { useTown } from './context';
@@ -24,9 +26,17 @@ export interface Actor {
   z: number;
   rot: number;
   clip: ClipName;
+  /** 지금 동작을 시작한 시각 (같은 동작을 다시 하면 처음부터 다시 그린다) */
+  clipStart?: number;
   emote: EmoteKind | null;
   emoteStart: number;
+  /** 낚시 중이면 찌 자리와 단계 */
+  fish?: FishingState | null;
 }
+
+/** 오른손에 든 낚싯대: 팔 관절 기준 손 위치와, 팔을 앞으로 들었을 때 앞위로 뻗는 방향 */
+const ROD_GRIP = new THREE.Vector3(-0.045, -0.19, 0.04);
+const ROD_DIR = new THREE.Vector3(0, -0.342, 0.94).normalize();
 
 const TAG_HEIGHT = 0.3;
 const EMOTE_SIZE = 0.62;
@@ -58,7 +68,7 @@ function tint(root: THREE.Object3D, color: string) {
 function Character({ actor, look, self = false }: { actor: RefObject<Actor>; look: Look; self?: boolean }) {
   const { assets } = useTown();
   const color = tokens.avatar[look.color] ?? tokens.avatar.mint;
-  const { model, mixer, actions } = useMemo(() => {
+  const { model, mixer, actions, rod } = useMemo(() => {
     const model = SkeletonUtils.clone(assets.character.scene);
     tint(model, color);
     const acc = assets.accessories[look.acc];
@@ -67,6 +77,12 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
       tint(prop, shiftLightness(color, -0.18));
       model.getObjectByName(HEAD_SOCKET)?.add(prop);
     }
+    const rod = assets.rod.clone();
+    rod.visible = false;
+    rod.position.copy(ROD_GRIP);
+    rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ROD_DIR);
+    rod.traverse((o) => void ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
+    model.getObjectByName('armR')?.add(rod);
     const mixer = new THREE.AnimationMixer(model);
     const actions = Object.fromEntries(
       CHARACTER_CLIPS.map((name) => {
@@ -76,7 +92,7 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
       }),
     ) as Record<ClipName, THREE.AnimationAction>;
     actions.idle.play();
-    return { model, mixer, actions };
+    return { model, mixer, actions, rod };
   }, [assets, color, look.acc]);
 
   const sub = profileTag(look.mbti, look.ilju);
@@ -84,6 +100,7 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
   const group = useRef<THREE.Group>(null);
   const emote = useRef<THREE.Sprite>(null);
   const playing = useRef<ClipName>('idle');
+  const playingStart = useRef(0);
 
   useEffect(
     () => () => {
@@ -102,11 +119,16 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
     if (!a || !g) return;
     g.position.set(a.x, a.y, a.z);
     model.rotation.y = a.rot;
-    if (a.clip !== playing.current) {
-      const next = actions[a.clip].reset().play();
-      actions[playing.current].crossFadeTo(next, 0.18, false);
-      playing.current = a.clip;
+    // 모르는 동작(새 버전에서 생긴 동작 등)은 서 있는 것으로 그린다
+    const clip: ClipName = actions[a.clip] ? a.clip : 'idle';
+    const start = a.clipStart ?? 0;
+    if (clip !== playing.current || (start !== playingStart.current && clip !== 'idle' && clip !== 'walk')) {
+      const next = actions[clip].reset().play();
+      if (clip !== playing.current) actions[playing.current].crossFadeTo(next, 0.18, false);
+      playing.current = clip;
+      playingStart.current = start;
     }
+    rod.visible = clip === 'fish';
     mixer.update(Math.min(dt, 0.1));
 
     const em = emote.current!;
@@ -124,6 +146,8 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
   });
 
   return (
+    <>
+    <FishingRig actor={actor} rod={rod} />
     <group ref={group}>
       <primitive object={model} />
       <sprite position-y={CHARACTER_HEIGHT + TAG_HEIGHT + 0.15 * (tag.rel - 1)} scale={[0.3 * tag.rel * tag.aspect, 0.3 * tag.rel, 1]} renderOrder={1000}>
@@ -133,6 +157,7 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
         <spriteMaterial depthTest={false} depthWrite={false} transparent />
       </sprite>
     </group>
+    </>
   );
 }
 
@@ -146,6 +171,7 @@ function applyGesture(a: Actor, id: string, session: TownSession, walking: boole
   }
   const acting = !!g?.action && t < g.actionUntil && !walking;
   a.clip = walking ? 'walk' : acting ? g!.action! : 'idle';
+  a.clipStart = acting ? (g!.actionStart ?? 0) : 0;
   // 걸으면 동작은 끝난다
   if (walking && g) g.actionUntil = 0;
 }
@@ -226,6 +252,14 @@ export function LocalPlayer() {
       facing.current = yawFromVector(dx, dz, facing.current);
     }
     const walking = Math.hypot(a.x - before.x, a.z - before.z) > 1e-4;
+    // 낚시: 찌를 던질 물 쪽을 본다
+    // 걸으면 낚시는 끝난다 (낚시 판은 열려 있어도 다시 던지면 된다)
+    if (walking && input.fishing) input.fishing = null;
+    const f = input.fishing;
+    if (f && !walking) {
+      if (a.fish !== f) facing.current = yawFromVector(f.tx - a.x, f.tz - a.z, facing.current);
+      a.fish = f;
+    } else a.fish = null;
     a.rot = lerpAngle(a.rot, facing.current, 1 - Math.exp(-dt * TURN_RATE));
     a.y += (groundHeightAt(map, a.x, a.z) - a.y) * (1 - Math.exp(-dt * 15));
     applyGesture(a, SELF_GESTURE, session, walking);
@@ -295,6 +329,13 @@ export function RemotePlayer({ id }: { id: string }) {
     a.rot = lerpAngle(a.rot, s.rot, 1 - Math.exp(-dt * TURN_RATE));
     a.y += (groundHeightAt(map, a.x, a.z) - a.y) * (1 - Math.exp(-dt * 15));
     applyGesture(a, id, session, s.moving || moved > 0.002);
+    // 다른 사람의 낚시: 바라보는 쪽 물에 찌를 던진 것으로 그린다 (입질·잡은 것은 보이지 않는다)
+    if (a.clip === 'fish') {
+      if (!a.fish || a.fish.castAt !== a.clipStart) {
+        const target = castTarget(map, a.x, a.z, s.rot);
+        a.fish = target ? { castAt: a.clipStart ?? now(), tx: target.x, tz: target.z } : null;
+      }
+    } else a.fish = null;
   });
 
   if (!p) return null;

@@ -12,3 +12,5 @@ function load(key: string): TownMap {
 export const loadTownMapForTest = () => load('map.town');
 /** 동네 틀 맵 (지역을 입히기 전) */
 export const loadHoodMapForTest = () => load('map.hood');
+/** 낚시터 맵 */
+export const loadFishingMapForTest = () => load('map.fishing');

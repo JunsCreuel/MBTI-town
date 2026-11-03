@@ -16,7 +16,7 @@ import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
 import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
 import { petParts } from './lib/pets';
 import { fishIcons, fruitIcons } from './lib/item-icons';
-import { beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, speakerParts } from './lib/play-props';
+import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, speakerParts } from './lib/play-props';
 import { FRUITS } from '../src/shared/play';
 import { PET_ANIMALS } from '../src/shared/pet';
 import { TOWN_TILES, buildHoodMap, buildSpotMap, buildTownMap } from './lib/town-map';
@@ -158,6 +158,8 @@ async function genTownProps() {
     ['prop.club.door', 'prop_club_door', clubDoorParts()],
     ['prop.club.bar', 'prop_club_bar', clubBarParts()],
     ['prop.club.sofa', 'prop_club_sofa', clubSofaParts()],
+    // 낚싯대 (낚시할 때 손에 든다)
+    ['prop.tool.rod', 'prop_tool_rod', rodParts()],
   ];
   for (const [key, name, parts] of props) {
     const file = `props/${name}_ph.glb`;

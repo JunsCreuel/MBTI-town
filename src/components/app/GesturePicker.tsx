@@ -5,8 +5,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { assetUrl } from '@/assets/manifest';
 import { townConfig } from '@/config/game';
-import { ACTIONS, type ActionKind, type EmoteKind } from '@/shared/protocol';
-import { ACTION_INFO, EMOTE_INFO, PICKABLE_EMOTES, type GestureInfo } from './gestures';
+import { type ActionKind, type EmoteKind } from '@/shared/protocol';
+import { ACTION_INFO, EMOTE_INFO, PICKABLE_ACTIONS, PICKABLE_EMOTES, type GestureInfo } from './gestures';
 
 const QUICK_ACTIONS: ActionKind[] = ['cheer', 'clap'];
 const QUICK_EMOTES: EmoteKind[] = ['heart', 'joy', 'wow'];
@@ -73,7 +73,7 @@ export function GesturePicker({
       {open && (
         <div className="gesture-panel" role="dialog" aria-label="몸짓 고르기">
           <p className="gesture-panel__title">몸짓</p>
-          <div className="gesture-grid">{ACTIONS.map(actionBtn)}</div>
+          <div className="gesture-grid">{PICKABLE_ACTIONS.map(actionBtn)}</div>
           <p className="gesture-panel__title">이모티콘</p>
           <div className="gesture-grid">{PICKABLE_EMOTES.map(emoteBtn)}</div>
         </div>

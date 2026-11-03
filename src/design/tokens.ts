@@ -193,6 +193,11 @@ export const tokens = {
     signDark: '#1C1726',
     signNeonSub: '#B9A8FF',
     signExit: '#5BE38C',
+    /** 낚시: 찌(빨강·하양), 낚싯줄, 물보라 */
+    bobberTop: '#E2483D',
+    bobberBottom: '#FFFFFF',
+    fishingLine: '#F4F1EA',
+    splash: '#DDF3FF',
   },
   font: {
     base: "'Pretendard Variable', 'Pretendard', system-ui, sans-serif",

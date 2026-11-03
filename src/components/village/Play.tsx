@@ -54,9 +54,11 @@ export function beaconsOf(map: TownMap): { kind: Spot; x: number; z: number; yaw
  * 낚시: 찌를 던지고 → 기다리다 → 입질! → 잡은 것을 보여 준다. 결과는 던지는 순간 서버가 정하고, 화면은 기다리는 연출만 한다.
  */
 export function FishingPanel({
-  onCast, onCaught, onClose,
+  onCast, onBite, onCaught, onClose,
 }: {
   onCast: () => Promise<FishResult>;
+  /** 입질 (찌가 잠기는 연출) */
+  onBite?: () => void;
   onCaught: (r: FishResult) => void;
   onClose: () => void;
 }) {
@@ -74,6 +76,7 @@ export function FishingPanel({
       const [r] = await Promise.all([onCast(), new Promise((res) => setTimeout(res, wait))]);
       if (my !== round.current) return;
       setStage('bite');
+      onBite?.();
       setTimeout(() => {
         if (my !== round.current) return;
         setResult(r);
@@ -96,37 +99,40 @@ export function FishingPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const done = stage === 'caught' || stage === 'error';
   return (
-    <div className="fishing" role="dialog" aria-label="낚시">
+    <div className={`fishing fishing--${stage}`} role="dialog" aria-label="낚시">
       {stage === 'wait' && (
         <>
           <span className="fishing__bobber" aria-hidden />
-          <p className="fishing__text">찌를 던졌어요… 조용히 기다리는 중</p>
+          <p className="fishing__text">찌를 던졌어요… 기다리는 중</p>
         </>
       )}
       {stage === 'bite' && <p className="fishing__text fishing__text--bite">앗! 물었다!</p>}
       {stage === 'caught' && result && (
-        <>
+        <div className="fishing__result">
           <span className="fishing__fish" aria-hidden>
-            <ItemIcon kind="fish" id={result.fish.id} size={64} />
+            <ItemIcon kind="fish" id={result.fish.id} size={56} />
           </span>
-          <p className="fishing__name">
-            {result.fish.name}
-            {result.size > 0 && <small> {result.size}cm</small>}
-          </p>
-          <p className="fishing__meta">
-            <span style={{ color: RARITY[result.fish.rarity].color }}>{RARITY[result.fish.rarity].label}</span> · 도감 {result.count}마리째 · 오늘 {result.left}번 남음
-          </p>
-        </>
+          <div className="fishing__info">
+            <p className="fishing__name">
+              {result.fish.name}
+              {result.size > 0 && <small> {result.size}cm</small>}
+            </p>
+            <p className="fishing__meta">
+              <span style={{ color: RARITY[result.fish.rarity].color }}>{RARITY[result.fish.rarity].label}</span> · 도감 {result.count}마리째 · 오늘 {result.left}번 남음
+            </p>
+          </div>
+        </div>
       )}
       {stage === 'error' && <p className="fishing__text">{error}</p>}
       <div className="fishing__actions">
-        {(stage === 'caught' || stage === 'error') && result && result.left > 0 && (
+        {done && result && result.left > 0 && (
           <button className="btn-primary btn-primary--inline" onClick={() => void cast()}>
             또 던지기
           </button>
         )}
-        <button className="btn-secondary" onClick={onClose}>
+        <button className={done ? 'btn-secondary' : 'fishing__stop'} onClick={onClose}>
           그만하기
         </button>
       </div>

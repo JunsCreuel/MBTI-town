@@ -11,7 +11,8 @@ function shade(hex: string, k: number): string {
   return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
 }
 
-const wrap = (body: string) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">${body}</svg>\n`;
+// 크기를 적어 둬야 캔버스에 그릴 때(화면 속 잡은 물고기) 어느 브라우저에서나 같은 크기로 나온다
+const wrap = (body: string) => `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">${body}</svg>\n`;
 const LEAF = '#5FAE5A';
 const STEM = '#8A5A3A';
 const SHINE = `fill="#FFFFFF" fill-opacity="0.55"`;
