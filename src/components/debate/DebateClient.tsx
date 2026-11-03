@@ -6,6 +6,7 @@ import { debateConfig } from '@/config/game';
 import { tokens } from '@/design/tokens';
 import type { Phase, Side } from '@/shared/debate';
 import { DISTRICT, isDistrict } from '@/shared/districts';
+import { call } from '@/lib/api';
 import { ApiError, api, type DebateView, type MeResponse } from './api';
 import { ResultSection } from './ResultSection';
 import { teamColor, teamInk, teamVars } from './teamColor';
@@ -411,6 +412,21 @@ function Arguments({ view, onChanged }: { view: DebateView; onChanged: () => voi
   const counts = { a: view.arguments.filter((a) => a.side === 'a').length, b: view.arguments.filter((a) => a.side === 'b').length };
   const canRecommend = view.phase === 'writing' && view.me.side === tab;
 
+  // 운영자: 논거 지우기
+  async function remove(id: string) {
+    if (!confirm('이 논거를 지울까요? 추천·투표도 같이 지워져요.')) return;
+    setPending(id);
+    setError(null);
+    try {
+      await call('DELETE', `/api/debate/arguments/${id}`);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '지우지 못했어요.');
+    } finally {
+      setPending(null);
+    }
+  }
+
   async function toggle(id: string, on: boolean) {
     setPending(id);
     setError(null);
@@ -474,6 +490,11 @@ function Arguments({ view, onChanged }: { view: DebateView; onChanged: () => voi
                   <span className="recommend recommend--static">
                     {a.picks !== null && <strong className="picks">판정 {a.picks}표 · </strong>}추천 {a.recommendations}
                   </span>
+                )}
+                {view.me.admin && (
+                  <button className="recommend recommend--danger" disabled={pending === a.id} onClick={() => remove(a.id)}>
+                    운영자 삭제
+                  </button>
                 )}
               </div>
             </li>

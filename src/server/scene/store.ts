@@ -116,6 +116,41 @@ const PATCH_COLS = new Set([
   'onboarded_at', 'hobby',
 ]);
 
+export interface AdminCounts {
+  residents: number;
+  joined_today: number;
+  active_today: number;
+  records: number;
+  photos: number;
+  guestbook: number;
+  open_reports: number;
+}
+
+export interface ReportRow {
+  id: string;
+  target_kind: 'guestbook' | 'record' | 'user';
+  target_id: string;
+  reason: string | null;
+  created_at: Date;
+  resolved_at: Date | null;
+  resolution: 'dismissed' | 'removed' | null;
+  reporter_handle: string | null;
+  reporter_name: string | null;
+  preview: string | null;
+  room_handle: string | null;
+}
+
+export interface AdminUserRow {
+  id: string;
+  handle: string | null;
+  display_name: string | null;
+  district: string | null;
+  onboarded_at: Date | null;
+  last_seen_at: Date | null;
+  is_admin: boolean;
+  records: number;
+}
+
 export class SceneStore {
   constructor(private readonly sql: Sql) {}
 
@@ -403,6 +438,89 @@ export class SceneStore {
       `insert into public.reports (reporter, target_kind, target_id, reason) values ($1, $2, $3, $4)`,
       [reporter, kind, targetId, reason],
     );
+  }
+
+  // ───────── 운영자 ─────────
+
+  async isAdmin(userId: string): Promise<boolean> {
+    const [r] = await this.sql.query<{ ok: number }>(`select 1 as ok from public.admins where user_id = $1`, [userId]);
+    return !!r;
+  }
+
+  async addAdmin(userId: string): Promise<void> {
+    await this.sql.query(`insert into public.admins (user_id) values ($1) on conflict (user_id) do nothing`, [userId]);
+  }
+
+  async adminCounts(since: Date): Promise<AdminCounts> {
+    const [r] = await this.sql.query<Record<keyof AdminCounts, number>>(
+      `select
+         (select count(*) from public.profiles where onboarded_at is not null)::int as residents,
+         (select count(*) from public.profiles where onboarded_at >= $1)::int as joined_today,
+         (select count(*) from public.profiles where last_seen_at >= $1)::int as active_today,
+         (select count(*) from public.records)::int as records,
+         (select count(*) from public.photos)::int as photos,
+         (select count(*) from public.guestbook)::int as guestbook,
+         (select count(*) from public.reports where resolved_at is null)::int as open_reports`,
+      [since],
+    );
+    return Object.fromEntries(Object.entries(r).map(([k, v]) => [k, Number(v)])) as unknown as AdminCounts;
+  }
+
+  /** 신고 목록 (처리 안 된 것 먼저). 대상 내용 미리보기와 그 방 주인 핸들을 같이 준다 */
+  async listReports(limit: number): Promise<ReportRow[]> {
+    return this.sql.query<ReportRow>(
+      `select r.id, r.target_kind, r.target_id, r.reason, r.created_at, r.resolved_at, r.resolution,
+              rp.handle as reporter_handle, rp.display_name as reporter_name,
+              case r.target_kind
+                when 'guestbook' then (select g.body from public.guestbook g where g.id = r.target_id)
+                when 'record' then (select rc.body from public.records rc where rc.id = r.target_id)
+                else (select coalesce(u.display_name, u.handle) from public.profiles u where u.id = r.target_id)
+              end as preview,
+              case r.target_kind
+                when 'guestbook' then (select o.handle from public.guestbook g join public.profiles o on o.id = g.owner_id where g.id = r.target_id)
+                when 'record' then (select o.handle from public.records rc join public.profiles o on o.id = rc.owner_id where rc.id = r.target_id)
+                else (select u.handle from public.profiles u where u.id = r.target_id)
+              end as room_handle
+       from public.reports r left join public.profiles rp on rp.id = r.reporter
+       order by (r.resolved_at is null) desc, r.created_at desc limit $1`,
+      [limit],
+    );
+  }
+
+  async getReport(id: string): Promise<{ id: string; target_kind: string; target_id: string; resolved_at: Date | null } | null> {
+    const [r] = await this.sql.query<{ id: string; target_kind: string; target_id: string; resolved_at: Date | null }>(
+      `select id, target_kind, target_id, resolved_at from public.reports where id = $1`,
+      [id],
+    );
+    return r ?? null;
+  }
+
+  /** 같은 대상의 신고를 한꺼번에 처리한다 */
+  async resolveReports(kind: string, targetId: string, by: string, resolution: 'dismissed' | 'removed', at: Date): Promise<void> {
+    await this.sql.query(
+      `update public.reports set resolved_at = $4, resolved_by = $3, resolution = $5
+       where target_kind = $1 and target_id = $2 and resolved_at is null`,
+      [kind, targetId, by, at, resolution],
+    );
+  }
+
+  /** 이름·핸들로 주민 찾기 (빈 검색이면 최근 가입 순) */
+  async searchProfiles(q: string, limit: number): Promise<AdminUserRow[]> {
+    const like = `%${q.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+    return this.sql.query<AdminUserRow>(
+      `select p.id, p.handle, p.display_name, p.district, p.onboarded_at, p.last_seen_at,
+              exists (select 1 from public.admins a where a.user_id = p.id) as is_admin,
+              (select count(*) from public.records rc where rc.owner_id = p.id)::int as records
+       from public.profiles p
+       where $1 = '%%' or p.display_name ilike $1 or p.handle ilike $1
+       order by p.onboarded_at desc nulls last limit $2`,
+      [like, limit],
+    );
+  }
+
+  /** 계정을 지운다 (프로필과 딸린 것이 모두 같이 지워진다) */
+  async deleteAccount(userId: string): Promise<void> {
+    await this.sql.query(`delete from auth.users where id = $1`, [userId]);
   }
 
   // ───────── 방명록 ─────────
