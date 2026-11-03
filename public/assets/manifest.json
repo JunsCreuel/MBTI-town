@@ -496,5 +496,20 @@
   },
   "prop.nature.sign": {
     "file": "props/nature/nature_sign.glb"
+  },
+  "ui.icon.wave": {
+    "file": "ui/ui_icon_wave_ph.svg"
+  },
+  "ui.icon.bow": {
+    "file": "ui/ui_icon_bow_ph.svg"
+  },
+  "ui.icon.dance": {
+    "file": "ui/ui_icon_dance_ph.svg"
+  },
+  "ui.icon.jump": {
+    "file": "ui/ui_icon_jump_ph.svg"
+  },
+  "ui.icon.think": {
+    "file": "ui/ui_icon_think_ph.svg"
   }
 }

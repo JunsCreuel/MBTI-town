@@ -332,6 +332,10 @@ describe('마을 집터', () => {
     const tp = await service.townTicket(p);
     expect(tp.guest).toBe(false);
     expect(verifyTownPass(tp.token)).toMatchObject({ name: '파랑', district: 'metal', hood: 1, lot: 1, color: 'sky', acc: 'cap' });
+    // 이름표 둘째 줄: 사주 일주 (생일은 담지 않는다)
+    const mine = (await service.me(p)).profile;
+    expect(tp.pass.ilju).toBe(mine.saju?.day.ko);
+    expect(JSON.stringify(tp.pass)).not.toContain(mine.saju!.solarDate);
     expect(tp.pass.handle).not.toBe('');
     // 발견을 끈 사람은 방 주소를 담지 않는다
     expect((await service.townTicket(q)).pass.handle).toBe('');

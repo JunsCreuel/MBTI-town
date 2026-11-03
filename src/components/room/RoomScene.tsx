@@ -5,20 +5,22 @@
 //       바닥을 누르면 캐릭터가 걸어가고, 기능 소품을 누르면 onAction.
 // 꾸미기: 방 전체가 보이게 더 높이서 본다. 소품을 눌러 고르고, 끌어서 칸에 맞춰 옮긴다 (놓을 수 있는 자리로만).
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { roomConfig, townConfig } from '@/config/game';
 import { shiftLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
-import type { Avatar } from '@/shared/avatar';
+import { profileTag, type Avatar } from '@/shared/avatar';
 import { CHARACTER_CLIPS, CHARACTER_HEIGHT, HEAD_SOCKET, TINT_MATERIAL, type ClipName } from '@/shared/character';
 import type { District } from '@/shared/districts';
 import {
   blockedCells, canPlace, findRoomPath, footprintSize, furnitureDef, itemCenter, moveInRoom,
   type FurnitureAction, type PlacedItem, type Point, type RoomLayout,
 } from '@/shared/room';
-import { tagTexture } from '../village/assets';
+import type { EmoteKind } from '@/shared/protocol';
+import { loadEmoteTextures, tagTexture } from '../village/assets';
+import { SELF_GESTURE, now as clockNow } from '../village/session';
 import type { RoomAssets } from './assets';
 import type { HousePresence } from './presence';
 import { floorTexture, wallTexture } from './textures';
@@ -43,6 +45,8 @@ export interface RoomSceneProps {
   avatar: Avatar;
   /** 내 이름 (다른 사람이 함께 있을 때 머리 위에 보인다) */
   selfName?: string;
+  /** 내 이름표 둘째 줄 (MBTI·일주) */
+  selfTag?: string;
   /** 같은 방에 있는 사람들 (주인·손님). 없으면 혼자 본다 */
   presence?: HousePresence | null;
   mode: RoomMode;
@@ -648,10 +652,14 @@ function playClip(m: ReturnType<typeof useAvatarModel>, clip: ClipName) {
 }
 
 /** 머리 위 이름표 */
-function NameTag({ label, color, self = false }: { label: string; color: string; self?: boolean }) {
-  const tag = useMemo(() => tagTexture(self ? `나 · ${label}` : label, color, self), [label, color, self]);
+function NameTag({ label, color, self = false, sub = '' }: { label: string; color: string; self?: boolean; sub?: string }) {
+  const tag = useMemo(() => tagTexture(self ? `나 · ${label}` : label, color, self, sub), [label, color, self, sub]);
   return (
-    <sprite position-y={CHARACTER_HEIGHT * AVATAR_SCALE + 0.28} scale={[0.26 * tag.aspect, 0.26, 1]} renderOrder={1000}>
+    <sprite
+      position-y={CHARACTER_HEIGHT * AVATAR_SCALE + 0.28 + 0.13 * (tag.rel - 1)}
+      scale={[0.26 * tag.rel * tag.aspect, 0.26 * tag.rel, 1]}
+      renderOrder={1000}
+    >
       <spriteMaterial map={tag.texture} depthTest={false} depthWrite={false} transparent />
     </sprite>
   );
@@ -659,12 +667,56 @@ function NameTag({ label, color, self = false }: { label: string; color: string;
 
 const MOVE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
 
+type EmoteTextures = Record<EmoteKind, THREE.Texture>;
+
+/** 걷기·몸짓·서기 중 지금 보여 줄 동작. 걸으면 몸짓은 끝난다 */
+function clipFor(presence: HousePresence | null | undefined, gid: string, walking: boolean): ClipName {
+  const g = presence?.gestures.get(gid);
+  if (walking) {
+    if (g) g.actionUntil = 0;
+    return 'walk';
+  }
+  return g?.action && clockNow() < g.actionUntil ? g.action : 'idle';
+}
+
+/** 머리 위 이모티콘 말풍선: 톡 튀어나왔다가 살짝 떠 있다 */
+function EmoteBubble({
+  presence, gid, model, textures,
+}: {
+  presence: HousePresence;
+  gid: string;
+  model: THREE.Object3D;
+  textures: EmoteTextures | null;
+}) {
+  const sprite = useRef<THREE.Sprite>(null);
+  useFrame(() => {
+    const sp = sprite.current;
+    if (!sp) return;
+    const g = presence.gestures.get(gid);
+    const t = clockNow() - (g?.emoteStart ?? 0);
+    if (!g?.emote || !textures || t > townConfig.emoteDurationMs / 1000) {
+      sp.visible = false;
+      return;
+    }
+    sp.visible = true;
+    sp.material.map = textures[g.emote];
+    const pop = Math.min(1, t / 0.15);
+    sp.scale.setScalar(0.55 * (0.6 + 0.4 * pop));
+    sp.position.set(model.position.x, CHARACTER_HEIGHT * AVATAR_SCALE + 0.72 + Math.sin(t * 5) * 0.03, model.position.z);
+  });
+  return (
+    <sprite ref={sprite} visible={false} renderOrder={1001}>
+      <spriteMaterial depthTest={false} depthWrite={false} transparent />
+    </sprite>
+  );
+}
+
 /**
  * 내 캐릭터: 바닥을 누르면 길을 찾아 걷고, 방향키(WASD)로도 걷는다. 카메라가 방 앞에서 보므로 위쪽 키 = 방 안쪽.
  * 같은 방에 다른 사람이 있으면 내 위치를 보낸다.
  */
 function RoomAvatar({
-  assets, avatar, layout, walkTo, focus, mode, presence, name, together,
+  assets, avatar, layout, walkTo, focus, mode, presence, name, tag, together, emotes,
 }: {
   assets: RoomAssets;
   avatar: Avatar;
@@ -675,8 +727,11 @@ function RoomAvatar({
   mode: RoomMode;
   presence?: HousePresence | null;
   name?: string;
+  /** 이름표 둘째 줄 (MBTI·일주) */
+  tag?: string;
   /** 다른 사람이 함께 있는지 (이름표를 띄운다) */
   together: boolean;
+  emotes: EmoteTextures | null;
 }) {
   const m = useAvatarModel(assets, avatar.color, avatar.accessory);
   const blocked = useMemo(() => blockedCells(layout.items), [layout.items]);
@@ -761,7 +816,7 @@ function RoomAvatar({
       walking = true;
     }
     s.rot += Math.atan2(Math.sin(s.facing - s.rot), Math.cos(s.facing - s.rot)) * (1 - Math.exp(-dt * TURN_RATE));
-    playClip(m, walking ? 'walk' : 'idle');
+    playClip(m, clipFor(presence, SELF_GESTURE, walking));
     m.mixer.update(dt);
     m.model.position.set(s.pos.x, 0, s.pos.z);
     m.model.rotation.y = s.rot;
@@ -783,20 +838,30 @@ function RoomAvatar({
   return (
     <group>
       <primitive object={m.model} />
-      {together && name && <FollowTag model={m.model} label={name} color={m.color} self />}
+      {together && name && <FollowTag model={m.model} label={name} color={m.color} self sub={tag} />}
+      {presence && <EmoteBubble presence={presence} gid={SELF_GESTURE} model={m.model} textures={emotes} />}
     </group>
   );
 }
 
 /** 모델을 따라다니는 이름표 */
-function FollowTag({ model, label, color, self = false }: { model: THREE.Object3D; label: string; color: string; self?: boolean }) {
+function FollowTag({
+  model, label, color, self = false, sub = '',
+}: {
+  model: THREE.Object3D;
+  label: string;
+  color: string;
+  self?: boolean;
+  /** 둘째 줄 (MBTI·일주) */
+  sub?: string;
+}) {
   const g = useRef<THREE.Group>(null);
   useFrame(() => {
     g.current?.position.copy(model.position);
   });
   return (
     <group ref={g}>
-      <NameTag label={label} color={color} self={self} />
+      <NameTag label={label} color={color} self={self} sub={sub} />
     </group>
   );
 }
@@ -804,7 +869,14 @@ function FollowTag({ model, label, color, self = false }: { model: THREE.Object3
 /**
  * 같은 방의 다른 사람. 받은 위치를 remoteDelaySec만큼 늦게 두 위치 사이로 고르게 그린다 (마을과 같다).
  */
-function RemoteAvatar({ presence, id, assets }: { presence: HousePresence; id: string; assets: RoomAssets }) {
+function RemoteAvatar({
+  presence, id, assets, emotes,
+}: {
+  presence: HousePresence;
+  id: string;
+  assets: RoomAssets;
+  emotes: EmoteTextures | null;
+}) {
   const p = presence.player(id);
   const m = useAvatarModel(assets, p?.color ?? 'mint', p?.acc ?? 'none');
   const samples = useRef<{ t: number; x: number; z: number }[]>(p ? [{ t: performance.now() / 1000, x: p.x, z: p.z }] : []);
@@ -836,7 +908,7 @@ function RemoteAvatar({ presence, id, assets }: { presence: HousePresence; id: s
       a.z = buf[0].z;
     }
     a.rot += Math.atan2(Math.sin(s.rot - a.rot), Math.cos(s.rot - a.rot)) * (1 - Math.exp(-dt * TURN_RATE));
-    playClip(m, s.moving || Math.hypot(a.x - bx, a.z - bz) > 0.002 ? 'walk' : 'idle');
+    playClip(m, clipFor(presence, id, s.moving || Math.hypot(a.x - bx, a.z - bz) > 0.002));
     m.mixer.update(dt);
     m.model.position.set(a.x, 0, a.z);
     m.model.rotation.y = a.rot;
@@ -846,18 +918,19 @@ function RemoteAvatar({ presence, id, assets }: { presence: HousePresence; id: s
   return (
     <>
       <primitive object={m.model} />
-      <FollowTag model={m.model} label={p.name} color={m.color} />
+      <FollowTag model={m.model} label={p.name} color={m.color} sub={profileTag(p.mbti, p.ilju)} />
+      <EmoteBubble presence={presence} gid={id} model={m.model} textures={emotes} />
     </>
   );
 }
 
-function RemoteAvatars({ presence, assets }: { presence: HousePresence; assets: RoomAssets }) {
+function RemoteAvatars({ presence, assets, emotes }: { presence: HousePresence; assets: RoomAssets; emotes: EmoteTextures | null }) {
   const snap = useSyncExternalStore(presence.subscribe, presence.getSnapshot, presence.getSnapshot);
   const ids = useMemo(() => presence.others(snap), [presence, snap]);
   return (
     <>
       {ids.map((id) => (
-        <RemoteAvatar key={id} presence={presence} id={id} assets={assets} />
+        <RemoteAvatar key={id} presence={presence} id={id} assets={assets} emotes={emotes} />
       ))}
     </>
   );
@@ -887,6 +960,11 @@ function SceneContent(props: RoomSceneProps) {
   // 같은 방에 들어간다 (화면은 먼저 뜨고, 붙는 순간의 내 자리를 알린다)
   useEffect(() => {
     if (presence) void presence.join(() => ({ ...focus.current }));
+  }, [presence]);
+  // 이모티콘 말풍선 그림 (같은 방 연결이 있을 때만)
+  const [emotes, setEmotes] = useState<EmoteTextures | null>(null);
+  useEffect(() => {
+    if (presence) void loadEmoteTextures().then(setEmotes).catch(() => {});
   }, [presence]);
   const together = useSyncExternalStore(
     presence?.subscribe ?? noopSubscribe,
@@ -938,9 +1016,11 @@ function SceneContent(props: RoomSceneProps) {
         mode={mode}
         presence={presence}
         name={props.selfName}
+        tag={props.selfTag}
         together={together}
+        emotes={emotes}
       />
-      {presence && <RemoteAvatars presence={presence} assets={assets} />}
+      {presence && <RemoteAvatars presence={presence} assets={assets} emotes={emotes} />}
       {mode === 'edit' && <DragController drag={drag} items={itemsRef} onMove={onMoveRef} />}
       <FirstFrame onFrame={props.onReady} />
     </>

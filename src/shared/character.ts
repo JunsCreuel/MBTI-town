@@ -2,7 +2,7 @@
 // 실제 모델로 바꿀 때도 이 이름들만 지키면 코드는 고칠 필요가 없다.
 
 /** 애니메이션 클립 이름 (모두 반복 재생) */
-export const CHARACTER_CLIPS = ['idle', 'walk', 'cheer', 'clap'] as const;
+export const CHARACTER_CLIPS = ['idle', 'walk', 'cheer', 'clap', 'wave', 'bow', 'dance', 'jump', 'think'] as const;
 export type ClipName = (typeof CHARACTER_CLIPS)[number];
 
 /** 이 이름의 재질은 유형 색을 입힌다 (캐릭터 옷, 소품의 색 부분) */

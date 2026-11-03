@@ -27,6 +27,10 @@ export interface TownPass {
    * 실시간 서버의 집 방은 이 값이 있는 토큰만 받는다. 마을 토큰에는 없다.
    */
   house?: string;
+  /** 이름표에 보이는 MBTI 태그 (넣은 사람만) */
+  mbti?: string;
+  /** 이름표에 보이는 사주 일주 한글 (예: 갑자). 생일·다른 기둥은 담지 않는다 */
+  ilju?: string;
 }
 
 const DEV_SECRET = 'scene-dev-town-secret';
@@ -83,5 +87,7 @@ export function verifyTownPass(token: unknown, nowSec = Math.floor(Date.now() / 
     acc: avatar.accessory,
     exp: raw.exp,
     ...(typeof raw.house === 'string' && raw.house ? { house: raw.house.slice(0, 32) } : {}),
+    ...(typeof raw.mbti === 'string' && /^[EI][SN][TF][JP]$/.test(raw.mbti) ? { mbti: raw.mbti } : {}),
+    ...(typeof raw.ilju === 'string' && /^[가-힣]{2}$/.test(raw.ilju) ? { ilju: raw.ilju } : {}),
   };
 }

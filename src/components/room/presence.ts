@@ -5,9 +5,13 @@ import { roomConfig } from '@/config/game';
 import { call } from '@/lib/api';
 import { realtimeUrl, wakeRealtime } from '@/lib/realtime';
 import type { HouseTicket } from '@/server/scene/service';
-import { MSG, type HouseJoinOptions, type MoveMessage, type SnapMessage } from '@/shared/protocol';
+import { townConfig } from '@/config/game';
+import {
+  MSG,
+  type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type HouseJoinOptions, type MoveMessage, type SnapMessage,
+} from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
-import type { PlayerView } from '../village/session';
+import { SELF_GESTURE, now, type Gesture, type PlayerView } from '../village/session';
 
 /**
  * - loading: 입장 토큰을 받는 중
@@ -30,6 +34,8 @@ export interface PresenceSnapshot {
 
 export class HousePresence {
   room: Room | null = null;
+  /** 사람 번호(세션 id, 나는 SELF_GESTURE) → 지금 하는 몸짓 */
+  readonly gestures = new Map<string, Gesture>();
   private snapshot: PresenceSnapshot = { status: 'loading', selfId: '', playerIds: [], pass: null, hidden: [] };
   private readonly listeners = new Set<() => void>();
   private readonly snapListeners = new Set<(s: SnapMessage) => void>();
@@ -89,9 +95,8 @@ export class HousePresence {
       $.onAdd('players', sync);
       $.onRemove('players', sync);
       room.onMessage(MSG.snap, (m: SnapMessage) => this.snapListeners.forEach((fn) => fn(m)));
-      // 몸짓은 아직 방 화면에 없다 (메시지만 받아 둔다)
-      room.onMessage(MSG.action, () => {});
-      room.onMessage(MSG.emote, () => {});
+      room.onMessage(MSG.action, (m: ActionBroadcast) => this.applyAction(m.id, m.kind));
+      room.onMessage(MSG.emote, (m: EmoteBroadcast) => this.applyEmote(m.id, m.kind));
       room.onLeave(() => {
         if (attempt !== this.attempt) return;
         this.room = null;
@@ -122,6 +127,40 @@ export class HousePresence {
     if (!this.connected) return false;
     this.room!.send(MSG.move, msg);
     return true;
+  }
+
+  /** 내 몸짓은 바로 보여 주고, 같은 방에 있으면 보낸다 (다른 사람에게만 전달된다) */
+  sendAction(kind: ActionKind) {
+    this.applyAction(SELF_GESTURE, kind);
+    if (this.connected) this.room!.send(MSG.action, { kind });
+  }
+
+  sendEmote(kind: EmoteKind) {
+    this.applyEmote(SELF_GESTURE, kind);
+    if (this.connected) this.room!.send(MSG.emote, { kind });
+  }
+
+  private gesture(id: string): Gesture {
+    let g = this.gestures.get(id);
+    if (!g) {
+      g = { actionUntil: 0, emoteStart: 0, emoteUntil: 0 };
+      this.gestures.set(id, g);
+    }
+    return g;
+  }
+
+  private applyAction(id: string, kind: ActionKind) {
+    const g = this.gesture(id);
+    g.action = kind;
+    g.actionUntil = now() + townConfig.actionDurationMs / 1000;
+    if (kind === 'clap') this.applyEmote(id, 'clap');
+  }
+
+  private applyEmote(id: string, kind: EmoteKind) {
+    const g = this.gesture(id);
+    g.emote = kind;
+    g.emoteStart = now();
+    g.emoteUntil = g.emoteStart + townConfig.emoteDurationMs / 1000;
   }
 
   onSnap(fn: (s: SnapMessage) => void) {

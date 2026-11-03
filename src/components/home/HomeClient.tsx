@@ -11,7 +11,7 @@ import { recordConfig, roomConfig } from '@/config/game';
 import { tokens } from '@/design/tokens';
 import { call, errorMessage, shrinkImage } from '@/lib/api';
 import type { RoomView } from '@/server/scene/service';
-import { ACCESSORIES, AVATAR_COLORS, type Avatar } from '@/shared/avatar';
+import { ACCESSORIES, AVATAR_COLORS, profileTag, type Avatar } from '@/shared/avatar';
 import { BGM_TRACKS } from '@/shared/bgm';
 import { DISTRICT } from '@/shared/districts';
 import {
@@ -19,6 +19,7 @@ import {
   type FurnitureAction, type PlacedItem, type RoomLayout, type Rot,
 } from '@/shared/room';
 import { BgmPlayer, type BgmHandle } from '../app/BgmPlayer';
+import { GesturePicker } from '../app/GesturePicker';
 import { Guide } from '../app/Guide';
 import { Icon } from '../app/Icon';
 import { Sheet } from '../app/Sheet';
@@ -226,6 +227,7 @@ export function HomeClient() {
             district={district}
             avatar={profile.avatar}
             selfName={profile.displayName}
+            selfTag={profileTag(profile.mbti, profile.saju?.day.ko)}
             presence={presence}
             mode={mode}
             selectedId={selected}
@@ -292,6 +294,9 @@ export function HomeClient() {
           )}
 
           <div className="room-bottom" data-hud="bottom">
+            {presence && (
+              <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} />
+            )}
             <BgmPlayer ref={player} trackKey={bgm} onPlayingChange={setPlaying} />
             <div className="quick-actions">
               <button className="quick" onClick={() => router.push('/archive?new=1')}>

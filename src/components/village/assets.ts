@@ -7,6 +7,7 @@ import { ACCESSORIES } from '@/shared/avatar';
 import { allFloraKeys } from '@/shared/flora';
 import type { TownMap } from '@/shared/townMap';
 import { EMOTES, type EmoteKind } from '@/shared/protocol';
+import { EMOTE_INFO } from '../app/gestures';
 
 /** 집터에 세우는 모델 */
 export const HOUSE_KEY = 'prop.town.house';
@@ -22,14 +23,6 @@ export interface TownAssets {
   props: Record<string, THREE.Object3D>;
   emotes: Record<EmoteKind, THREE.Texture>;
 }
-
-// 이모티콘 말풍선 안에 그릴 UI 아이콘
-const EMOTE_ICON: Record<EmoteKind, { key: string; color: string }> = {
-  clap: { key: 'ui.icon.clap', color: tokens.color.accent },
-  heart: { key: 'ui.icon.heart', color: tokens.scene.heart },
-  question: { key: 'ui.icon.question', color: tokens.color.accent },
-  wow: { key: 'ui.icon.wow', color: tokens.color.accent },
-};
 
 function canvas(w: number, h: number) {
   const c = document.createElement('canvas');
@@ -48,7 +41,7 @@ async function iconImage(key: string, color: string): Promise<HTMLImageElement> 
 }
 
 async function emoteTexture(kind: EmoteKind): Promise<THREE.Texture> {
-  const { key, color } = EMOTE_ICON[kind];
+  const { icon: key, color } = EMOTE_INFO[kind];
   const icon = await iconImage(key, color);
   const S = 128;
   const { c, ctx } = canvas(S, S);
@@ -68,6 +61,19 @@ async function emoteTexture(kind: EmoteKind): Promise<THREE.Texture> {
   return t;
 }
 
+let emoteCache: Promise<Record<EmoteKind, THREE.Texture>> | null = null;
+
+/** 머리 위 이모티콘 말풍선 그림 (마을과 방이 같이 쓴다, 한 번만 만든다) */
+export function loadEmoteTextures(): Promise<Record<EmoteKind, THREE.Texture>> {
+  emoteCache ??= Promise.all(EMOTES.map(async (e) => [e, await emoteTexture(e)] as const)).then(
+    (list) => Object.fromEntries(list) as Record<EmoteKind, THREE.Texture>,
+  );
+  emoteCache.catch(() => {
+    emoteCache = null;
+  });
+  return emoteCache;
+}
+
 export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) => void): Promise<TownAssets> {
   const loader = new GLTFLoader();
   const accessoryKeys = ACCESSORIES.filter((a) => a.key).map((a) => [a.id, a.key!] as const);
@@ -85,52 +91,52 @@ export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) =
       }),
     ),
   );
-  const emotes = await Promise.all(
-    EMOTES.map(async (e) => {
-      const t = await emoteTexture(e);
-      onProgress(++done / (urls.length + EMOTES.length));
-      return [e, t] as const;
-    }),
-  );
+  const emotes = await loadEmoteTextures();
+  onProgress(1);
   return {
     character: models.get(assetUrl('char.base'))!,
     accessories: Object.fromEntries(accessoryKeys.map(([id, key]) => [id, models.get(assetUrl(key))!.scene])),
     props: Object.fromEntries(propKeys.map((k) => [k, models.get(assetUrl(k))!.scene])),
-    emotes: Object.fromEntries(emotes) as Record<EmoteKind, THREE.Texture>,
+    emotes,
   };
 }
 
-const tagCache = new Map<string, { texture: THREE.Texture; aspect: number }>();
+const tagCache = new Map<string, { texture: THREE.Texture; aspect: number; rel: number }>();
 
 /**
- * 이름표: 색 점 + 이름. 내 캐릭터는 강조색 바탕에 "나"를 붙인다.
- * 같은 이름표는 한 번만 만든다.
+ * 이름표: 색 점 + 이름, 둘째 줄에 작게 MBTI·일주(sub). 내 캐릭터는 강조색 바탕에 "나"를 붙인다.
+ * rel = 한 줄짜리 이름표 대비 높이 (두 줄이면 더 높다). 같은 이름표는 한 번만 만든다.
  */
-export function tagTexture(label: string, dotColor: string | null, self = false) {
-  const key = `${label}|${dotColor}|${self}`;
+export function tagTexture(label: string, dotColor: string | null, self = false, sub = '') {
+  const key = `${label}|${dotColor}|${self}|${sub}`;
   const cached = tagCache.get(key);
   if (cached) return cached;
   const scale = 4;
   const font = `700 ${15 * scale}px ${tokens.font.base}`;
+  const subFont = `600 ${11 * scale}px ${tokens.font.base}`;
   const probe = canvas(1, 1).ctx;
   probe.font = font;
   const textW = probe.measureText(label).width;
+  probe.font = subFont;
+  const subW = sub ? probe.measureText(sub).width : 0;
   const dot = dotColor ? 8 * scale : 0;
   const gap = dotColor ? 5 * scale : 0;
   const padX = 11 * scale;
-  const W = Math.ceil(textW + dot + gap + padX * 2);
-  const H = 30 * scale;
+  const W = Math.ceil(Math.max(textW + dot + gap, subW) + padX * 2);
+  const H = (sub ? 44 : 30) * scale;
   const { c, ctx } = canvas(W, H);
   ctx.fillStyle = self ? tokens.color.accent : tokens.scene.tagBg;
   ctx.beginPath();
-  ctx.roundRect(2 * scale, 2 * scale, W - 4 * scale, H - 4 * scale, H / 2);
+  ctx.roundRect(2 * scale, 2 * scale, W - 4 * scale, H - 4 * scale, Math.min(H / 2, 15 * scale));
   ctx.fill();
-  ctx.font = font;
   ctx.textBaseline = 'middle';
+  // 첫 줄 가운데 높이 (한 줄이면 가운데, 두 줄이면 위쪽)
+  const line1 = sub ? 16 * scale : H / 2;
+  const startX = (W - (textW + dot + gap)) / 2;
   if (dotColor) {
     ctx.fillStyle = dotColor;
     ctx.beginPath();
-    ctx.arc(padX + dot / 2, H / 2, dot / 2, 0, Math.PI * 2);
+    ctx.arc(startX + dot / 2, line1, dot / 2, 0, Math.PI * 2);
     ctx.fill();
     if (self) {
       ctx.strokeStyle = tokens.color.accentText;
@@ -138,12 +144,20 @@ export function tagTexture(label: string, dotColor: string | null, self = false)
       ctx.stroke();
     }
   }
+  ctx.font = font;
   ctx.fillStyle = self ? tokens.color.accentText : tokens.scene.tagText;
-  ctx.fillText(label, padX + dot + gap, H / 2 + scale);
+  ctx.fillText(label, startX + dot + gap, line1 + scale);
+  if (sub) {
+    ctx.font = subFont;
+    ctx.globalAlpha = 0.78;
+    ctx.textAlign = 'center';
+    ctx.fillText(sub, W / 2, 31 * scale);
+    ctx.globalAlpha = 1;
+  }
   const texture = new THREE.CanvasTexture(c);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
-  const out = { texture, aspect: W / H };
+  const out = { texture, aspect: W / H, rel: H / (30 * scale) };
   tagCache.set(key, out);
   return out;
 }

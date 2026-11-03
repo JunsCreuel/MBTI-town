@@ -19,6 +19,11 @@ export interface Avatar {
 
 export const DEFAULT_AVATAR: Avatar = { color: 'mint', accessory: 'none' };
 
+/** 이름표 둘째 줄: MBTI 태그와 사주 일주 (예: "ENFP · 갑자일주"). 둘 다 없으면 '' */
+export function profileTag(mbti?: string | null, ilju?: string | null): string {
+  return [mbti || '', ilju ? `${ilju}일주` : ''].filter(Boolean).join(' · ');
+}
+
 export function cleanAvatar(v: unknown): Avatar {
   const a = (v ?? {}) as Partial<Record<keyof Avatar, unknown>>;
   return {

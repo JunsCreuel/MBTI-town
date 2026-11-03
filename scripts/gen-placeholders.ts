@@ -305,6 +305,12 @@ const ICONS: Record<string, string> = {
   question:
     '<path d="M8.5 9a3.5 3.5 0 1 1 5 3.2c-1 .5-1.5 1.2-1.5 2.3v.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="19" r="1.4"/>',
   wow: '<path d="M12 4v10.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="19.2" r="1.6"/>',
+  // 몸짓 (안녕·꾸벅·춤·폴짝·갸웃)
+  wave: `<path d="M8.5 13.5V7a1.4 1.4 0 0 1 2.8 0v4.5M11.3 11V5a1.4 1.4 0 0 1 2.8 0v6M14.1 11V6.5a1.4 1.4 0 0 1 2.8 0v7c0 4-2.6 6.5-6.2 6.5-2.8 0-4.4-1.6-5.2-3.8L4.6 12a1.3 1.3 0 0 1 2.3-1.1l1.6 2.6" ${S}/><path d="M19 3.8c1 .8 1.6 1.9 1.7 3.2M3.6 6.4c.3-1.2.9-2.1 1.9-2.8" ${S}/>`,
+  bow: `<circle cx="16" cy="6.5" r="2.3" ${S}/><path d="M14.2 9 9 11.2l.6 4.6M9.6 15.8 8 21M9.6 15.8l3.6 5.2M9 11.2 6.2 14.6" ${S}/>`,
+  dance: `<circle cx="11" cy="4.6" r="2" ${S}/><path d="M11 7v6l-3 7M11 13l3.4 6.8M11 9.2l5-3.4M11 9.2 6.2 11" ${S}/><path d="M18.5 12.5v5" ${S}/><circle cx="17.3" cy="17.8" r="1.3"/>`,
+  jump: `<path d="M12 16V4.5M7.5 9l4.5-4.5L16.5 9M5 20.5h14" ${S}/>`,
+  think: `<path d="M4.5 10.5c0-3 2.9-5 6.5-5s6.5 2 6.5 5-2.9 5-6.5 5c-1 0-1.9-.1-2.7-.4L5 16.5l.9-2.7a4.3 4.3 0 0 1-1.4-3.3Z" ${S}/><circle cx="18.6" cy="17.6" r="1.4" ${S}/><circle cx="20.8" cy="21" r=".9"/>`,
   home: `<path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1h-4.5v-5h-5v5H5a1 1 0 0 1-1-1Z" ${S}/>`,
   map: `<path d="M3.5 6.2 9 4l6 2.2 5.5-2.2v13.8L15 20l-6-2.2-5.5 2.2Z" ${S}/><path d="M9 4v13.8M15 6.2V20" ${S}/>`,
   archive: `<path d="M5 4.5h10.5A2.5 2.5 0 0 1 18 7v13H7.5A2.5 2.5 0 0 1 5 17.5Z" ${S}/><path d="M5 17.5A2.5 2.5 0 0 1 7.5 15H18M9 8.5h5" ${S}/>`,

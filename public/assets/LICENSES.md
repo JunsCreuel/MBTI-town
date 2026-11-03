@@ -159,3 +159,8 @@ AI로 생성한 이미지·모델은 출처 칸에 사용한 도구를 적는다
 | props/nature/nature_corn.glb | Kenney Nature Kit 2.1 (www.kenney.nl, https://opengameart.org/content/nature-kit), 색·크기 조정 | CC0 1.0 | 2026-11-03 |
 | props/nature/nature_pot.glb | Kenney Nature Kit 2.1 (www.kenney.nl, https://opengameart.org/content/nature-kit), 색·크기 조정 | CC0 1.0 | 2026-11-03 |
 | props/nature/nature_sign.glb | Kenney Nature Kit 2.1 (www.kenney.nl, https://opengameart.org/content/nature-kit), 색·크기 조정 | CC0 1.0 | 2026-11-03 |
+| ui/ui_icon_wave_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| ui/ui_icon_bow_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| ui/ui_icon_dance_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| ui/ui_icon_jump_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| ui/ui_icon_think_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |

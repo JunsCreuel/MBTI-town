@@ -2755,6 +2755,47 @@ a:focus-visible {
   background: var(--color-surface);
   box-shadow: 0 4px 18px var(--color-shadow);
 }
+/* 몸짓 고르기: 아래 막대 위로 판이 열린다 */
+.gesture {
+  position: relative;
+}
+.gesture--button {
+  justify-self: end;
+}
+.gesture-panel {
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  width: min(360px, calc(100vw - 24px));
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 8px 28px var(--color-shadow);
+  animation: fade-in 0.15s ease;
+}
+.gesture--button .gesture-panel {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.gesture-panel__title {
+  margin: var(--space-1) var(--space-1) 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-textSub);
+}
+.gesture-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+}
+.gesture-grid .action-btn {
+  min-width: 0;
+}
 .actionbar__sep {
   width: 1px;
   margin: var(--space-2) var(--space-1);

@@ -26,7 +26,7 @@ export const townConfig = {
   /** 화면이 이 초당 프레임보다 느리면 해상도를 한 단계씩 낮춘다 (휴대폰 끊김 줄이기) */
   minFps: 45,
   /** 응원·박수 동작 길이 (ms) */
-  actionDurationMs: 1600,
+  actionDurationMs: 2000,
   /** 동작·이모티콘 재사용 대기 (ms) */
   emoteCooldownMs: 1200,
   /** 머리 위 이모티콘 표시 시간 (ms) */

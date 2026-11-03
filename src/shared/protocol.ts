@@ -3,10 +3,12 @@
 import { townConfig } from '../config/game';
 import { isDistrict, type District } from './districts';
 
-export const ACTIONS = ['cheer', 'clap'] as const;
+/** 몸짓 (캐릭터 동작). 이름은 캐릭터 애니메이션 클립과 같다 (shared/character.ts) */
+export const ACTIONS = ['cheer', 'clap', 'wave', 'bow', 'dance', 'jump', 'think'] as const;
 export type ActionKind = (typeof ACTIONS)[number];
 
-export const EMOTES = ['clap', 'heart', 'question', 'wow'] as const;
+/** 머리 위 이모티콘 (clap은 박수 동작에 같이 뜬다) */
+export const EMOTES = ['clap', 'heart', 'question', 'wow', 'joy', 'sad', 'flutter', 'tired', 'sparkle', 'music'] as const;
 export type EmoteKind = (typeof EMOTES)[number];
 
 /**

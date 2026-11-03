@@ -7,7 +7,7 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { townConfig } from '@/config/game';
 import { shiftLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
-import type { AccessoryId, AvatarColor } from '@/shared/avatar';
+import { profileTag, type AccessoryId, type AvatarColor } from '@/shared/avatar';
 import { CHARACTER_CLIPS, CHARACTER_HEIGHT, HEAD_SOCKET, TINT_MATERIAL, type ClipName } from '@/shared/character';
 import { lerpAngle, moveWithCollision, yawFromVector } from '@/shared/movement';
 import { findPath, type Point } from '@/shared/pathfinding';
@@ -36,6 +36,9 @@ interface Look {
   name: string;
   color: AvatarColor;
   acc: AccessoryId;
+  /** 이름표 둘째 줄 (MBTI 태그·사주 일주) */
+  mbti?: string;
+  ilju?: string;
 }
 
 /** 캐릭터 색을 입힐 재질만 복제해서 색을 바꾼다. 나머지 재질은 모든 캐릭터가 같이 쓴다. */
@@ -76,7 +79,8 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
     return { model, mixer, actions };
   }, [assets, color, look.acc]);
 
-  const tag = useMemo(() => tagTexture(self ? `나 · ${look.name}` : look.name, color, self), [look.name, color, self]);
+  const sub = profileTag(look.mbti, look.ilju);
+  const tag = useMemo(() => tagTexture(self ? `나 · ${look.name}` : look.name, color, self, sub), [look.name, color, self, sub]);
   const group = useRef<THREE.Group>(null);
   const emote = useRef<THREE.Sprite>(null);
   const playing = useRef<ClipName>('idle');
@@ -113,7 +117,7 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
       // 톡 튀어나왔다가 살짝 떠 있는 느낌
       const pop = Math.min(1, t / 0.15);
       em.scale.setScalar(EMOTE_SIZE * (0.6 + 0.4 * pop));
-      em.position.y = CHARACTER_HEIGHT + TAG_HEIGHT + 0.42 + Math.sin(t * 5) * 0.03;
+      em.position.y = CHARACTER_HEIGHT + TAG_HEIGHT + 0.3 * (tag.rel - 1) + 0.42 + Math.sin(t * 5) * 0.03;
     } else {
       em.visible = false;
     }
@@ -122,7 +126,7 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
   return (
     <group ref={group}>
       <primitive object={model} />
-      <sprite position-y={CHARACTER_HEIGHT + TAG_HEIGHT} scale={[0.3 * tag.aspect, 0.3, 1]} renderOrder={1000}>
+      <sprite position-y={CHARACTER_HEIGHT + TAG_HEIGHT + 0.15 * (tag.rel - 1)} scale={[0.3 * tag.rel * tag.aspect, 0.3 * tag.rel, 1]} renderOrder={1000}>
         <spriteMaterial map={tag.texture} depthTest={false} depthWrite={false} transparent />
       </sprite>
       <sprite ref={emote} visible={false} renderOrder={1001}>

@@ -247,16 +247,37 @@ describe('집 안 (방)', () => {
   it('같은 집 토큰을 가진 주인과 손님이 같은 방에서 서로 보인다', async () => {
     const owner = await enter(pass({ pid: ownerPid, name: '주인', house: ownerPid }), ownerPid);
     rooms.push(owner);
-    const friend = await enter(pass({ name: '친구', color: 'peach', house: ownerPid }), ownerPid, { x: 2.5, z: 4.5 });
+    const friend = await enter(pass({ name: '친구', color: 'peach', house: ownerPid, mbti: 'ENFP', ilju: '갑자' }), ownerPid, { x: 2.5, z: 4.5 });
     rooms.push(friend);
     expect(friend.roomId).toBe(owner.roomId);
     await until(() => owner.state.players.size === 2 && friend.state.players.size === 2);
     const seen = owner.state.players.get(friend.sessionId);
-    expect(seen).toMatchObject({ name: '친구', color: 'peach' });
+    expect(seen).toMatchObject({ name: '친구', color: 'peach', mbti: 'ENFP', ilju: '갑자' });
     expect(near(seen, { x: 2.5, z: 4.5 }, 0.01)).toBe(true);
     // 걸으면 주인 화면에도 보인다
     friend.send(MSG.move, { x: 2.8, z: 4.5, rot: 1, moving: true });
     await until(() => Math.abs(owner.state.players.get(friend.sessionId).x - 2.8) < 0.01);
+  });
+
+  it('방에서도 몸짓·이모티콘이 다른 사람에게 간다 (새 몸짓 포함, 모르는 것은 무시)', async () => {
+    const house = townPid('user-house-gesture');
+    const a = await enter(pass({ house }), house);
+    rooms.push(a);
+    const b = await enter(pass({ house }), house);
+    rooms.push(b);
+    const got: { type: string; kind: string; id: string }[] = [];
+    a.onMessage(MSG.action, (m: { kind: string; id: string }) => got.push({ type: 'action', ...m }));
+    a.onMessage(MSG.emote, (m: { kind: string; id: string }) => got.push({ type: 'emote', ...m }));
+    b.send(MSG.action, { kind: 'dance' });
+    await until(() => got.length === 1);
+    await new Promise((r) => setTimeout(r, 1300));
+    b.send(MSG.emote, { kind: 'moonwalk' });
+    b.send(MSG.emote, { kind: 'joy' });
+    await until(() => got.length === 2);
+    expect(got).toEqual([
+      { type: 'action', kind: 'dance', id: b.sessionId },
+      { type: 'emote', kind: 'joy', id: b.sessionId },
+    ]);
   });
 
   it('다른 집 토큰이나 마을 토큰으로는 들어가지 못한다', async () => {

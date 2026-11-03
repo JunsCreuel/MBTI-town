@@ -22,6 +22,9 @@ export interface PlayerView {
   district: District | '';
   color: AvatarColor;
   acc: AccessoryId;
+  /** 이름표 둘째 줄 (없으면 '') */
+  mbti: string;
+  ilju: string;
   x: number;
   z: number;
   /** 바라보는 방향 (라디안) */

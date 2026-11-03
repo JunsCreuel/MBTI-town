@@ -8,11 +8,12 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { tokens } from '@/design/tokens';
 import { ApiError, call, errorMessage } from '@/lib/api';
 import type { RoomView } from '@/server/scene/service';
-import { DEFAULT_AVATAR, type Avatar } from '@/shared/avatar';
+import { DEFAULT_AVATAR, profileTag, type Avatar } from '@/shared/avatar';
 import { DISTRICT } from '@/shared/districts';
 import type { FurnitureAction } from '@/shared/room';
 import { RecordCard } from '../archive/RecordCard';
 import { BgmPlayer, type BgmHandle } from '../app/BgmPlayer';
+import { GesturePicker } from '../app/GesturePicker';
 import { Guide } from '../app/Guide';
 import { Icon } from '../app/Icon';
 import { Sheet } from '../app/Sheet';
@@ -136,6 +137,7 @@ export function VisitClient({ handle }: { handle: string }) {
             district={district}
             avatar={myAvatar}
             selfName={pass?.name}
+            selfTag={profileTag(pass?.mbti, pass?.ilju)}
             presence={presence}
             mode="view"
             onAction={onAction}
@@ -192,6 +194,9 @@ export function VisitClient({ handle }: { handle: string }) {
       </header>
 
       <div className="room-bottom" data-hud="bottom">
+        {presence && (
+          <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} />
+        )}
         {view.room && <BgmPlayer ref={player} trackKey={view.room.bgm} onPlayingChange={setPlaying} />}
         <div className="quick-actions">
           <button className="quick" onClick={() => setSheet('guestbook')} disabled={!view.room}>

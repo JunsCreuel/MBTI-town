@@ -266,6 +266,14 @@ describe('입장 토큰', () => {
     expect(verifyTownPass(odd, 1_000)).toMatchObject({ district: '', hood: 1, lot: -1, color: 'mint', acc: 'none' });
   });
 
+  it('이름표 둘째 줄(MBTI·일주)은 올바른 값만 받는다', () => {
+    const tagged = verifyTownPass(signTownPass({ ...pass, mbti: 'ENFP', ilju: '갑자' }), 1_000);
+    expect(tagged).toMatchObject({ mbti: 'ENFP', ilju: '갑자' });
+    const odd = verifyTownPass(signTownPass({ ...pass, mbti: 'ABCD', ilju: '<script>' }), 1_000);
+    expect(odd?.mbti).toBeUndefined();
+    expect(odd?.ilju).toBeUndefined();
+  });
+
   it('사람 번호는 계정마다 같고, 계정 id를 드러내지 않는다', () => {
     expect(townPid('user-1')).toBe(pass.pid);
     expect(townPid('user-2')).not.toBe(pass.pid);

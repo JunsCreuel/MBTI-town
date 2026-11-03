@@ -10,10 +10,11 @@ import { withMaxLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { Guide } from '@/components/app/Guide';
 import { Icon } from '@/components/app/Icon';
+import { GesturePicker } from '@/components/app/GesturePicker';
 import { TabBar } from '@/components/app/TabBar';
 import type { HouseView, TownView } from '@/server/scene/service';
 import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
-import { parseRoomPlace, type ActionKind, type EmoteKind, type RoomPlace, type TownPlace } from '@/shared/protocol';
+import { parseRoomPlace, type RoomPlace, type TownPlace } from '@/shared/protocol';
 import { districtAt, lotDoor, parseTownMap, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
 import { lotKey, type TownCamera, type TownContextValue, type TownInput } from './context';
 import { currentView, cycleView, initialCamera, isTurned, resetCamera, rotateCamera, type CameraView } from './camera';
@@ -27,16 +28,6 @@ import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
 // 본섬(중앙광장 + 다섯 지역 1동)과 새로 열린 동네(2동·3동…)는 큰길 끝 "동네 길" 아치로 오간다.
 // three.js 장면은 브라우저에서만 불러온다 (첫 화면 코드에서 분리)
 const VillageScene = dynamic(() => import('./VillageScene'), { ssr: false });
-
-const ACTION_BUTTONS: { kind: ActionKind; label: string; icon: string }[] = [
-  { kind: 'cheer', label: '응원', icon: 'cheer' },
-  { kind: 'clap', label: '박수', icon: 'clap' },
-];
-const EMOTE_BUTTONS: { kind: EmoteKind; label: string; icon: string }[] = [
-  { kind: 'heart', label: '하트', icon: 'heart' },
-  { kind: 'question', label: '궁금', icon: 'question' },
-  { kind: 'wow', label: '놀람', icon: 'wow' },
-];
 
 /** 중앙광장으로 치는 반지름 (광장 둘레 순환로까지) */
 const PLAZA_RADIUS = 13.2;
@@ -86,7 +77,6 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const [progress, setProgress] = useState(0);
   const [loadError, setLoadError] = useState(false);
   const [rendered, setRendered] = useState(false);
-  const [cooling, setCooling] = useState(false);
   const [hint, setHint] = useState(true);
   const [showWelcome, setShowWelcome] = useState(welcome);
   const [town, setTown] = useState<TownView>({ houses: [], hidden: [] });
@@ -215,9 +205,14 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const passName = snap.pass?.name;
   const passColor = snap.pass?.color;
   const passAcc = snap.pass?.acc;
+  const passMbti = snap.pass?.mbti;
+  const passIlju = snap.pass?.ilju;
   const look = useMemo(
-    () => (passName !== undefined && passColor && passAcc ? { name: passName, color: passColor, acc: passAcc } : null),
-    [passName, passColor, passAcc],
+    () =>
+      passName !== undefined && passColor && passAcc
+        ? { name: passName, color: passColor, acc: passAcc, mbti: passMbti, ilju: passIlju }
+        : null,
+    [passName, passColor, passAcc, passMbti, passIlju],
   );
   const value = useMemo<TownContextValue | null>(
     () =>
@@ -315,13 +310,6 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     return () => window.removeEventListener('keydown', onKey);
   }, [view, openMap]);
 
-  function gesture(send: () => void) {
-    if (cooling) return;
-    send();
-    setHint(false);
-    setCooling(true);
-    setTimeout(() => setCooling(false), townConfig.emoteCooldownMs);
-  }
 
   const failed = loadError || snap.status === 'error';
   const label = (key: string) => (el: HTMLElement | null) => {
@@ -540,21 +528,16 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
               </div>
             )}
 
-            <div className="actionbar" role="toolbar" aria-label="몸짓">
-              {ACTION_BUTTONS.map((b) => (
-                <button key={b.kind} className="action-btn" disabled={cooling} onClick={() => gesture(() => session.sendAction(b.kind))}>
-                  <Icon name={b.icon} />
-                  {b.label}
-                </button>
-              ))}
-              <span className="actionbar__sep" aria-hidden />
-              {EMOTE_BUTTONS.map((b) => (
-                <button key={b.kind} className="action-btn" disabled={cooling} onClick={() => gesture(() => session.sendEmote(b.kind))}>
-                  <Icon name={b.icon} />
-                  {b.label}
-                </button>
-              ))}
-            </div>
+            <GesturePicker
+              onAction={(k) => {
+                session.sendAction(k);
+                setHint(false);
+              }}
+              onEmote={(k) => {
+                session.sendEmote(k);
+                setHint(false);
+              }}
+            />
           </div>
         </div>
       )}

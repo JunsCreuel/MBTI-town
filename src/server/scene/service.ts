@@ -713,6 +713,9 @@ export class SceneService {
         color: avatar.color,
         acc: avatar.accessory,
         exp,
+        // 이름표 둘째 줄: MBTI 태그와 일주만 (생일·다른 기둥은 담지 않는다)
+        ...(p.mbti ? { mbti: p.mbti } : {}),
+        ...(p.saju?.day?.ko ? { ilju: p.saju.day.ko } : {}),
       };
     } else {
       pass = {
