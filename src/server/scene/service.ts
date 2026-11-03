@@ -17,6 +17,11 @@ import { guestPid, signTownPass, townPid, type TownPass } from '@/shared/townTok
 import { SajuError, cleanBirthInput, computeSaju, dayPillarOn, type BirthInput, type SajuReading } from '../saju';
 import { localDate } from '@/shared/debate';
 import { dailyFortune, type DailyFortune } from '@/shared/fortune';
+import {
+  FORTUNE_FRUIT, FRUITS, fishDef, fortuneFor, parseTreeSpot, rollFish, treeSpotId,
+  type FishDef, type FortuneFruit,
+} from '@/shared/play';
+import { playConfig } from '@/config/game';
 import type { ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
 
 export type SceneErrorCode =
@@ -99,6 +104,38 @@ export interface TownTicket {
   token: string;
   pass: TownPass;
   guest: boolean;
+}
+
+export interface PickResult {
+  /** 오늘 이미 딴 나무 */
+  already: boolean;
+  fruit: { id: string; name: string; color: string };
+  /** 이번에 바구니에 들어간 수 */
+  added: number;
+  /** 지금까지 모은 수 */
+  count: number;
+  /** 운세 나무면 오늘의 운세 열매 */
+  fortune: FortuneFruit | null;
+}
+
+export interface FishResult {
+  fish: FishDef;
+  /** cm (장화·병은 0) */
+  size: number;
+  count: number;
+  /** 오늘 남은 횟수 */
+  left: number;
+}
+
+export interface PlayState {
+  day: string;
+  /** 오늘 딴 나무 자리 ("fruit.wood.0", "fortune") */
+  pickedTrees: string[];
+  fishLeft: number;
+  /** 열매 id → 개수 */
+  fruits: Record<string, number>;
+  /** 물고기 id → 마리 수 */
+  fish: Record<string, number>;
 }
 
 /** 집 안 입장 토큰: 그 방을 볼 수 있는 사람에게만 준다 */
@@ -751,6 +788,63 @@ export class SceneService {
     if (!p.saju) throw new SceneError('not_found', '사주가 없어요. MY에서 생일을 넣어 주세요.');
     const date = localDate(this.now());
     return dailyFortune(p.saju.dayMaster, dayPillarOn(date), date);
+  }
+
+  // ───────────────────────── 놀거리: 열매·운세 열매·낚시 ─────────────────────────
+
+  /**
+   * 나무에서 열매 따기. 나무마다 하루 한 번 (열매 나무는 playConfig.fruitsPerTree개, 운세 나무는 운세 열매 하나).
+   * 이미 땄으면 already: true (운세 나무는 그날 운세를 다시 보여 준다).
+   */
+  async pickTree(viewer: Viewer | null, spotRaw: unknown): Promise<PickResult> {
+    const p = await this.requireOnboarded(viewer);
+    const spot = parseTreeSpot(spotRaw);
+    if (!spot) throw new SceneError('bad_request', '나무를 찾지 못했어요.');
+    const day = localDate(this.now());
+    const fortune = spot.kind === 'fortune' ? fortuneFor(`${p.id}:${day}`) : null;
+    const fruit = spot.kind === 'fortune' ? FORTUNE_FRUIT : FRUITS[spot.district];
+    const n = spot.kind === 'fortune' ? 1 : playConfig.fruitsPerTree;
+    const fresh = await this.store.takeDailySpot(p.id, day, `tree:${treeSpotId(spot)}`, fruit.id);
+    const count = fresh ? await this.store.addToCollection(p.id, 'fruit', fruit.id, n) : await this.countOf(p.id, 'fruit', fruit.id);
+    return { already: !fresh, fruit: { id: fruit.id, name: fruit.name, color: fruit.color }, added: fresh ? n : 0, count, fortune };
+  }
+
+  /** 낚시 한 번. 하루 playConfig.fishPerDay번 */
+  async castLine(viewer: Viewer | null): Promise<FishResult> {
+    const p = await this.requireOnboarded(viewer);
+    const day = localDate(this.now());
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const used = (await this.store.dailySpots(p.id, day, 'fish:')).length;
+      if (used >= playConfig.fishPerDay) throw new SceneError('conflict', `오늘 낚시는 ${playConfig.fishPerDay}번까지예요. 내일 또 와요!`);
+      const { fish, size } = rollFish(Math.random(), Math.random());
+      // 같은 번호를 동시에 쓰면 다시 센다
+      if (!(await this.store.takeDailySpot(p.id, day, `fish:${used + 1}`, fish.id))) continue;
+      const count = await this.store.addToCollection(p.id, 'fish', fish.id, 1);
+      return { fish, size, count, left: playConfig.fishPerDay - used - 1 };
+    }
+    throw new SceneError('conflict', '잠깐 뒤에 다시 던져 주세요.');
+  }
+
+  /** 오늘 딴 나무, 남은 낚시 횟수, 모은 것 (도감) */
+  async playState(viewer: Viewer | null): Promise<PlayState> {
+    const p = await this.requireOnboarded(viewer);
+    const day = localDate(this.now());
+    const [trees, fish, items] = await Promise.all([
+      this.store.dailySpots(p.id, day, 'tree:'),
+      this.store.dailySpots(p.id, day, 'fish:'),
+      this.store.collection(p.id),
+    ]);
+    return {
+      day,
+      pickedTrees: trees.map((t) => t.spot.slice('tree:'.length)),
+      fishLeft: Math.max(0, playConfig.fishPerDay - fish.length),
+      fruits: Object.fromEntries(items.filter((i) => i.kind === 'fruit').map((i) => [i.item, i.count])),
+      fish: Object.fromEntries(items.filter((i) => i.kind === 'fish' && fishDef(i.item)).map((i) => [i.item, i.count])),
+    };
+  }
+
+  private async countOf(userId: string, kind: 'fruit' | 'fish', item: string): Promise<number> {
+    return (await this.store.collection(userId)).find((c) => c.kind === kind && c.item === item)?.count ?? 0;
   }
 
   // ───────────────────────── 내보내기·삭제 ─────────────────────────

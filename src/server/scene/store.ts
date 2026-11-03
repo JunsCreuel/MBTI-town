@@ -445,6 +445,45 @@ export class SceneStore {
 
   // ───────── 방문 ─────────
 
+  // ───────── 놀거리 (열매·낚시) ─────────
+
+  /** 하루 한 번짜리 자리를 쓴다. 이미 썼으면 false (같은 날 같은 자리) */
+  async takeDailySpot(userId: string, day: string, spot: string, item: string | null): Promise<boolean> {
+    const rows = await this.sql.query(
+      `insert into public.daily_picks (user_id, day, spot, item) values ($1, $2, $3, $4)
+       on conflict do nothing returning spot`,
+      [userId, day, spot, item],
+    );
+    return rows.length > 0;
+  }
+
+  /** 오늘 쓴 자리 (prefix로 시작하는 것만) */
+  async dailySpots(userId: string, day: string, prefix = ''): Promise<{ spot: string; item: string | null }[]> {
+    return this.sql.query<{ spot: string; item: string | null }>(
+      `select spot, item from public.daily_picks where user_id = $1 and day = $2 and spot like $3 order by created_at`,
+      [userId, day, `${prefix}%`],
+    );
+  }
+
+  /** 모은 것에 더하고 지금 개수를 돌려준다 */
+  async addToCollection(userId: string, kind: 'fruit' | 'fish', item: string, n: number): Promise<number> {
+    const [r] = await this.sql.query<{ count: number }>(
+      `insert into public.collections (user_id, kind, item, count) values ($1, $2, $3, $4)
+       on conflict (user_id, kind, item) do update set count = public.collections.count + excluded.count
+       returning count`,
+      [userId, kind, item, n],
+    );
+    return Number(r.count);
+  }
+
+  async collection(userId: string): Promise<{ kind: 'fruit' | 'fish'; item: string; count: number }[]> {
+    const rows = await this.sql.query<{ kind: 'fruit' | 'fish'; item: string; count: number }>(
+      `select kind, item, count from public.collections where user_id = $1 order by kind, first_at`,
+      [userId],
+    );
+    return rows.map((r) => ({ ...r, count: Number(r.count) }));
+  }
+
   async recordVisit(ownerId: string, visitorId: string, at: Date, day: string): Promise<void> {
     await this.sql.query(
       `insert into public.visits (owner_id, visitor_id, visited_on, last_at) values ($1, $2, $3, $4)

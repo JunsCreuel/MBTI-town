@@ -6,7 +6,7 @@ import { loadTownMapForTest } from '../src/shared/testMap';
 import { gateSpawnName, lotDoor, spawnName, type TownMap } from '../src/shared/townMap';
 import { guestPid, signTownPass, townPid, type TownPass } from '../src/shared/townToken';
 import { createRealtimeServer } from './app';
-import { getHoodMap } from './assets';
+import { getHoodMap, getSpotMap } from './assets';
 
 const map = loadTownMapForTest();
 const near = (p: { x: number; z: number }, q: { x: number; z: number } | undefined, r: number) =>
@@ -211,6 +211,21 @@ describe('새 동네 (2동·3동…)', () => {
       await r.leave();
     }
     expect(ok.roomId).toBe(r1.roomId);
+  });
+
+  it('놀이터(낚시터·클럽)는 따로 방이 열리고 입구에서 시작한다', async () => {
+    for (const spot of ['fishing', 'club'] as const) {
+      const m = getSpotMap(spot);
+      const r = await join(pass({ name: `${spot}꾼` }), 'home', spot);
+      await until(() => !!r.state.players?.get(r.sessionId));
+      expect(inSpawn(r.state.players.get(r.sessionId), 'spawn', m)).toBe(true);
+      expect(r.roomId).not.toBe(rooms[0].roomId);
+      // 같은 놀이터에 온 사람은 같은 방
+      const r2 = await join(pass({ name: `${spot}친구` }), 'home', spot);
+      expect(r2.roomId).toBe(r.roomId);
+      await r2.leave();
+      await r.leave();
+    }
   });
 
   it('없는 곳으로는 들어가지 못한다', async () => {

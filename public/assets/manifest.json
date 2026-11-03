@@ -547,5 +547,47 @@
   },
   "pet.pig": {
     "file": "pets/pet_pig_ph.glb"
+  },
+  "prop.fruit.wood": {
+    "file": "props/prop_fruit_wood_ph.glb"
+  },
+  "prop.fruit.fire": {
+    "file": "props/prop_fruit_fire_ph.glb"
+  },
+  "prop.fruit.earth": {
+    "file": "props/prop_fruit_earth_ph.glb"
+  },
+  "prop.fruit.metal": {
+    "file": "props/prop_fruit_metal_ph.glb"
+  },
+  "prop.fruit.water": {
+    "file": "props/prop_fruit_water_ph.glb"
+  },
+  "prop.plaza.fortune_tree": {
+    "file": "props/prop_plaza_fortune_tree_ph.glb"
+  },
+  "prop.plaza.beacon_fishing": {
+    "file": "props/prop_plaza_beacon_fishing_ph.glb"
+  },
+  "prop.plaza.beacon_club": {
+    "file": "props/prop_plaza_beacon_club_ph.glb"
+  },
+  "prop.club.booth": {
+    "file": "props/prop_club_booth_ph.glb"
+  },
+  "prop.club.speaker": {
+    "file": "props/prop_club_speaker_ph.glb"
+  },
+  "map.fishing": {
+    "file": "maps/fishing.json"
+  },
+  "map.club": {
+    "file": "maps/club.json"
+  },
+  "ui.icon.basket": {
+    "file": "ui/ui_icon_basket_ph.svg"
+  },
+  "ui.icon.fishing": {
+    "file": "ui/ui_icon_fishing_ph.svg"
   }
 }

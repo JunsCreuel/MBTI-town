@@ -260,6 +260,19 @@ export function groundHeightAt(map: TownMap, x: number, z: number): number {
   return wsum ? sum / wsum : 0;
 }
 
+/** 물가인지: 반지름 r칸 안에 연못(물 타일)이나 바다(빈 칸·맵 밖)가 있으면 낚시할 수 있다 */
+export function nearWater(map: TownMap, x: number, z: number, r = 1.7): boolean {
+  for (let tz = Math.floor(z - r); tz <= Math.floor(z + r); tz++) {
+    for (let tx = Math.floor(x - r); tx <= Math.floor(x + r); tx++) {
+      if (Math.hypot(tx + 0.5 - x, tz + 0.5 - z) > r) continue;
+      if (tx < 0 || tz < 0 || tx >= map.width || tz >= map.height) return true;
+      const g = map.ground[tz * map.width + tx];
+      if (!g || map.terrain[g] === 'water') return true;
+    }
+  }
+  return false;
+}
+
 /** 월드 좌표의 발 위치가 막힌 칸인지 */
 export function isBlockedAt(map: TownMap, x: number, z: number): boolean {
   return isBlockedTile(map, Math.floor(x), Math.floor(z));

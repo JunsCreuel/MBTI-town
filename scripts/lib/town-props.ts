@@ -180,6 +180,7 @@ export const PROP_MATERIALS: Record<string, MaterialSpec> = {
   cloth: { roughness: 0.9, doubleSided: true },
   glow: { roughness: 0.6, emissive: [1, 0.86, 0.55] },
   outfit: { roughness: 0.75, doubleSided: true },
+  foliage: { roughness: 0.9 },
 };
 
 // ───────────────────────── 빈 집터와 지역 명소 ─────────────────────────

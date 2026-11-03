@@ -13,7 +13,7 @@
 // 동네 틀 맵(buildHoodMap): 지역 1동(본섬) 집터가 다 차면 열리는 2동·3동…이 함께 쓰는 작은 섬.
 //   지역은 정해 두지 않는다. 화면과 서버가 그 동네의 지역을 입힌다 (townMap.ts withDistrict).
 //   lots 이름은 "hood.번호", districts 레이어는 땅 전체가 1, 지역 색 소품은 district 속성(아무 지역)만 표시해 둔다.
-import { townConfig } from '../../src/config/game';
+import { playConfig, townConfig } from '../../src/config/game';
 import { DISTRICTS, type District } from '../../src/shared/districts';
 import { BEACH_TREES, FLORA, PLAZA_TREES, TEMPLATE_BUSH, TEMPLATE_ROCK, TEMPLATE_TREE, pickWeighted } from '../../src/shared/flora';
 
@@ -391,6 +391,49 @@ export function buildTownMap(tilesetFile: string) {
   const inSpawn = (x: number, y: number) => spawnSpots.some((p) => Math.abs(p.x - x) < 2.6 && Math.abs(p.y - y) < 2.6);
   const onPathTile = (x: number, y: number) => get(ground, Math.floor(x), Math.floor(y)) === gid('path');
 
+  // 놀거리: 지역 입구의 열매 나무, 광장의 운세 나무와 비콘(낚시터·클럽).
+  // 원하는 자리 근처에서 길·집터·스폰과 겹치지 않는 가장 가까운 빈 칸을 고른다.
+  const freeSpot = (r: number, a: number, clear: number, size = 1) => {
+    const want = at(r, a);
+    for (let ring = 0; ring <= 12; ring++) {
+      for (let k = 0; k < Math.max(1, ring * 6); k++) {
+        const t = (k / Math.max(1, ring * 6)) * Math.PI * 2;
+        const x = snap(want.x + Math.cos(t) * ring * 0.5);
+        const y = snap(want.y + Math.sin(t) * ring * 0.5);
+        const tiles = size > 1 ? square(Math.floor(x - size / 2 + 0.5), Math.floor(y - size / 2 + 0.5), size, size) : [[Math.floor(x), Math.floor(y)] as [number, number]];
+        if (tiles.some(([tx, ty]) => isBlocked(tx + 0.5, ty + 0.5) || get(ground, tx, ty) === gid('path') || get(ground, tx, ty) === gid('stone') || get(ground, tx, ty) === gid('stoneEdge'))) continue;
+        if (inSpawn(x, y)) continue;
+        if (taken.some((q) => Math.hypot(q.x - x, q.y - y) < q.r + clear)) continue;
+        return { x, y, tiles };
+      }
+    }
+    throw new Error(`빈 자리를 찾지 못했습니다 (r=${r}, a=${a.toFixed(2)})`);
+  };
+  DISTRICTS.forEach((district, i) => {
+    const a0 = districtAngle(i);
+    const wants: [number, number][] = [[15.4, 0.34], [15.4, -0.34], [17.8, 0.62]].slice(0, playConfig.fruitTreesPerDistrict) as [number, number][];
+    for (const [r, da] of wants) {
+      const s = freeSpot(r, a0 + da, 1.3);
+      prop(`prop.fruit.${district}`, s.x, s.y, s.tiles, Math.round(rand() * 360), district);
+      taken.push({ x: s.x, y: s.y, r: 1.3 });
+    }
+  });
+  {
+    // 운세 나무: 광장 북서쪽 풀밭 (돌 화단 2×2)
+    const s = freeSpot(8.6, districtAngle(0) + 0.36, 1.2, 2);
+    prop('prop.plaza.fortune_tree', s.x, s.y, s.tiles, facing(s.x, s.y, C, C));
+    taken.push({ x: s.x, y: s.y, r: 1.6 });
+    // 비콘: 낚시터는 호수 지역 쪽, 클럽은 노을 지역 쪽 광장 가장자리
+    const water = DISTRICTS.indexOf('water');
+    const fire = DISTRICTS.indexOf('fire');
+    const bf = freeSpot(8.4, districtAngle(water) + 0.36, 1.0);
+    prop('prop.plaza.beacon_fishing', bf.x, bf.y, bf.tiles, facing(bf.x, bf.y, C, C));
+    taken.push({ x: bf.x, y: bf.y, r: 1.2 });
+    const bc = freeSpot(8.4, districtAngle(fire) + 0.36, 1.0);
+    prop('prop.plaza.beacon_club', bc.x, bc.y, bc.tiles, facing(bc.x, bc.y, C, C));
+    taken.push({ x: bc.x, y: bc.y, r: 1.2 });
+  }
+
   // 나무·덤불·큰 돌: 지역마다 그 지역 식물을 정해진 수만큼 흩어 심는다 (길·집터·명소와 떨어뜨린다)
   DISTRICTS.forEach((district, i) => {
     const f = FLORA[district];
@@ -567,4 +610,142 @@ export function buildHoodMap(tilesetFile: string) {
   // 6. 스폰: 아치 앞 (들어오는 곳)
   const s = at(gateR - 2.6, HOOD_ENTRANCE);
   return toTiled(tilesetFile, [spawnRect('spawn', s.x - 1.5, s.y - 1, 3, 2)]);
+}
+
+// ───────────────────────── 놀이터 맵: 낚시터·클럽 ─────────────────────────
+// 중앙광장의 비콘으로 가는 작은 섬. 집터는 없고, 남쪽 비콘으로 광장에 돌아간다.
+
+const SPOT_SIZE = 48;
+const SOUTH = Math.PI / 2;
+
+export function buildSpotMap(kind: 'fishing' | 'club', tilesetFile: string) {
+  const { ground, set, get, block, isBlocked, polar, taken, prop, facing, square, at, snap, onPath, spawnRect, toTiled } = canvas(SPOT_SIZE);
+  const c = SPOT_SIZE / 2;
+  const rand = rng(kind === 'fishing' ? 20261104 : 20261105);
+  const shoreAt = (a: number) => (kind === 'fishing' ? 18 : 15.5) + Math.sin(a * 3 + 0.7) * 0.8 + Math.sin(a * 5 + 1.1) * 0.4;
+  const beaconR = shoreAt(SOUTH) - 3.2;
+  // 낚시터 연못 (타원): 가운데보다 조금 북쪽
+  const pond = { x: c, y: c - 2.5, rx: 8.5, ry: 6.2 };
+  const inPond = (x: number, y: number, k = 1) => Math.hypot((x + 0.5 - pond.x) / pond.rx, (y + 0.5 - pond.y) / pond.ry) <= k;
+
+  // 1. 섬: 잔디 → 모래사장 → 바다
+  for (let y = 0; y < SPOT_SIZE; y++) {
+    for (let x = 0; x < SPOT_SIZE; x++) {
+      const { d, a } = polar(x, y);
+      const shore = shoreAt(a);
+      if (d < shore) set(ground, x, y, rand() < 0.22 ? gid('grass2') : gid('grass'));
+      else if (d < shore + 2.4) set(ground, x, y, gid('sand'));
+      else block(x, y);
+    }
+  }
+
+  // 2. 길과 바닥
+  for (let y = 0; y < SPOT_SIZE; y++) {
+    for (let x = 0; x < SPOT_SIZE; x++) {
+      const { d } = polar(x, y);
+      if (d >= shoreAt(polar(x, y).a)) continue;
+      const southPath = Math.abs(x + 0.5 - c) < 1.2 && y + 0.5 > c && y + 0.5 < c + beaconR + 1.5;
+      if (kind === 'fishing') {
+        if (inPond(x, y)) {
+          set(ground, x, y, gid('water'));
+          block(x, y);
+        } else if (inPond(x, y, 1.28) || (southPath && !inPond(x, y, 1))) set(ground, x, y, gid('path'));
+      } else {
+        // 클럽: 가운데 넓은 돌바닥(무대), 남쪽 길
+        if (d <= 8.6) set(ground, x, y, gid('stone'));
+        else if (d <= 9.6) set(ground, x, y, gid('stoneEdge'));
+        else if (southPath) set(ground, x, y, gid('path'));
+      }
+    }
+  }
+
+  // 3. 소품
+  if (kind === 'fishing') {
+    // 부두: 연못 남쪽 가장자리에서 연못 쪽을 본다
+    const pier = { x: c + 3.5, y: pond.y + pond.ry - 0.6 };
+    prop('prop.district.pier', pier.x, pier.y, [], 180, 'water');
+    taken.push({ x: pier.x, y: pier.y, r: 1.8 });
+    // 연못 둘레 벤치·가로등
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 + 0.2;
+      const p = { x: pond.x + Math.cos(a) * pond.rx * 1.42, y: pond.y + Math.sin(a) * pond.ry * 1.42 };
+      if (Math.abs(p.x - c) < 2 && p.y > c) continue;
+      const key = k % 2 ? 'prop.plaza.bench' : 'prop.plaza.lamp';
+      const x = snap(p.x);
+      const y = snap(p.y);
+      if (isBlocked(x, y) || get(ground, Math.floor(x), Math.floor(y)) === gid('path')) continue;
+      prop(key, x, y, [[Math.floor(x), Math.floor(y)]], key === 'prop.plaza.bench' ? facing(x, y, pond.x, pond.y) : 0);
+      taken.push({ x, y, r: 1.2 });
+    }
+  } else {
+    // DJ 부스 (북쪽, 남쪽을 본다)와 스피커 둘, 둘레 가로등
+    const booth = { x: c, y: c - 6.4 };
+    prop('prop.club.booth', booth.x, booth.y, square(Math.floor(booth.x) - 1, Math.floor(booth.y), 3, 1), 0);
+    taken.push({ x: booth.x, y: booth.y, r: 2 });
+    for (const s of [-1, 1]) {
+      const sp = { x: snap(c + s * 3.8), y: snap(c - 6.1) };
+      prop('prop.club.speaker', sp.x, sp.y, [[Math.floor(sp.x), Math.floor(sp.y)]], facing(sp.x, sp.y, c, c));
+      taken.push({ x: sp.x, y: sp.y, r: 1.2 });
+    }
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2 + 0.3;
+      if (Math.abs(wrap(a - SOUTH)) < 0.35) continue;
+      const l = at(10.3, a);
+      prop('prop.plaza.lamp', snap(l.x), snap(l.y), [[Math.floor(l.x), Math.floor(l.y)]]);
+      taken.push({ x: l.x, y: l.y, r: 1 });
+    }
+    for (const a of [0, Math.PI]) {
+      const b = at(7.6, a);
+      prop('prop.plaza.bench', snap(b.x), snap(b.y), [[Math.floor(b.x), Math.floor(b.y)]], facing(b.x, b.y, c, c));
+      taken.push({ x: b.x, y: b.y, r: 1.2 });
+    }
+  }
+  // 광장으로 돌아가는 비콘 (남쪽 길 옆)
+  {
+    const b = at(beaconR, SOUTH);
+    const x = snap(b.x + 2.2);
+    const y = snap(b.y);
+    prop(kind === 'fishing' ? 'prop.plaza.beacon_fishing' : 'prop.plaza.beacon_club', x, y, [[Math.floor(x), Math.floor(y)]], 180);
+    taken.push({ x, y, r: 1.4 });
+  }
+
+  // 4. 나무: 길·연못·무대와 떨어진 곳 (낚시터는 호수 지역, 클럽은 노을 지역 식물)
+  const flora = FLORA[kind === 'fishing' ? 'water' : 'fire'];
+  const spawnAt = at(beaconR - 1.2, SOUTH);
+  for (const [kindKey, list, want] of [
+    ['tree', flora.trees, kind === 'fishing' ? 40 : 28],
+    ['bush', flora.bushes, 16],
+    ['rock', flora.rocks, 6],
+  ] as const) {
+    let planted = 0;
+    for (let tries = 0; tries < 4000 && planted < want; tries++) {
+      const a = rand() * 2 * Math.PI;
+      const inner = kind === 'fishing' ? 0 : 10.8;
+      const d = inner + Math.sqrt(rand()) * (shoreAt(a) - inner - 0.8);
+      const x = snap(c + Math.cos(a) * d);
+      const y = snap(c + Math.sin(a) * d);
+      if (isBlocked(x, y) || onPath(x, y)) continue;
+      if (kind === 'fishing' && inPond(x, y, 1.45)) continue;
+      if (Math.hypot(x - spawnAt.x, y - spawnAt.y) < 3) continue;
+      if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + SPACING[kindKey])) continue;
+      prop(pickWeighted(list, rand()), x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360), kind === 'fishing' ? 'water' : 'fire');
+      taken.push({ x, y, r: SPACING[kindKey] });
+      planted++;
+    }
+  }
+  // 바닷가 야자수
+  for (let k = 0, planted = 0; k < 1500 && planted < 10; k++) {
+    const a = rand() * 2 * Math.PI;
+    const d = shoreAt(a) + 0.4 + rand() * 1.2;
+    const x = snap(c + Math.cos(a) * d);
+    const y = snap(c + Math.sin(a) * d);
+    if (get(ground, Math.floor(x), Math.floor(y)) !== gid('sand') || isBlocked(x, y)) continue;
+    if (Math.abs(wrap(a - SOUTH)) < 0.3 || taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + 2)) continue;
+    prop(pickWeighted(BEACH_TREES, rand()), x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360));
+    taken.push({ x, y, r: 1.2 });
+    planted++;
+  }
+
+  // 5. 스폰: 남쪽 비콘 앞
+  return toTiled(tilesetFile, [spawnRect('spawn', spawnAt.x - 1.5, spawnAt.y - 1, 3, 2)]);
 }

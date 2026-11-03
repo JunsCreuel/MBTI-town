@@ -176,3 +176,17 @@ AI로 생성한 이미지·모델은 출처 칸에 사용한 도구를 적는다
 | pets/pet_rooster_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
 | pets/pet_dog_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
 | pets/pet_pig_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| props/prop_fruit_wood_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| props/prop_fruit_fire_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| props/prop_fruit_earth_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| props/prop_fruit_metal_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| props/prop_fruit_water_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| props/prop_plaza_fortune_tree_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| props/prop_plaza_beacon_fishing_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| props/prop_plaza_beacon_club_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| props/prop_club_booth_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| props/prop_club_speaker_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| maps/fishing.json | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| maps/club.json | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| ui/ui_icon_basket_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| ui/ui_icon_fishing_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |

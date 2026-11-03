@@ -15,8 +15,10 @@ import { Bitmap, hex, type RGBA } from './lib/bitmap';
 import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
 import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
 import { petParts } from './lib/pets';
+import { beaconParts, djBoothParts, fortuneTreeParts, fruitTreeParts, speakerParts } from './lib/play-props';
+import { FRUITS } from '../src/shared/play';
 import { PET_ANIMALS } from '../src/shared/pet';
-import { TOWN_TILES, buildHoodMap, buildTownMap } from './lib/town-map';
+import { TOWN_TILES, buildHoodMap, buildSpotMap, buildTownMap } from './lib/town-map';
 import {
   PROP_MATERIALS, benchParts, boardParts, flagParts, fountainParts, gateParts, greenhouseParts, houseParts, lampParts, lotParts,
   pierParts, shopParts, stageParts, treeParts, workshopParts,
@@ -143,6 +145,13 @@ async function genTownProps() {
     ['prop.district.workshop', 'prop_district_workshop', workshopParts()],
     ['prop.district.pier', 'prop_district_pier', pierParts()],
     ['prop.hood.gate', 'prop_hood_gate', gateParts()],
+    // 놀거리: 지역 열매 나무, 광장 운세 나무, 낚시터·클럽 비콘, 클럽 소품
+    ...DISTRICTS.map((d): [string, string, Part[]] => [`prop.fruit.${d}`, `prop_fruit_${d}`, fruitTreeParts(FRUITS[d].color)]),
+    ['prop.plaza.fortune_tree', 'prop_plaza_fortune_tree', fortuneTreeParts()],
+    ['prop.plaza.beacon_fishing', 'prop_plaza_beacon_fishing', beaconParts('#5BB6E8', 'fish')],
+    ['prop.plaza.beacon_club', 'prop_plaza_beacon_club', beaconParts('#C77DFF', 'club')],
+    ['prop.club.booth', 'prop_club_booth', djBoothParts()],
+    ['prop.club.speaker', 'prop_club_speaker', speakerParts()],
   ];
   for (const [key, name, parts] of props) {
     const file = `props/${name}_ph.glb`;
@@ -189,6 +198,13 @@ function genTownMap() {
   const hood = 'maps/hood.json';
   if (FORCE_MAP || !existsSync(join(ROOT, hood))) save(hood, JSON.stringify(buildHoodMap(tiles)) + '\n');
   register('map.hood', { file: hood });
+  // 놀이터: 중앙광장 비콘으로 가는 낚시터·클럽
+  for (const kind of ['fishing', 'club'] as const) {
+    const f = `maps/${kind}.json`;
+    if (FORCE_MAP || !existsSync(join(ROOT, f))) save(f, JSON.stringify(buildSpotMap(kind, tiles)) + '\n');
+    register(`map.${kind}`, { file: f });
+    record(f);
+  }
   record(hood, '자체 제작 (scripts/lib/town-map.ts, Tiled JSON)');
 }
 
@@ -318,6 +334,9 @@ const ICONS: Record<string, string> = {
   question:
     '<path d="M8.5 9a3.5 3.5 0 1 1 5 3.2c-1 .5-1.5 1.2-1.5 2.3v.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="19" r="1.4"/>',
   wow: '<path d="M12 4v10.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="12" cy="19.2" r="1.6"/>',
+  // 놀거리: 바구니(모은 열매·물고기), 낚싯대
+  basket: `<path d="M3.5 10h17l-1.8 8.2a2 2 0 0 1-2 1.6H7.3a2 2 0 0 1-2-1.6Z" ${S}/><path d="M7.5 10 11 4.5M16.5 10 13 4.5M9 13.5v3M12 13.5v3M15 13.5v3" ${S}/>`,
+  fishing: `<path d="M5 20 18.5 4.5M18.5 4.5v9.5" ${S}/><path d="M18.5 14a2 2 0 1 1-2 2" ${S}/>`,
   // 몸짓 (안녕·꾸벅·춤·폴짝·갸웃)
   wave: `<path d="M8.5 13.5V7a1.4 1.4 0 0 1 2.8 0v4.5M11.3 11V5a1.4 1.4 0 0 1 2.8 0v6M14.1 11V6.5a1.4 1.4 0 0 1 2.8 0v7c0 4-2.6 6.5-6.2 6.5-2.8 0-4.4-1.6-5.2-3.8L4.6 12a1.3 1.3 0 0 1 2.3-1.1l1.6 2.6" ${S}/><path d="M19 3.8c1 .8 1.6 1.9 1.7 3.2M3.6 6.4c.3-1.2.9-2.1 1.9-2.8" ${S}/>`,
   bow: `<circle cx="16" cy="6.5" r="2.3" ${S}/><path d="M14.2 9 9 11.2l.6 4.6M9.6 15.8 8 21M9.6 15.8l3.6 5.2M9 11.2 6.2 14.6" ${S}/>`,

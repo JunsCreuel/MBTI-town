@@ -25,7 +25,16 @@ export function isTownPlace(v: unknown): v is TownPlace {
  * 실시간 방이 맡는 곳: 'town' = 본섬(중앙광장 + 다섯 지역의 1동), '<지역>.<번호>' = 2동부터의 동네.
  * 같은 곳의 방끼리만 채널이 나뉜다.
  */
-export type RoomPlace = 'town' | `${District}.${number}`;
+export type RoomPlace = 'town' | Spot | `${District}.${number}`;
+
+/** 놀이터: 중앙광장 비콘으로 가는 낚시터·클럽 (집터 없는 작은 섬) */
+export const SPOTS = ['fishing', 'club'] as const;
+export type Spot = (typeof SPOTS)[number];
+export const SPOT_NAME: Record<Spot, string> = { fishing: '낚시터', club: '클럽' };
+
+export function parseSpot(v: unknown): Spot | null {
+  return typeof v === 'string' && (SPOTS as readonly string[]).includes(v) ? (v as Spot) : null;
+}
 
 export interface Hood {
   district: District;

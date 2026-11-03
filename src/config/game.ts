@@ -81,6 +81,18 @@ export const cameraConfig = {
   dragRotateDegPerPx: 0.15,
 } as const;
 
+// 마을 놀거리 (PROJECT_GUIDE.md 3장): 열매 따기·운세 열매·낚시
+export const playConfig = {
+  /** 지역마다 열매 나무 수 (마을 맵 생성기와 서버 검사가 같이 쓴다) */
+  fruitTreesPerDistrict: 3,
+  /** 나무 하나에서 하루에 따는 열매 수 */
+  fruitsPerTree: 3,
+  /** 하루 낚시 횟수 */
+  fishPerDay: 30,
+  /** 나무·낚시 자리에서 버튼이 뜨는 거리 (칸) */
+  reach: 1.9,
+} as const;
+
 // 나의 방 = 마을 속 내 집의 안 (PROJECT_GUIDE.md 6장)
 export const roomConfig = {
   /** 바닥 칸 수 (가로 x, 세로 z). 방 크기 확장은 2차 */

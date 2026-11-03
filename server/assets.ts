@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { District } from '../src/shared/districts';
+import type { Spot } from '../src/shared/protocol';
 import { parseTownMap, withDistrict, type TownMap } from '../src/shared/townMap';
 
 const ASSET_ROOT = join(import.meta.dirname, '..', 'public', 'assets');
@@ -17,6 +18,17 @@ let townMap: TownMap | undefined;
 export function getTownMap(): TownMap {
   townMap ??= parseTownMap(JSON.parse(readAsset('map.town')));
   return townMap;
+}
+
+const spotMaps = new Map<Spot, TownMap>();
+/** 놀이터 맵 (낚시터·클럽) */
+export function getSpotMap(spot: Spot): TownMap {
+  let m = spotMaps.get(spot);
+  if (!m) {
+    m = parseTownMap(JSON.parse(readAsset(`map.${spot}`)));
+    spotMaps.set(spot, m);
+  }
+  return m;
 }
 
 let hoodTemplate: TownMap | undefined;

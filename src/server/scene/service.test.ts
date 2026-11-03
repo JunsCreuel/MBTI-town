@@ -1,7 +1,7 @@
 // 미니홈피 규칙을 실제 Postgres(PGlite, 메모리)로 확인한다. 공개 범위·차단은 서버 규칙이라 여기서 꼼꼼히 본다.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { townConfig } from '@/config/game';
+import { playConfig, townConfig } from '@/config/game';
 import { DISTRICTS, type District } from '@/shared/districts';
 import { verifyTownPass } from '@/shared/townToken';
 import { computeSaju, type BirthInput } from '../saju';
@@ -379,5 +379,42 @@ describe('사주로 사는 지역 정하기', () => {
   it('미리 보기는 저장하지 않고 사주와 지역만 알려 준다', () => {
     for (const d of DISTRICTS) expect(service.previewSaju(birthFor(d)).district).toBe(d);
     expect(() => service.previewSaju({ calendar: 'solar', date: '1800-01-01', time: null })).toThrow();
+  });
+});
+
+describe('놀거리: 열매·운세 열매·낚시', () => {
+  it('열매 나무는 하루 한 번, 운세 나무는 그날 같은 운세', async () => {
+    const v = await user();
+    await onboard(v, '열매꾼');
+    const first = await service.pickTree(v, 'fruit.wood.0');
+    expect(first).toMatchObject({ already: false, fruit: { id: 'apple', name: '사과' }, added: playConfig.fruitsPerTree, count: playConfig.fruitsPerTree });
+    const again = await service.pickTree(v, 'fruit.wood.0');
+    expect(again).toMatchObject({ already: true, added: 0, count: playConfig.fruitsPerTree });
+    // 다른 나무는 또 딸 수 있다
+    expect((await service.pickTree(v, 'fruit.water.1')).fruit.name).toBe('포도');
+    const luck = await service.pickTree(v, 'fortune');
+    expect(luck.fortune?.line.length).toBeGreaterThan(5);
+    expect((await service.pickTree(v, 'fortune')).fortune).toEqual(luck.fortune);
+    await expectError(service.pickTree(v, 'fruit.moon.0'), 'bad_request');
+    await expectError(service.pickTree(v, `fruit.wood.${playConfig.fruitTreesPerDistrict}`), 'bad_request');
+    await expectError(service.pickTree(null, 'fortune'), 'login_required');
+    const state = await service.playState(v);
+    expect(state.pickedTrees.sort()).toEqual(['fortune', 'fruit.water.1', 'fruit.wood.0']);
+    expect(state.fruits).toMatchObject({ apple: playConfig.fruitsPerTree, fortune: 1 });
+  });
+
+  it('낚시는 하루 횟수만큼, 잡은 것은 도감에 쌓인다', async () => {
+    const v = await user();
+    await onboard(v, '낚시꾼');
+    let total = 0;
+    for (let i = 0; i < playConfig.fishPerDay; i++) {
+      const r = await service.castLine(v);
+      expect(r.left).toBe(playConfig.fishPerDay - i - 1);
+      total++;
+    }
+    await expectError(service.castLine(v), 'conflict');
+    const state = await service.playState(v);
+    expect(state.fishLeft).toBe(0);
+    expect(Object.values(state.fish).reduce((a, b) => a + b, 0)).toBe(total);
   });
 });

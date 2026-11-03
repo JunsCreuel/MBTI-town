@@ -3237,3 +3237,156 @@ a:focus-visible {
   background: var(--color-danger);
   box-shadow: 0 0 0 2px var(--color-surface);
 }
+
+/* 놀거리: 열매 따기 버튼의 열매 점, 운세 열매, 바구니 */
+.fruit-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.12);
+  flex: none;
+}
+.fortune-fruit {
+  display: grid;
+  gap: var(--space-3);
+  text-align: center;
+}
+.fortune-fruit__grade {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--grade);
+}
+.fortune-fruit__line {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.55;
+  font-weight: 600;
+}
+.fortune-fruit__card {
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-md);
+  box-shadow: 0 4px 18px var(--color-shadow);
+}
+.fortune-fruit__note {
+  margin: 0;
+  font-size: 12px;
+}
+.basket {
+  display: grid;
+  gap: var(--space-2);
+}
+.basket__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: 0;
+  list-style: none;
+}
+.basket__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-size: 14px;
+}
+.basket__item b {
+  margin-left: auto;
+}
+.basket__item--unknown {
+  color: var(--color-textSub);
+}
+.basket__dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex: none;
+}
+.basket__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 낚시: 아래쪽에 뜨는 작은 판 */
+.fishing {
+  position: fixed;
+  left: 50%;
+  bottom: calc(108px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(360px, calc(100% - 24px));
+  display: grid;
+  justify-items: center;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 8px 28px var(--color-shadow);
+  text-align: center;
+  animation: fade-in 0.2s ease;
+}
+.fishing__text {
+  margin: 0;
+  font-weight: 600;
+}
+.fishing__text--bite {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--color-accentInk);
+  animation: bite 0.25s ease-in-out infinite alternate;
+}
+.fishing__bobber {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: linear-gradient(var(--color-danger) 50%, var(--color-surface) 50%);
+  box-shadow: 0 0 0 2px var(--color-border);
+  animation: bob 1.2s ease-in-out infinite;
+}
+.fishing__fish {
+  width: 72px;
+  height: 36px;
+  border-radius: 50% 40% 40% 50%;
+  box-shadow: inset 0 -4px 0 rgb(0 0 0 / 0.12);
+}
+.fishing__name {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+.fishing__name small {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-textSub);
+}
+.fishing__meta {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-textSub);
+}
+.fishing__actions {
+  display: flex;
+  gap: var(--space-2);
+}
+.club-hint {
+  opacity: 1;
+}
+@keyframes bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(5px); }
+}
+@keyframes bite {
+  from { transform: scale(1); }
+  to { transform: scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fishing__bobber,
+  .fishing__text--bite {
+    animation: none;
+  }
+}

@@ -3,9 +3,11 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { assetUrl } from '@/assets/manifest';
-import { townConfig } from '@/config/game';
+import { playConfig, townConfig } from '@/config/game';
+import { call } from '@/lib/api';
+import { FORTUNE_FRUIT, FRUITS, type FortuneFruit } from '@/shared/play';
 import { withMaxLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { Guide } from '@/components/app/Guide';
@@ -14,14 +16,18 @@ import { GesturePicker } from '@/components/app/GesturePicker';
 import { TabBar } from '@/components/app/TabBar';
 import type { HouseView, TownView } from '@/server/scene/service';
 import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
-import { parseRoomPlace, type RoomPlace, type TownPlace } from '@/shared/protocol';
-import { districtAt, lotDoor, parseTownMap, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
+import { SPOT_NAME, parseRoomPlace, parseSpot, type RoomPlace, type Spot, type TownPlace } from '@/shared/protocol';
+import { districtAt, lotDoor, nearWater, parseTownMap, randomSpawnPoint, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
 import { lotKey, type TownCamera, type TownContextValue, type TownInput } from './context';
 import { currentView, cycleView, initialCamera, isTurned, resetCamera, rotateCamera, type CameraView } from './camera';
 import { placePoint } from '@/shared/spawn';
 import { wakeRealtime } from '@/lib/realtime';
 import { TownSession, now } from './session';
 import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
+import {
+  BasketSheet, CLUB_FLOOR_RADIUS, FishingPanel, FortuneFruitSheet, beaconsOf, treesOf,
+  type FishResult, type PickResult, type PlayState, type TreeInfo,
+} from './Play';
 
 // 마을 화면: 3D 장면 + 머리 위 HUD + 전체 지도.
 // 마을이 이 서비스의 기본 틀이다. 나의 방은 마을 속 내 집 안이다 (문 앞에서 "들어가기").
@@ -69,7 +75,9 @@ function houseHref(h: HouseView | undefined): string | null {
 export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: TownPlace; welcome: boolean }) {
   const router = useRouter();
   /** 지금 있는 동네 (본섬이면 null) */
-  const here = useMemo(() => parseRoomPlace(place) ?? null, [place]);
+  /** 놀이터(낚시터·클럽)면 그곳 */
+  const spot = parseSpot(place);
+  const here = useMemo(() => (spot ? null : (parseRoomPlace(place) ?? null)), [place, spot]);
   const hoodNo = here?.hood ?? 1;
   const session = useMemo(() => new TownSession(place, at), [place, at]);
   const snap = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
@@ -87,13 +95,26 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   /** 동네 길 카드를 연 지역 */
   const [gateFor, setGateFor] = useState<District | null>(null);
   const [nearGate, setNearGate] = useState<District | null>(null);
+  // 놀거리: 가까운 나무, 오늘 딴 나무·모은 것, 운세 열매 결과, 바구니
+  const [nearTree, setNearTree] = useState<TreeInfo | null>(null);
+  const [play, setPlay] = useState<PlayState | null>(null);
+  const [fortuneFruit, setFortuneFruit] = useState<FortuneFruit | null>(null);
+  const [basketOpen, setBasketOpen] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         // 2동부터는 동네 틀 맵에 그 지역을 입혀 쓴다
-        const raw = parseTownMap(await (await fetch(assetUrl(here ? 'map.hood' : 'map.town'))).json());
+        const key = spot ? `map.${spot}` : here ? 'map.hood' : 'map.town';
+        const raw = parseTownMap(await (await fetch(assetUrl(key))).json());
         const map = here ? withDistrict(raw, here.district) : raw;
         const assets = await loadTownAssets(map, (r) => alive && setProgress(r));
         await document.fonts?.ready;
@@ -106,7 +127,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     return () => {
       alive = false;
     };
-  }, [here]);
+  }, [here, spot]);
 
   // 집 이름표: 새 이웃이 이사 오거나 친구가 되면 바뀐다. 받아 오지 못하면 지난 목록을 그대로 쓴다.
   useEffect(() => {
@@ -154,6 +175,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       mapBlend: 0,
       labels: new Map(),
       camera: initialCamera(),
+      drops: [],
     }),
     [],
   );
@@ -162,12 +184,12 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const [spawn, setSpawn] = useState<{ x: number; z: number } | null>(null);
   useEffect(() => {
     if (!loaded || !snap.pass || spawn) return;
-    const p = placePoint(loaded.map, snap.pass, at, here);
+    const p = spot ? randomSpawnPoint(loaded.map) : placePoint(loaded.map, snap.pass, at, here);
     input.self.x = p.x;
     input.self.z = p.z;
     setSpawn(p);
     void session.join(() => ({ x: input.self.x, z: input.self.z }));
-  }, [loaded, snap.pass, spawn, at, here, input, session]);
+  }, [loaded, snap.pass, spawn, at, here, spot, input, session]);
   // 지금 동네에 선 집만 (본섬 = 다섯 지역의 1동)
   const houses = useMemo(
     () => new Map(town.houses.filter((h) => h.hood === hoodNo && (!here || h.district === here.district)).map((h) => [lotKey(h), h])),
@@ -222,6 +244,41 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     [session, snap.selfId, spawn, look, loaded, input, hoodNo, houses, hidden, onHouse, onGate],
   );
 
+  const trees = useMemo(() => (loaded ? treesOf(loaded.map) : []), [loaded]);
+  const beacons = useMemo(() => (loaded ? beaconsOf(loaded.map) : []), [loaded]);
+  const [nearBeacon, setNearBeacon] = useState<Spot | null>(null);
+  const [canFish, setCanFish] = useState(false);
+  const [fishing, setFishing] = useState(false);
+  const [onFloor, setOnFloor] = useState(false);
+  const lastDance = useRef(0);
+  const isGuest = snap.guest;
+  const refreshPlay = useCallback(() => {
+    call<PlayState>('GET', '/api/play').then(setPlay).catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (snap.pass && !isGuest) refreshPlay();
+  }, [snap.pass, isGuest, refreshPlay]);
+
+  async function pickTree(t: TreeInfo) {
+    if (isGuest) {
+      setToast('집이 있는 주민만 열매를 딸 수 있어요');
+      return;
+    }
+    setPicking(true);
+    try {
+      const r = await call<PickResult>('POST', '/api/play/pick', { spot: t.spot });
+      if (!r.already) input.drops.push({ x: t.x, z: t.z, color: r.fruit.color, at: now() });
+      if (r.fortune) setFortuneFruit(r.fortune);
+      else setToast(r.already ? `이 나무는 오늘 이미 땄어요 (${r.fruit.name} ${r.count}개)` : `${r.fruit.name} ${r.added}개를 땄어요! 바구니에 ${r.count}개`);
+      if (!r.already) session.sendAction('jump');
+      refreshPlay();
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '열매를 따지 못했어요');
+    } finally {
+      setPicking(false);
+    }
+  }
+
   // 지금 서 있는 곳 이름과, 문 앞·아치 앞에 섰는지 (HUD)
   useEffect(() => {
     if (!loaded) return;
@@ -229,9 +286,11 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     const gates = loaded.map.props.filter((p) => p.key === GATE_KEY && p.district);
     const t = setInterval(() => {
       if (!input.self.ready) return;
-      const next = here
-        ? { label: hoodName(here.district, here.hood), district: here.district }
-        : areaAt(loaded.map, input.self.x, input.self.z);
+      const next = spot
+        ? { label: SPOT_NAME[spot], district: null }
+        : here
+          ? { label: hoodName(here.district, here.hood), district: here.district }
+          : areaAt(loaded.map, input.self.x, input.self.z);
       setArea((a) => (a.label === next.label ? a : next));
       let best: Lot | null = null;
       let bestD: number = townConfig.doorDistance;
@@ -249,9 +308,35 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         return Math.hypot(f.x - input.self.x, f.z - input.self.z) < GATE_DISTANCE;
       });
       setNearGate(g?.district ?? null);
+      // 나무: 손이 닿는 거리 안에서 가장 가까운 것 (운세 나무는 화단이 넓어 조금 더 멀리서도)
+      let tree: TreeInfo | null = null;
+      let treeD = Infinity;
+      for (const t of trees) {
+        const d = Math.hypot(t.x - input.self.x, t.z - input.self.z) - (t.kind === 'fortune' ? 0.8 : 0);
+        if (d < playConfig.reach && d < treeD) {
+          treeD = d;
+          tree = t;
+        }
+      }
+      setNearTree((cur) => (cur?.spot === tree?.spot ? cur : tree));
+      // 비콘: 본섬에서는 놀이터로, 놀이터에서는 광장으로
+      const b = beacons.find((q) => Math.hypot(q.x - input.self.x, q.z - input.self.z) < playConfig.reach + 0.4);
+      setNearBeacon(b?.kind ?? null);
+      // 낚시터 물가
+      setCanFish(spot === 'fishing' && nearWater(loaded.map, input.self.x, input.self.z));
+      // 클럽 무대에 서 있으면 저절로 춤춘다 (2초마다, 걷는 중에는 걷기가 먼저)
+      if (spot === 'club') {
+        const onFloor = Math.hypot(input.self.x - loaded.map.width / 2, input.self.z - loaded.map.height / 2) < CLUB_FLOOR_RADIUS;
+        const t = now();
+        if (onFloor && t - lastDance.current > 2.2) {
+          lastDance.current = t;
+          session.sendAction('dance');
+        }
+        setOnFloor(onFloor);
+      }
     }, 300);
     return () => clearInterval(t);
-  }, [loaded, input, here]);
+  }, [loaded, input, here, trees, beacons, spot, session]);
 
   const openMap = useCallback(
     (open: boolean) => {
@@ -416,12 +501,30 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
                     <Icon name="home" />
                   </button>
                 )}
+                {!guest && (
+                  <button
+                    className="icon-btn"
+                    onClick={() => {
+                      setBasketOpen(true);
+                      refreshPlay();
+                    }}
+                    aria-label="바구니와 도감"
+                  >
+                    <Icon name="basket" />
+                  </button>
+                )}
                 <Link className="icon-btn" href="/explore" aria-label="이웃 방 둘러보기">
                   <Icon name="friends" />
                 </Link>
+                {spot ? (
+                  <Link className="icon-btn icon-btn--accent" href="/village?at=plaza" aria-label="광장으로 돌아가기">
+                    <Icon name="exit" />
+                  </Link>
+                ) : (
                 <button className="icon-btn icon-btn--accent" onClick={() => openMap(true)} aria-label="전체 지도 보기">
                   <Icon name="map" />
                 </button>
+                )}
               </div>
               <CameraControls cam={input.camera} onUse={() => setHint(false)} />
             </div>
@@ -512,6 +615,41 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
               </button>
             )}
 
+            {nearBeacon && !picked && !gateFor && !showDoor && (
+              <button
+                className="door-btn"
+                onClick={() => router.push(spot ? '/village?at=plaza' : `/village?place=${nearBeacon}`)}
+              >
+                <Icon name={nearBeacon === 'fishing' ? 'fishing' : 'music'} size={20} />
+                {spot ? '광장으로 돌아가기' : `${SPOT_NAME[nearBeacon]}로 가기`}
+              </button>
+            )}
+
+            {canFish && !nearBeacon && !fishing && (
+              <button
+                className="door-btn"
+                onClick={() => (guest ? setToast('집이 있는 주민만 낚시할 수 있어요') : setFishing(true))}
+              >
+                <Icon name="fishing" size={20} />
+                낚시하기 {play ? `(오늘 ${play.fishLeft}번 남음)` : ''}
+              </button>
+            )}
+
+            {spot === 'club' && onFloor && <div className="hud__hint club-hint">무대 위에서는 저절로 춤을 춰요</div>}
+
+            {nearTree && !picked && !gateFor && !showDoor && !nearGate && (
+              <button className="door-btn" onClick={() => pickTree(nearTree)} disabled={picking}>
+                <span className="fruit-dot" style={{ background: nearTree.kind === 'fortune' ? FORTUNE_FRUIT.color : FRUITS[nearTree.district!].color }} aria-hidden />
+                {nearTree.kind === 'fortune'
+                  ? play?.pickedTrees.includes('fortune')
+                    ? '오늘의 운세 다시 보기'
+                    : '운세 열매 따기'
+                  : play?.pickedTrees.includes(nearTree.spot)
+                    ? `${FRUITS[nearTree.district!].name} 나무 (오늘은 다 땄어요)`
+                    : `${FRUITS[nearTree.district!].name} 따기`}
+              </button>
+            )}
+
             {showDoor && (
               <button className="door-btn" onClick={() => router.push(doorHref)}>
                 <Icon name="home" size={20} />
@@ -579,6 +717,32 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
           <p className="overlay__sub">{loaded ? '자리를 찾고 있어요' : `마을을 불러오는 중 ${Math.round(progress * 100)}%`}</p>
         </div>
       )}
+
+      {fortuneFruit && (
+        <FortuneFruitSheet
+          fortune={fortuneFruit}
+          name={pass?.name ?? '손님'}
+          district={pass?.district || null}
+          day={play?.day ?? new Date().toISOString().slice(0, 10)}
+          onClose={() => setFortuneFruit(null)}
+        />
+      )}
+      {basketOpen && <BasketSheet state={play} onClose={() => setBasketOpen(false)} />}
+      {fishing && (
+        <FishingPanel
+          onCast={async () => {
+            const r = await call<FishResult>('POST', '/api/play/fish');
+            refreshPlay();
+            return r;
+          }}
+          onCaught={(r) => {
+            session.sendAction(r.fish.rarity === 'junk' ? 'think' : 'cheer');
+            session.sendEmote(r.fish.rarity === 'legend' ? 'sparkle' : r.fish.rarity === 'junk' ? 'question' : 'joy');
+          }}
+          onClose={() => setFishing(false)}
+        />
+      )}
+      {toast && <div className="toast" role="status">{toast}</div>}
 
       {failed && (
         <div className="overlay">

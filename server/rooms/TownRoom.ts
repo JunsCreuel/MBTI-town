@@ -5,15 +5,15 @@ import { Room, matchMaker, type Client } from '@colyseus/core';
 import { townConfig } from '../../src/config/game';
 import { MOVE_BUDGET_MAX, isMoveAllowed, normalizeAngle, refillMoveBudget } from '../../src/shared/movement';
 import { isStartPoint, placePoint } from '../../src/shared/spawn';
-import type { TownMap } from '../../src/shared/townMap';
+import { randomSpawnPoint, type TownMap } from '../../src/shared/townMap';
 import { verifyTownPass, type TownPass } from '../../src/shared/townToken';
 import {
   ACTIONS, EMOTES, MSG,
   type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type JoinOptions, type MoveMessage,
   type Hood, type SnapMessage, type TownPlace,
-  isTownPlace, parseRoomPlace,
+  isTownPlace, parseRoomPlace, parseSpot, type Spot,
 } from '../../src/shared/protocol';
-import { getHoodMap, getTownMap } from '../assets';
+import { getHoodMap, getSpotMap, getTownMap } from '../assets';
 import { Player, TownState } from './TownState';
 
 export function townRoomCapacity(): number {
@@ -47,6 +47,8 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
 
   /** 이 방이 맡는 동네 (본섬이면 null) */
   private here: Hood | null = null;
+  /** 놀이터(낚시터·클럽)면 그곳 */
+  private spot: Spot | null = null;
   private map: TownMap = getTownMap();
   /** 손님별 이동 예산 (movement.ts 참고) */
   private readonly moveBudget = new Map<string, { value: number; at: number }>();
@@ -62,11 +64,14 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
   }
 
   async onCreate(options?: JoinOptions) {
-    const here = parseRoomPlace(options?.place);
+    const spot = parseSpot(options?.place);
+    const here = spot ? null : parseRoomPlace(options?.place);
     if (here === undefined) throw new Error('들어갈 곳이 올바르지 않습니다');
     this.here = here;
-    if (here) this.map = getHoodMap(here.district);
-    const place = here ? `${here.district}.${here.hood}` : 'town';
+    this.spot = spot;
+    if (spot) this.map = getSpotMap(spot);
+    else if (here) this.map = getHoodMap(here.district);
+    const place = spot ?? (here ? `${here.district}.${here.hood}` : 'town');
     this.state.channel = await this.nextChannelNumber(place);
     await this.setMetadata({ channel: this.state.channel, place });
 
@@ -100,7 +105,9 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     // (지도에서 어디로든 바로 갈 수 있으므로 새로 생기는 권한은 없다)
     const spawn = isStartPoint(this.map, options?.start)
       ? { x: options.start.x, z: options.start.z }
-      : placePoint(this.map, pass, isTownPlace(options?.at) ? options.at : 'home', this.here);
+      : this.spot
+        ? randomSpawnPoint(this.map)
+        : placePoint(this.map, pass, isTownPlace(options?.at) ? options.at : 'home', this.here);
     const player = new Player();
     player.pid = pass.pid;
     player.name = pass.name;
@@ -135,7 +142,8 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     const now = Date.now();
     if (now - (this.lastWarpAt.get(client.sessionId) ?? 0) < townConfig.warpCooldownMs) return;
     this.lastWarpAt.set(client.sessionId, now);
-    const spawn = placePoint(this.map, pass, to, this.here);
+    // 놀이터에는 지도 이동할 곳이 없다 (비콘으로 광장에 돌아간다). 입구로만 옮긴다
+    const spawn = this.spot ? randomSpawnPoint(this.map) : placePoint(this.map, pass, to, this.here);
     player.x = spawn.x;
     player.z = spawn.z;
     player.moving = false;

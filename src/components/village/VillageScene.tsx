@@ -526,6 +526,127 @@ function AdaptiveResolution() {
   return null;
 }
 
+/**
+ * 클럽 무대: 가운데 바닥 칸들이 박자에 맞춰 색이 바뀌고, 하늘로 색 빛줄기가 돈다. (클럽 맵에만 있다)
+ */
+const CLUB_COLORS = ['#FF5FA2', '#7C6BFF', '#3CC8FF', '#5BE38C', '#FFD24A'];
+function ClubFx() {
+  const { map } = useTown();
+  const isClub = useMemo(() => map.props.some((p) => p.key === 'prop.club.booth'), [map]);
+  const tiles = useRef<THREE.InstancedMesh>(null);
+  const beams = useRef<THREE.Group>(null);
+  const cells = useMemo(() => {
+    const out: { x: number; z: number; k: number }[] = [];
+    const c = map.width / 2;
+    for (let z = -4; z < 4; z++) for (let x = -4; x < 4; x++) {
+      if (Math.hypot(x + 0.5, z + 0.5) <= 4.4) out.push({ x: c + x + 0.5, z: map.height / 2 + z + 0.5, k: (x * 7 + z * 13 + 100) % 5 });
+    }
+    return out;
+  }, [map]);
+  const o = useMemo(() => new THREE.Object3D(), []);
+  const col = useMemo(() => new THREE.Color(), []);
+  const black = useMemo(() => new THREE.Color('#1A1824'), []);
+  // 빛줄기: 꼭짓점이 바닥에 있고 위로 넓어진다 (바닥을 축으로 흔든다)
+  const beamGeo = useMemo(() => new THREE.ConeGeometry(1.1, 9, 16, 1, true).rotateX(Math.PI).translate(0, 4.5, 0), []);
+  useEffect(() => () => beamGeo.dispose(), [beamGeo]);
+  useEffect(() => {
+    const m = tiles.current;
+    if (!m) return;
+    cells.forEach((cell, i) => {
+      o.position.set(cell.x, groundHeightAt(map, cell.x, cell.z) + 0.035, cell.z);
+      o.rotation.set(-Math.PI / 2, 0, 0);
+      o.scale.set(0.92, 0.92, 1);
+      o.updateMatrix();
+      m.setMatrixAt(i, o.matrix);
+    });
+    m.instanceMatrix.needsUpdate = true;
+  }, [cells, map, o]);
+  useFrame(() => {
+    const t = now();
+    const beat = Math.floor(t * 2.1);
+    const m = tiles.current;
+    if (m) {
+      cells.forEach((cell, i) => {
+        const on = (cell.k + beat) % 5;
+        // 박자마다 두세 칸 건너 하나씩 밝힌다
+        if (on < 2) m.setColorAt(i, col.set(CLUB_COLORS[(cell.k + beat) % CLUB_COLORS.length]));
+        else m.setColorAt(i, black);
+      });
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    }
+    const g = beams.current;
+    if (g) {
+      g.children.forEach((b, i) => {
+        b.rotation.z = Math.sin(t * 0.9 + i * 1.7) * 0.5;
+        b.rotation.x = Math.cos(t * 0.7 + i * 2.3) * 0.35;
+      });
+    }
+  });
+  if (!isClub) return null;
+  const c = map.width / 2;
+  return (
+    <>
+      <instancedMesh ref={tiles} args={[undefined, undefined, cells.length]} frustumCulled={false}>
+        <planeGeometry args={[1, 1]} />
+        <meshBasicMaterial toneMapped={false} />
+      </instancedMesh>
+      <group ref={beams} position={[c, 0, map.height / 2 - 6.4]}>
+        {CLUB_COLORS.slice(0, 4).map((color, i) => (
+          <mesh key={color} position={[(i - 1.5) * 1.6, 0, 0]} geometry={beamGeo}>
+            <meshBasicMaterial color={color} transparent opacity={0.16} depthWrite={false} side={THREE.DoubleSide} toneMapped={false} />
+          </mesh>
+        ))}
+      </group>
+    </>
+  );
+}
+
+/** 열매 따기 연출: 나무 위에서 열매 몇 알이 톡톡 떨어져 굴렀다가 사라진다 */
+const DROP_SECONDS = 1.6;
+const DROPS_PER_PICK = 3;
+function FruitDrops() {
+  const { input, map } = useTown();
+  const mesh = useRef<THREE.InstancedMesh>(null);
+  const max = 12 * DROPS_PER_PICK;
+  const o = useMemo(() => new THREE.Object3D(), []);
+  const color = useMemo(() => new THREE.Color(), []);
+  useFrame(() => {
+    const m = mesh.current;
+    if (!m) return;
+    const t = now();
+    input.drops = input.drops.filter((d) => t - d.at < DROP_SECONDS);
+    let n = 0;
+    for (const d of input.drops) {
+      for (let k = 0; k < DROPS_PER_PICK && n < max; k++) {
+        const u = (t - d.at) / DROP_SECONDS;
+        // 나무 둘레로 흩어지며 떨어지고 한 번 튀어 오른다
+        const ang = k * 2.1 + d.at;
+        const spread = 0.45 + k * 0.18;
+        const x = d.x + Math.cos(ang) * spread * Math.min(1, u * 2);
+        const z = d.z + Math.sin(ang) * spread * Math.min(1, u * 2) + 0.4;
+        const ground = groundHeightAt(map, x, z);
+        const fall = Math.max(0, 1 - u * 2.2);
+        const bounce = u > 0.45 ? Math.abs(Math.sin((u - 0.45) * 9)) * 0.25 * (1 - u) : 0;
+        o.position.set(x, ground + 0.12 + fall * fall * 1.6 + bounce, z);
+        o.scale.setScalar(u > 0.85 ? (1 - u) / 0.15 : 1);
+        o.updateMatrix();
+        m.setMatrixAt(n, o.matrix);
+        m.setColorAt(n, color.set(d.color));
+        n++;
+      }
+    }
+    m.count = n;
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  });
+  return (
+    <instancedMesh ref={mesh} args={[undefined, undefined, max]} frustumCulled={false} castShadow>
+      <sphereGeometry args={[0.13, 12, 9]} />
+      <meshStandardMaterial roughness={0.5} />
+    </instancedMesh>
+  );
+}
+
 function FirstFrame({ onFrame }: { onFrame: () => void }) {
   useFrame(onFrame);
   return null;
@@ -564,6 +685,8 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <CameraRig />
         <KeyboardInput />
         <AdaptiveResolution />
+        <FruitDrops />
+        <ClubFx />
         <FirstFrame
           onFrame={() => {
             if (!firstFrame.current) {

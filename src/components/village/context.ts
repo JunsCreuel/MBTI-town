@@ -23,6 +23,8 @@ export interface TownInput {
   labels: Map<string, HTMLElement>;
   /** 카메라 목표값. 버튼·단축키·휠·끌기가 바꾸고, 카메라가 매 프레임 부드럽게 따라간다. */
   camera: TownCamera;
+  /** 나무에서 떨어지는 열매 (따기 연출). 장면이 그리고 시간이 지나면 지운다 */
+  drops: { x: number; z: number; color: string; at: number }[];
 }
 
 export interface TownCamera {
