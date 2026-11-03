@@ -13,7 +13,8 @@ import { DistrictOverlay, MapLabelSync } from './MapView';
 import { Houses, Props } from './Props';
 import { Decor } from './Decor';
 import { windUniforms } from './wind';
-import { currentHour, day, dayLookAt } from './daylight';
+import { currentHour, day, dayLookAt, indoorLook } from './daylight';
+import { clubPulse, isIndoor, mod } from './club';
 import { Ambient } from './Ambient';
 import { normalDistance, saveCamera } from './camera';
 import { pointerState } from './pointer';
@@ -334,17 +335,32 @@ function CameraRig() {
 
 /** 전체 지도에서는 안개를 걷는다 (걸을 때는 먼 곳을 안개로 덮어 가볍게 보인다) */
 function FogRig() {
-  const { input } = useTown();
+  const { input, map } = useTown();
+  const indoor = useMemo(() => isIndoor(map), [map]);
   const scene = useThree((s) => s.scene);
   useFrame(() => {
     const f = scene.fog as THREE.Fog | null;
     if (!f) return;
     const b = input.mapBlend;
     f.color.copy(day.look.fog);
-    f.near = 30 + b * 900;
-    f.far = 90 + b * 1800;
+    // 실내는 홀이 다 보이게 멀리서부터 어두워진다
+    f.near = (indoor ? 26 : 30) + b * 900;
+    f.far = (indoor ? 64 : 90) + b * 1800;
   });
   return null;
+}
+
+/** 바깥은 하늘·구름·나비, 실내(클럽)는 어둠 */
+function Outdoors() {
+  const { map } = useTown();
+  if (isIndoor(map)) return <color attach="background" args={[S.clubVoid]} />;
+  return (
+    <>
+      <Sky />
+      <Clouds />
+      <Ambient />
+    </>
+  );
 }
 
 /** 바닥을 누른 자리에 잠깐 보이는 동그라미 */
@@ -452,15 +468,22 @@ function Ground() {
  */
 function DayCycle() {
   const scene = useThree((st) => st.scene);
+  const { map } = useTown();
+  const indoor = useMemo(() => isIndoor(map), [map]);
   const state = useRef({ at: -100, mats: null as { m: THREE.MeshStandardMaterial; kind: 'glass' | 'glow'; base: number }[] | null });
   const glow = useMemo(() => new THREE.Color(S.windowGlow), []);
+  // 맵이 바뀌면(클럽 ↔ 바깥) 빛을 바로 다시 정하고 재질도 다시 모은다
+  useEffect(() => {
+    state.current.at = -100;
+    state.current.mats = null;
+  }, [map]);
   useFrame(() => {
     const st = state.current;
     const t = now();
     if (t - st.at < 4) return;
     st.at = t;
     day.hour = currentHour();
-    day.look = dayLookAt(day.hour);
+    day.look = indoor ? indoorLook() : dayLookAt(day.hour);
     if (!st.mats) {
       const found = new Map<THREE.Material, { m: THREE.MeshStandardMaterial; kind: 'glass' | 'glow'; base: number }>();
       scene.traverse((o) => {
@@ -527,76 +550,199 @@ function AdaptiveResolution() {
 }
 
 /**
- * 클럽 무대: 가운데 바닥 칸들이 박자에 맞춰 색이 바뀌고, 하늘로 색 빛줄기가 돈다. (클럽 맵에만 있다)
+ * 실내 클럽 조명 (클럽 맵에만 있다). 지금 흐르는 곡의 박자(BPM)에 맞춰 움직인다 (음악을 꺼도 같은 박자).
+ * - 가운데 무대 바닥 칸이 박자마다 색을 바꾼다
+ * - 천장 조명 넷이 무대로 색 빛줄기를 흔든다
+ * - 미러볼이 돌며 바닥에 빛 조각을 뿌린다
+ * - 벽 위·아래에 네온 띠가 흐른다
+ * - 색 조명 둘이 무대를 비춘다
  */
-const CLUB_COLORS = ['#FF5FA2', '#7C6BFF', '#3CC8FF', '#5BE38C', '#FFD24A'];
+const CLUB_COLORS = S.clubNeon;
+/** 곡 정보가 없을 때 조명이 넘어가는 빠르기 (초당 박자) */
+const IDLE_BPS = 2.1;
+const CEILING = 5;
 function ClubFx() {
-  const { map } = useTown();
+  const { map, input } = useTown();
   const isClub = useMemo(() => map.props.some((p) => p.key === 'prop.club.booth'), [map]);
   const tiles = useRef<THREE.InstancedMesh>(null);
   const beams = useRef<THREE.Group>(null);
+  const ball = useRef<THREE.Mesh>(null);
+  const spots = useRef<THREE.InstancedMesh>(null);
+  const neon = useRef<THREE.InstancedMesh>(null);
+  const lights = useRef<(THREE.PointLight | null)[]>([]);
+  const c = map.width / 2;
+  const cz = map.height / 2;
+  const floorY = useMemo(() => groundHeightAt(map, c, cz), [map, c, cz]);
   const cells = useMemo(() => {
     const out: { x: number; z: number; k: number }[] = [];
-    const c = map.width / 2;
     for (let z = -4; z < 4; z++) for (let x = -4; x < 4; x++) {
-      if (Math.hypot(x + 0.5, z + 0.5) <= 4.4) out.push({ x: c + x + 0.5, z: map.height / 2 + z + 0.5, k: (x * 7 + z * 13 + 100) % 5 });
+      if (Math.hypot(x + 0.5, z + 0.5) <= 4.4) out.push({ x: c + x + 0.5, z: cz + z + 0.5, k: (x * 7 + z * 13 + 100) % 5 });
     }
     return out;
-  }, [map]);
+  }, [c, cz]);
+  // 벽 네온 띠: 벽마다 위·아래 두 줄 (벽 정면 = 홀 안쪽)
+  const strips = useMemo(
+    () =>
+      map.props
+        .filter((p) => p.key === 'prop.club.wall' || p.key === 'prop.club.door')
+        .flatMap((p, i) =>
+          [2.78, 0.3].map((y, row) => ({
+            wx: p.x,
+            wz: p.z,
+            x: p.x + Math.sin(p.yaw) * 0.25,
+            z: p.z + Math.cos(p.yaw) * 0.25,
+            y: groundHeightAt(map, p.x, p.z) + y,
+            yaw: p.yaw,
+            k: i + row * 2,
+          })),
+        ),
+    [map],
+  );
+  const fixtures = useMemo(() => [[-3.6, -2.6], [3.6, -2.6], [-3.6, 2.6], [3.6, 2.6]].map(([x, z]) => new THREE.Vector3(c + x, CEILING, cz + z)), [c, cz]);
+  const SPOTS = 18;
   const o = useMemo(() => new THREE.Object3D(), []);
   const col = useMemo(() => new THREE.Color(), []);
-  const black = useMemo(() => new THREE.Color('#1A1824'), []);
-  // 빛줄기: 꼭짓점이 바닥에 있고 위로 넓어진다 (바닥을 축으로 흔든다)
-  const beamGeo = useMemo(() => new THREE.ConeGeometry(1.1, 9, 16, 1, true).rotateX(Math.PI).translate(0, 4.5, 0), []);
+  const off = useMemo(() => new THREE.Color(S.clubTileOff), []);
+  // 빛줄기: 꼭짓점이 천장 조명에 있고 아래로 넓어진다 (꼭짓점을 축으로 흔든다)
+  const beamGeo = useMemo(() => new THREE.ConeGeometry(1.05, 5.4, 18, 1, true).translate(0, -2.7, 0), []);
   useEffect(() => () => beamGeo.dispose(), [beamGeo]);
   useEffect(() => {
     const m = tiles.current;
-    if (!m) return;
-    cells.forEach((cell, i) => {
-      o.position.set(cell.x, groundHeightAt(map, cell.x, cell.z) + 0.035, cell.z);
-      o.rotation.set(-Math.PI / 2, 0, 0);
-      o.scale.set(0.92, 0.92, 1);
-      o.updateMatrix();
-      m.setMatrixAt(i, o.matrix);
-    });
-    m.instanceMatrix.needsUpdate = true;
-  }, [cells, map, o]);
-  useFrame(() => {
+    if (m) {
+      cells.forEach((cell, i) => {
+        o.position.set(cell.x, groundHeightAt(map, cell.x, cell.z) + 0.035, cell.z);
+        o.rotation.set(-Math.PI / 2, 0, 0);
+        o.scale.set(0.92, 0.92, 1);
+        o.updateMatrix();
+        m.setMatrixAt(i, o.matrix);
+      });
+      m.instanceMatrix.needsUpdate = true;
+    }
+    shown.current = new Int8Array(strips.length).fill(-1);
+  }, [cells, strips, map, o]);
+  /** 네온 띠가 보이는지 (-1 = 아직 안 정함). 흐려진(카메라 쪽) 벽의 띠는 허공에 떠 보이므로 숨긴다 */
+  const shown = useRef(new Int8Array(0));
+  const pulse = useRef({ level: 0 });
+  useFrame((_, dt) => {
+    if (!isClub) return;
     const t = now();
-    const beat = Math.floor(t * 2.1);
+    // 박자: 지금 흐르는 곡에 맞춘다 (곡 정보가 없으면 정해진 빠르기)
+    const beat = clubPulse();
+    const step = beat ? beat.step : Math.floor(t * IDLE_BPS);
+    const target = beat ? 0.2 + 0.8 * beat.level : 0.35 + 0.35 * Math.max(0, Math.cos(((t * IDLE_BPS) % 1) * Math.PI));
+    const p = pulse.current;
+    p.level += (target - p.level) * (1 - Math.exp(-Math.min(dt, 0.1) * 14));
+    const glow = 0.55 + 0.6 * p.level;
+
     const m = tiles.current;
     if (m) {
       cells.forEach((cell, i) => {
-        const on = (cell.k + beat) % 5;
+        const on = mod(cell.k + step, 5);
         // 박자마다 두세 칸 건너 하나씩 밝힌다
-        if (on < 2) m.setColorAt(i, col.set(CLUB_COLORS[(cell.k + beat) % CLUB_COLORS.length]));
-        else m.setColorAt(i, black);
+        if (on < 2) m.setColorAt(i, col.set(CLUB_COLORS[mod(cell.k + step, CLUB_COLORS.length)]).multiplyScalar(glow));
+        else m.setColorAt(i, off);
       });
       if (m.instanceColor) m.instanceColor.needsUpdate = true;
     }
     const g = beams.current;
     if (g) {
       g.children.forEach((b, i) => {
-        b.rotation.z = Math.sin(t * 0.9 + i * 1.7) * 0.5;
-        b.rotation.x = Math.cos(t * 0.7 + i * 2.3) * 0.35;
+        // 바깥쪽 조명은 무대 가운데를 향해 기울어진 채 흔든다
+        const f = fixtures[i];
+        const toward = Math.atan2(c - f.x, cz - f.z);
+        b.rotation.set(Math.cos(t * 0.8 + i * 2.1) * 0.45 + 0.35 * Math.cos(toward), 0, -Math.sin(t * 0.95 + i * 1.6) * 0.45 - 0.35 * Math.sin(toward));
+        const mat = (b as THREE.Mesh).material as THREE.MeshBasicMaterial;
+        mat.color.set(CLUB_COLORS[mod(i + Math.floor(step / 4), CLUB_COLORS.length)]);
+        mat.opacity = 0.08 + 0.12 * p.level;
       });
     }
+    if (ball.current) ball.current.rotation.y = t * 0.8;
+    const sp = spots.current;
+    if (sp) {
+      for (let i = 0; i < SPOTS; i++) {
+        const r = 1.5 + (i % 6) * 1.25;
+        const a = t * 0.55 + i * 2.39;
+        const x = c + Math.cos(a) * r;
+        const z = cz + Math.sin(a) * r * 0.85;
+        o.position.set(x, groundHeightAt(map, x, z) + 0.05, z);
+        o.rotation.set(-Math.PI / 2, 0, 0);
+        o.scale.setScalar(0.8 + 0.5 * p.level);
+        o.updateMatrix();
+        sp.setMatrixAt(i, o.matrix);
+      }
+      sp.instanceMatrix.needsUpdate = true;
+    }
+    const n = neon.current;
+    if (n) {
+      // 벽과 같은 기준(Props의 blocks)으로 카메라 쪽 벽인지 본다
+      const yaw = input.camera.yawNow;
+      const sy = Math.sin(yaw);
+      const cy = Math.cos(yaw);
+      let moved = false;
+      strips.forEach((st, i) => {
+        const vis = input.view !== 'walk' || (st.wx - input.self.x) * sy + (st.wz - input.self.z) * cy <= 0.4 ? 1 : 0;
+        if (shown.current[i] === vis) return;
+        shown.current[i] = vis;
+        o.position.set(st.x, st.y, st.z);
+        o.rotation.set(0, st.yaw, 0);
+        o.scale.setScalar(vis);
+        o.updateMatrix();
+        n.setMatrixAt(i, o.matrix);
+        moved = true;
+      });
+      if (moved) n.instanceMatrix.needsUpdate = true;
+      // 네온은 천천히 색이 흘러가고, 박자에 맞춰 밝아진다
+      const flow = Math.floor(t * 1.2);
+      strips.forEach((st, i) => n.setColorAt(i, col.set(CLUB_COLORS[(st.k + flow) % CLUB_COLORS.length]).multiplyScalar(0.5 + 0.5 * glow)));
+      if (n.instanceColor) n.instanceColor.needsUpdate = true;
+    }
+    lights.current.forEach((l, i) => {
+      if (!l) return;
+      l.color.set(CLUB_COLORS[mod(step + i * 2, CLUB_COLORS.length)]);
+      l.intensity = 10 + 30 * p.level;
+    });
   });
   if (!isClub) return null;
-  const c = map.width / 2;
   return (
     <>
       <instancedMesh ref={tiles} args={[undefined, undefined, cells.length]} frustumCulled={false}>
         <planeGeometry args={[1, 1]} />
         <meshBasicMaterial toneMapped={false} />
       </instancedMesh>
-      <group ref={beams} position={[c, 0, map.height / 2 - 6.4]}>
-        {CLUB_COLORS.slice(0, 4).map((color, i) => (
-          <mesh key={color} position={[(i - 1.5) * 1.6, 0, 0]} geometry={beamGeo}>
-            <meshBasicMaterial color={color} transparent opacity={0.16} depthWrite={false} side={THREE.DoubleSide} toneMapped={false} />
+      <group ref={beams}>
+        {fixtures.map((f, i) => (
+          <mesh key={i} position={f} geometry={beamGeo}>
+            <meshBasicMaterial color={CLUB_COLORS[i]} transparent opacity={0.14} depthWrite={false} side={THREE.DoubleSide} blending={THREE.AdditiveBlending} toneMapped={false} />
           </mesh>
         ))}
       </group>
+      {/* 천장 조명 몸체 */}
+      {fixtures.map((f, i) => (
+        <mesh key={i} position={[f.x, f.y + 0.12, f.z]}>
+          <cylinderGeometry args={[0.2, 0.26, 0.32, 12]} />
+          <meshStandardMaterial color={S.clubTileOff} roughness={0.6} />
+        </mesh>
+      ))}
+      {/* 미러볼과 줄 */}
+      <mesh ref={ball} position={[c, CEILING - 0.6, cz]}>
+        <icosahedronGeometry args={[0.55, 1]} />
+        <meshStandardMaterial color={S.clubBall} metalness={0.4} roughness={0.25} flatShading emissive={S.clubBall} emissiveIntensity={0.35} />
+      </mesh>
+      <mesh position={[c, CEILING + 0.6, cz]}>
+        <cylinderGeometry args={[0.015, 0.015, 1.8, 4]} />
+        <meshBasicMaterial color={S.clubTileOff} />
+      </mesh>
+      <instancedMesh ref={spots} args={[undefined, undefined, SPOTS]} frustumCulled={false}>
+        <circleGeometry args={[0.16, 10]} />
+        <meshBasicMaterial color={S.clubBall} transparent opacity={0.55} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
+      </instancedMesh>
+      <instancedMesh ref={neon} args={[undefined, undefined, strips.length]} frustumCulled={false}>
+        <boxGeometry args={[1.96, 0.07, 0.05]} />
+        <meshBasicMaterial toneMapped={false} />
+      </instancedMesh>
+      {[-1, 1].map((sx, i) => (
+        <pointLight key={sx} ref={(el) => void (lights.current[i] = el)} position={[c + sx * 2.6, floorY + 3.2, cz]} distance={16} decay={1.6} intensity={12} />
+      ))}
     </>
   );
 }
@@ -667,8 +813,7 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
     >
       <TownContext.Provider value={value}>
         <fog attach="fog" args={[S.fog, 30, 90]} />
-        <Sky />
-        <Clouds />
+        <Outdoors />
         <Lights />
         <FogRig />
         <Ground />
@@ -676,7 +821,6 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <Decor />
         <WindClock />
         <DayCycle />
-        <Ambient />
         <Houses />
         <DistrictOverlay />
         <MapLabelSync />

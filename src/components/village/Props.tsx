@@ -24,8 +24,10 @@ const CLICKABLE = new Set([DEBATE_BOARD_KEY, GATE_KEY]);
 const FADE_MIN_HEIGHT = 1.4;
 const FADE_OPACITY = 0.3;
 
-/** 한 번에 흐려질 수 있는 소품 수 (내 캐릭터 앞을 가리는 것만 흐려지므로 몇 개 안 된다) */
-const MAX_FADING = 24;
+/** 한 번에 흐려질 수 있는 소품 수 (내 캐릭터 앞을 가리는 것만 흐려지므로 몇 개 안 된다. 클럽 벽은 카메라 쪽이 다 흐려진다) */
+const MAX_FADING = 48;
+/** 실내 벽: 내 캐릭터보다 카메라 쪽에 있으면 거리와 상관없이 흐려진다 (안이 들여다보이는 단면처럼) */
+const CUTAWAY = new Set(['prop.club.wall', 'prop.club.door']);
 
 /** 인스턴스마다 투명도를 따로 주는 반투명 재질 */
 function fadingMaterial(src: THREE.Material): THREE.Material {
@@ -52,10 +54,11 @@ interface PropGroup {
   parts: { geometry: THREE.BufferGeometry; material: THREE.Material; local: THREE.Matrix4; tint: boolean }[];
   tall: boolean;
   halfWidth: number;
+  cutaway: boolean;
 }
 
 /** 카메라와 내 캐릭터 사이를 가리는지. yaw = 카메라 방향 (0 = 남쪽에서 북쪽을 본다) */
-function blocks(p: { x: number; z: number }, self: { x: number; z: number }, halfWidth: number, yaw: number) {
+function blocks(p: { x: number; z: number }, self: { x: number; z: number }, halfWidth: number, yaw: number, cutaway = false) {
   const dx = p.x - self.x;
   const dz = p.z - self.z;
   const c = Math.cos(yaw);
@@ -63,6 +66,7 @@ function blocks(p: { x: number; z: number }, self: { x: number; z: number }, hal
   // 캐릭터에서 카메라 쪽으로 얼마나 앞에 있는지, 화면 옆으로 얼마나 비켜 있는지
   const toward = dx * s + dz * c;
   const side = dx * c - dz * s;
+  if (cutaway) return toward > 0.4;
   return toward > 0.4 && toward < 8 && Math.abs(side) < halfWidth + 0.6;
 }
 
@@ -147,7 +151,7 @@ export function InstancedProps({ group, onPick }: { group: PropGroup; onPick?: (
     const { opacity, fadeSlot } = state;
     let changed = false;
     group.placements.forEach((p, i) => {
-      const target = walking && blocks(p, input.self, group.halfWidth, input.camera.yawNow) ? FADE_OPACITY : 1;
+      const target = walking && blocks(p, input.self, group.halfWidth, input.camera.yawNow, group.cutaway) ? FADE_OPACITY : 1;
       const cur = opacity[i];
       if (cur === target) return;
       opacity[i] = Math.abs(target - cur) < 0.01 ? target : cur + (target - cur) * k;
@@ -306,7 +310,7 @@ export function buildGroup(key: string, placements: PropPlacement[], assets: Tow
     });
   });
   const box = new THREE.Box3().setFromObject(root);
-  return { key, placements, parts, tall: box.max.y - box.min.y > FADE_MIN_HEIGHT, halfWidth: (box.max.x - box.min.x) / 2 };
+  return { key, placements, parts, tall: box.max.y - box.min.y > FADE_MIN_HEIGHT, halfWidth: (box.max.x - box.min.x) / 2, cutaway: CUTAWAY.has(key) };
 }
 
 export function Props() {

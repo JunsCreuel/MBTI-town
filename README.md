@@ -71,6 +71,7 @@ curl -X POST localhost:3000/api/dev/clock -H 'content-type: application/json' -d
 | `npm run test:postgres` | 서버 규칙 테스트를 운영과 같은 DB 드라이버(postgres.js)로 |
 | `npm run typecheck` | 타입 검사 |
 | `npm run assets:kenney -- "<폴더>/Models/GLTF format"` | Kenney Nature Kit(CC0, opengameart.org/content/nature-kit)에서 쓰는 자연물을 우리 색·크기로 바꿔 `public/assets/props/nature/`에 넣는다 |
+| `npm run assets:club-music -- "<폴더>"` | 클럽 음악(OpenGameArt CC0 EDM, 목록은 `src/shared/clubMusic.ts`)을 음량 맞춤 OGG + MP3로 바꾸고 박자를 재서 `public/assets/audio/`에 넣는다 (원본은 `<id>.<확장자>` 이름으로 받아 둔다) |
 | `npm run db:bundle` | `supabase/migrations/` 를 이어 붙여 `supabase/setup.sql` (Supabase에 한 번에 붙여 넣는 파일)을 다시 만든다. 마이그레이션을 추가하면 실행한다 |
 | `npm run assets:ph` | 임시 에셋(마을 소품·가구 GLB, 창밖 풍경, 아이콘, 안내 캐릭터, BGM)을 다시 만든다. 마을 맵은 없을 때만 만든다 (`-- --map` 이면 다시 만든다). BGM 인코딩에 ffmpeg가 필요하다 (`-- --no-audio` 면 BGM은 건너뛴다) |
 | `npm run assets:check` | 에셋 규칙·용량·남은 `_ph` 목록 검사 |

@@ -179,6 +179,10 @@ export const PROP_MATERIALS: Record<string, MaterialSpec> = {
   water: { roughness: 0.15, metallic: 0.05 },
   cloth: { roughness: 0.9, doubleSided: true },
   glow: { roughness: 0.6, emissive: [1, 0.86, 0.55] },
+  // 클럽 네온: 늘 제 색으로 빛난다 (밤낮과 상관없다. 값은 선형 색)
+  neonPink: { roughness: 0.5, emissive: [1, 0.2, 0.69] },
+  neonCyan: { roughness: 0.5, emissive: [0.1, 0.77, 1] },
+  neonGreen: { roughness: 0.5, emissive: [0.1, 0.77, 0.26] },
   outfit: { roughness: 0.75, doubleSided: true },
   foliage: { roughness: 0.9 },
 };

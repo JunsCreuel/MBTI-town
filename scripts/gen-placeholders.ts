@@ -15,7 +15,7 @@ import { Bitmap, hex, type RGBA } from './lib/bitmap';
 import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
 import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
 import { petParts } from './lib/pets';
-import { beaconParts, djBoothParts, fortuneTreeParts, fruitTreeParts, speakerParts } from './lib/play-props';
+import { beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, speakerParts } from './lib/play-props';
 import { FRUITS } from '../src/shared/play';
 import { PET_ANIMALS } from '../src/shared/pet';
 import { TOWN_TILES, buildHoodMap, buildSpotMap, buildTownMap } from './lib/town-map';
@@ -152,6 +152,11 @@ async function genTownProps() {
     ['prop.plaza.beacon_club', 'prop_plaza_beacon_club', beaconParts('#C77DFF', 'club')],
     ['prop.club.booth', 'prop_club_booth', djBoothParts()],
     ['prop.club.speaker', 'prop_club_speaker', speakerParts()],
+    // 실내 클럽: 벽·출입문·바·소파
+    ['prop.club.wall', 'prop_club_wall', clubWallParts()],
+    ['prop.club.door', 'prop_club_door', clubDoorParts()],
+    ['prop.club.bar', 'prop_club_bar', clubBarParts()],
+    ['prop.club.sofa', 'prop_club_sofa', clubSofaParts()],
   ];
   for (const [key, name, parts] of props) {
     const file = `props/${name}_ph.glb`;

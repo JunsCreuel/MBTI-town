@@ -589,5 +589,53 @@
   },
   "ui.icon.fishing": {
     "file": "ui/ui_icon_fishing_ph.svg"
+  },
+  "prop.club.wall": {
+    "file": "props/prop_club_wall_ph.glb"
+  },
+  "prop.club.door": {
+    "file": "props/prop_club_door_ph.glb"
+  },
+  "prop.club.bar": {
+    "file": "props/prop_club_bar_ph.glb"
+  },
+  "prop.club.sofa": {
+    "file": "props/prop_club_sofa_ph.glb"
+  },
+  "bgm.club.party_sector": {
+    "file": "audio/club_party_sector.ogg",
+    "alt": "audio/club_party_sector.mp3",
+    "title": "Party Sector",
+    "mood": "우주 느낌 댄스",
+    "seconds": 96.1,
+    "bpm": 120,
+    "beat": 0.026
+  },
+  "bgm.club.funky_house": {
+    "file": "audio/club_funky_house.ogg",
+    "alt": "audio/club_funky_house.mp3",
+    "title": "Funky House",
+    "mood": "여름 해변 하우스",
+    "seconds": 68.8,
+    "bpm": 128,
+    "beat": 0.049
+  },
+  "bgm.club.hella_bumps": {
+    "file": "audio/club_hella_bumps.ogg",
+    "alt": "audio/club_hella_bumps.mp3",
+    "title": "Hella Bumps",
+    "mood": "신나는 댄스 하우스",
+    "seconds": 58.8,
+    "bpm": 122.99,
+    "beat": 0.145
+  },
+  "bgm.club.lucid_trigger": {
+    "file": "audio/club_lucid_trigger.ogg",
+    "alt": "audio/club_lucid_trigger.mp3",
+    "title": "Lucid Trigger",
+    "mood": "프로그레시브 브레이크",
+    "seconds": 135.2,
+    "bpm": 150,
+    "beat": 0
   }
 }

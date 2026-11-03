@@ -18,6 +18,9 @@ export interface AssetEntry {
   title?: string;
   mood?: string;
   seconds?: number;
+  /** 클럽 음악: 빠르기(BPM)와 첫 박 위치(초). 무대 조명이 박자를 맞춘다 */
+  bpm?: number;
+  beat?: number;
 }
 
 const manifest = manifestJson as unknown as Record<string, AssetEntry>;

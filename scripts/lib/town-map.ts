@@ -619,6 +619,7 @@ const SPOT_SIZE = 48;
 const SOUTH = Math.PI / 2;
 
 export function buildSpotMap(kind: 'fishing' | 'club', tilesetFile: string) {
+  if (kind === 'club') return buildClubMap(tilesetFile);
   const { ground, set, get, block, isBlocked, polar, taken, prop, facing, square, at, snap, onPath, spawnRect, toTiled } = canvas(SPOT_SIZE);
   const c = SPOT_SIZE / 2;
   const rand = rng(kind === 'fishing' ? 20261104 : 20261105);
@@ -645,60 +646,29 @@ export function buildSpotMap(kind: 'fishing' | 'club', tilesetFile: string) {
       const { d } = polar(x, y);
       if (d >= shoreAt(polar(x, y).a)) continue;
       const southPath = Math.abs(x + 0.5 - c) < 1.2 && y + 0.5 > c && y + 0.5 < c + beaconR + 1.5;
-      if (kind === 'fishing') {
-        if (inPond(x, y)) {
-          set(ground, x, y, gid('water'));
-          block(x, y);
-        } else if (inPond(x, y, 1.28) || (southPath && !inPond(x, y, 1))) set(ground, x, y, gid('path'));
-      } else {
-        // 클럽: 가운데 넓은 돌바닥(무대), 남쪽 길
-        if (d <= 8.6) set(ground, x, y, gid('stone'));
-        else if (d <= 9.6) set(ground, x, y, gid('stoneEdge'));
-        else if (southPath) set(ground, x, y, gid('path'));
-      }
+      if (inPond(x, y)) {
+        set(ground, x, y, gid('water'));
+        block(x, y);
+      } else if (inPond(x, y, 1.28) || (southPath && !inPond(x, y, 1))) set(ground, x, y, gid('path'));
     }
   }
 
-  // 3. 소품
-  if (kind === 'fishing') {
-    // 부두: 연못 남쪽 가장자리에서 연못 쪽을 본다
-    const pier = { x: c + 3.5, y: pond.y + pond.ry - 0.6 };
-    prop('prop.district.pier', pier.x, pier.y, [], 180, 'water');
-    taken.push({ x: pier.x, y: pier.y, r: 1.8 });
-    // 연못 둘레 벤치·가로등
-    for (let k = 0; k < 8; k++) {
-      const a = (k / 8) * Math.PI * 2 + 0.2;
-      const p = { x: pond.x + Math.cos(a) * pond.rx * 1.42, y: pond.y + Math.sin(a) * pond.ry * 1.42 };
-      if (Math.abs(p.x - c) < 2 && p.y > c) continue;
-      const key = k % 2 ? 'prop.plaza.bench' : 'prop.plaza.lamp';
-      const x = snap(p.x);
-      const y = snap(p.y);
-      if (isBlocked(x, y) || get(ground, Math.floor(x), Math.floor(y)) === gid('path')) continue;
-      prop(key, x, y, [[Math.floor(x), Math.floor(y)]], key === 'prop.plaza.bench' ? facing(x, y, pond.x, pond.y) : 0);
-      taken.push({ x, y, r: 1.2 });
-    }
-  } else {
-    // DJ 부스 (북쪽, 남쪽을 본다)와 스피커 둘, 둘레 가로등
-    const booth = { x: c, y: c - 6.4 };
-    prop('prop.club.booth', booth.x, booth.y, square(Math.floor(booth.x) - 1, Math.floor(booth.y), 3, 1), 0);
-    taken.push({ x: booth.x, y: booth.y, r: 2 });
-    for (const s of [-1, 1]) {
-      const sp = { x: snap(c + s * 3.8), y: snap(c - 6.1) };
-      prop('prop.club.speaker', sp.x, sp.y, [[Math.floor(sp.x), Math.floor(sp.y)]], facing(sp.x, sp.y, c, c));
-      taken.push({ x: sp.x, y: sp.y, r: 1.2 });
-    }
-    for (let k = 0; k < 10; k++) {
-      const a = (k / 10) * Math.PI * 2 + 0.3;
-      if (Math.abs(wrap(a - SOUTH)) < 0.35) continue;
-      const l = at(10.3, a);
-      prop('prop.plaza.lamp', snap(l.x), snap(l.y), [[Math.floor(l.x), Math.floor(l.y)]]);
-      taken.push({ x: l.x, y: l.y, r: 1 });
-    }
-    for (const a of [0, Math.PI]) {
-      const b = at(7.6, a);
-      prop('prop.plaza.bench', snap(b.x), snap(b.y), [[Math.floor(b.x), Math.floor(b.y)]], facing(b.x, b.y, c, c));
-      taken.push({ x: b.x, y: b.y, r: 1.2 });
-    }
+  // 3. 소품: 부두, 연못 둘레 벤치·가로등
+  // 부두: 연못 남쪽 가장자리에서 연못 쪽을 본다
+  const pier = { x: c + 3.5, y: pond.y + pond.ry - 0.6 };
+  prop('prop.district.pier', pier.x, pier.y, [], 180, 'water');
+  taken.push({ x: pier.x, y: pier.y, r: 1.8 });
+  // 연못 둘레 벤치·가로등
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2 + 0.2;
+    const p = { x: pond.x + Math.cos(a) * pond.rx * 1.42, y: pond.y + Math.sin(a) * pond.ry * 1.42 };
+    if (Math.abs(p.x - c) < 2 && p.y > c) continue;
+    const key = k % 2 ? 'prop.plaza.bench' : 'prop.plaza.lamp';
+    const x = snap(p.x);
+    const y = snap(p.y);
+    if (isBlocked(x, y) || get(ground, Math.floor(x), Math.floor(y)) === gid('path')) continue;
+    prop(key, x, y, [[Math.floor(x), Math.floor(y)]], key === 'prop.plaza.bench' ? facing(x, y, pond.x, pond.y) : 0);
+    taken.push({ x, y, r: 1.2 });
   }
   // 광장으로 돌아가는 비콘 (남쪽 길 옆)
   {
@@ -748,4 +718,80 @@ export function buildSpotMap(kind: 'fishing' | 'club', tilesetFile: string) {
 
   // 5. 스폰: 남쪽 비콘 앞
   return toTiled(tilesetFile, [spawnRect('spawn', spawnAt.x - 1.5, spawnAt.y - 1, 3, 2)]);
+}
+
+// ───────────────────────── 실내 클럽 ─────────────────────────
+// 사방이 벽으로 막힌 홀. 벽 밖은 비워 둔다 (화면은 어둠으로 그린다).
+// 가운데 무대(춤추는 바닥), 북쪽 DJ 부스와 스피커, 동쪽 바, 서쪽 소파, 남쪽 출입문과 광장으로 돌아가는 비콘.
+
+const CLUB_SIZE = 36;
+/** 홀 안쪽 칸 범위: 가로 20칸, 세로 18칸 (가운데가 맵 가운데) */
+export const CLUB_HALL = { halfW: 10, halfD: 9 };
+
+function buildClubMap(tilesetFile: string) {
+  const { ground, set, block, prop, facing, rectTiles, square, spawnRect, toTiled } = canvas(CLUB_SIZE);
+  const c = CLUB_SIZE / 2;
+  const x0 = c - CLUB_HALL.halfW;
+  const x1 = c + CLUB_HALL.halfW;
+  const y0 = c - CLUB_HALL.halfD;
+  const y1 = c + CLUB_HALL.halfD;
+
+  // 1. 바닥: 홀 안은 돌바닥(화면이 짙은 클럽 바닥으로 칠한다), 벽 자리는 테두리, 밖은 막힌 빈 곳
+  for (let y = 0; y < CLUB_SIZE; y++) {
+    for (let x = 0; x < CLUB_SIZE; x++) {
+      const hall = x >= x0 && x < x1 && y >= y0 && y < y1;
+      const ring = x >= x0 - 1 && x <= x1 && y >= y0 - 1 && y <= y1;
+      if (hall) set(ground, x, y, gid('stone'));
+      else {
+        if (ring) set(ground, x, y, gid('stoneEdge'));
+        block(x, y);
+      }
+    }
+  }
+
+  // 2. 벽: 폭 2칸짜리 벽을 홀 둘레에 세운다. 벽 안쪽 면이 홀 경계에 오게 둔다 (정면 = 홀 안쪽)
+  const T2 = 0.2;
+  for (let x = x0 - 1; x <= x1; x += 2) {
+    prop('prop.club.wall', x + 1, y0 - T2, [], 0);
+    // 남쪽 가운데는 출입문
+    prop(x + 1 === c ? 'prop.club.door' : 'prop.club.wall', x + 1, y1 + T2, [], 180);
+  }
+  for (let y = y0; y < y1; y += 2) {
+    prop('prop.club.wall', x0 - T2, y + 1, [], facing(x0, y + 1, c, y + 1));
+    prop('prop.club.wall', x1 + T2, y + 1, [], facing(x1, y + 1, c, y + 1));
+  }
+
+  // 3. 북쪽 DJ 부스와 스피커 둘 (홀 쪽을 본다)
+  // 부스 뒤 한 줄은 비워 둔다 (DJ 자리에 설 수 있다)
+  const booth = { x: c, y: y0 + 2.5 };
+  prop('prop.club.booth', booth.x, booth.y, square(Math.floor(booth.x) - 1, Math.floor(booth.y), 3, 1), 0);
+  for (const s of [-1, 1]) {
+    const sp = { x: c + s * 3.8 + 0.5 * s, y: y0 + 1.6 };
+    prop('prop.club.speaker', sp.x, sp.y, [[Math.floor(sp.x), Math.floor(sp.y)]], facing(sp.x, sp.y, c, c));
+  }
+
+  // 4. 동쪽 바 (서쪽을 본다): 벽에 붙인다
+  {
+    const rot = facing(x1, c, c, c);
+    const bar = { x: x1 - 0.95, y: c - 2 };
+    // 선반·카운터·의자 자리 (벽 쪽 두 칸 × 네 칸)
+    prop('prop.club.bar', bar.x, bar.y, square(x1 - 2, bar.y - 2, 2, 4), rot);
+  }
+
+  // 5. 서쪽 소파 둘 (동쪽을 본다)
+  for (const y of [c - 4, c + 3]) {
+    const rot = facing(x0, y, c, y);
+    const sofa = { x: x0 + 0.55, y };
+    prop('prop.club.sofa', sofa.x, sofa.y, rectTiles(sofa.x, sofa.y, 1.2, 0.45, rot), rot);
+  }
+
+  // 6. 광장으로 돌아가는 비콘: 출입문 옆 안쪽
+  {
+    const x = c + 2.5;
+    const y = y1 - 1.5;
+    prop('prop.plaza.beacon_club', x, y, [[Math.floor(x), Math.floor(y)]], 180);
+  }
+
+  // 7. 스폰: 출입문 앞
+  return toTiled(tilesetFile, [spawnRect('spawn', c - 1.5, y1 - 3.5, 3, 2)]);
 }

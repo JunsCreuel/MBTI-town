@@ -174,6 +174,16 @@ export const tokens = {
     tagBg: '#FFFFFF',
     tagText: '#283240',
     heart: '#FF7A9C',
+    /** 클럽 (실내): 벽 밖은 어둠, 짙은 바닥, 보랏빛 조명, 네온 색 */
+    clubVoid: '#09080F',
+    clubFloor: '#2C2739',
+    clubFloorEdge: '#1F1B29',
+    clubLight: '#B9A8FF',
+    clubHemiSky: '#7C6CDB',
+    clubHemiGround: '#2B1D3B',
+    clubTileOff: '#1A1824',
+    clubNeon: ['#FF5FA2', '#7C6BFF', '#3CC8FF', '#5BE38C', '#FFD24A'],
+    clubBall: '#E4E2F2',
   },
   font: {
     base: "'Pretendard Variable', 'Pretendard', system-ui, sans-serif",

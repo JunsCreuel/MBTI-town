@@ -23,6 +23,7 @@ import { currentView, cycleView, initialCamera, isTurned, resetCamera, rotateCam
 import { placePoint } from '@/shared/spawn';
 import { wakeRealtime } from '@/lib/realtime';
 import { TownSession, now } from './session';
+import { ClubMusic } from './ClubMusic';
 import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
 import {
   BasketSheet, CLUB_FLOOR_RADIUS, FishingPanel, FortuneFruitSheet, beaconsOf, treesOf,
@@ -251,6 +252,11 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const [fishing, setFishing] = useState(false);
   const [onFloor, setOnFloor] = useState(false);
   const lastDance = useRef(0);
+  // 클럽 음악: 무대 가운데에서 멀어지면 작게 들린다
+  const clubDistance = useCallback(() => {
+    const map = loaded?.map;
+    return map ? Math.hypot(input.self.x - map.width / 2, input.self.z - map.height / 2) : 0;
+  }, [loaded, input]);
   const isGuest = snap.guest;
   const refreshPlay = useCallback(() => {
     call<PlayState>('GET', '/api/play').then(setPlay).catch(() => {});
@@ -489,6 +495,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
                   {snap.error ?? '연결이 끊겼어요'} · <b>다시 연결</b>
                 </button>
               )}
+              {spot === 'club' && loaded && <ClubMusic distance={clubDistance} />}
               <Link className="pill debate-link" href="/debate">
                 <span className="debate-link__tag">이벤트</span>
                 <span className="debate-link__label">오늘의 토론</span> ›

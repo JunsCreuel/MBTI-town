@@ -105,7 +105,7 @@ export function beaconParts(color: string, sign: 'fish' | 'club'): Part[] {
 export function djBoothParts(): Part[] {
   return [
     part(box(2.2, 0.95, 0.9), C.dark, { pos: [0, 0.475, 0] }),
-    part(box(2.1, 0.5, 0.04), '#FF7AD9', { pos: [0, 0.5, 0.47], mat: 'glow' }),
+    part(box(2.1, 0.5, 0.04), '#FF7AD9', { pos: [0, 0.5, 0.47], mat: 'neonPink' }),
     ...[-0.55, 0.55].map((x) => part(cyl(0.28, 0.28, 0.05, 24), '#1C1A22', { pos: [x, 0.98, 0] })),
     ...[-0.55, 0.55].map((x) => part(cyl(0.06, 0.06, 0.06, 12), C.gold, { pos: [x, 1.02, 0] })),
     part(box(0.4, 0.06, 0.3), C.metal, { pos: [0, 0.98, 0] }),
@@ -117,7 +117,75 @@ export function speakerParts(): Part[] {
   return [
     part(box(0.9, 1.7, 0.75), '#26232C', { pos: [0, 0.85, 0] }),
     part(cyl(0.3, 0.3, 0.05, 24), '#3B3746', { pos: [0, 1.15, 0.38], rot: [90, 0, 0] }),
-    part(cyl(0.17, 0.17, 0.06, 20), '#57E3FF', { pos: [0, 1.15, 0.4], rot: [90, 0, 0], mat: 'glow' }),
+    part(cyl(0.17, 0.17, 0.06, 20), '#57E3FF', { pos: [0, 1.15, 0.4], rot: [90, 0, 0], mat: 'neonCyan' }),
     part(cyl(0.2, 0.2, 0.05, 20), '#3B3746', { pos: [0, 0.5, 0.38], rot: [90, 0, 0] }),
+  ];
+}
+
+// ───────────────────────── 실내 클럽 ─────────────────────────
+// 네온 띠는 화면(ClubFx)이 벽 자리를 읽어 음악에 맞춰 그린다. 모델은 어두운 벽과 가구만.
+
+const CLUB = {
+  wall: '#2E2840',
+  panel: '#3A3150',
+  base: '#1C1826',
+  cap: '#433A5C',
+  door: '#4A2E3E',
+  velvet: '#5B2E6B',
+  velvetDark: '#46224F',
+  counter: '#33263B',
+  top: '#C9A36A',
+};
+
+/** 클럽 벽 한 칸 (폭 2, 높이 3): 흡음 판 둘, 아래 걸레받이, 위 마감. 정면(+Z)이 홀 안쪽 */
+export function clubWallParts(): Part[] {
+  return [
+    part(box(2, 3, 0.4), CLUB.wall, { pos: [0, 1.5, 0] }),
+    part(box(2.02, 0.22, 0.46), CLUB.base, { pos: [0, 0.11, 0] }),
+    part(box(2.02, 0.12, 0.5), CLUB.cap, { pos: [0, 2.96, 0] }),
+    ...[-0.5, 0.5].map((x) => part(box(0.86, 1.5, 0.06), CLUB.panel, { pos: [x, 1.45, 0.22] })),
+  ];
+}
+
+/** 클럽 출입문 (폭 2): 문틀, 두 짝 문, 손잡이, 위에 빛나는 출구 표시 */
+export function clubDoorParts(): Part[] {
+  return [
+    part(box(2, 3, 0.4), CLUB.wall, { pos: [0, 1.5, 0] }),
+    part(box(1.6, 2.3, 0.08), CLUB.base, { pos: [0, 1.15, 0.2] }),
+    ...[-0.39, 0.39].map((x) => part(box(0.74, 2.18, 0.06), CLUB.door, { pos: [x, 1.1, 0.25] })),
+    ...[-0.1, 0.1].map((x) => part(box(0.04, 0.4, 0.05), C.gold, { pos: [x, 1.1, 0.3] })),
+    part(box(0.7, 0.24, 0.08), '#5BE38C', { pos: [0, 2.62, 0.24], mat: 'neonGreen' }),
+    part(box(2.02, 0.12, 0.5), CLUB.cap, { pos: [0, 2.96, 0] }),
+  ];
+}
+
+/** 바 (폭 4, 깊이 2): 앞 카운터와 의자 셋, 뒤 선반의 병들 (몇 병은 빛난다). 정면(+Z)이 손님 쪽 */
+export function clubBarParts(): Part[] {
+  const bottles = ['#7CC36A', '#F2C14E', '#E2483D', '#57E3FF', '#C77DFF', '#F4A08C', '#9ED6C9'];
+  return [
+    // 카운터
+    part(box(3.8, 1.0, 0.7), CLUB.counter, { pos: [0, 0.5, 0.25] }),
+    part(box(3.96, 0.08, 0.86), CLUB.top, { pos: [0, 1.04, 0.25] }),
+    // 뒤 선반 두 단
+    part(box(3.6, 1.9, 0.3), CLUB.base, { pos: [0, 0.95, -0.75] }),
+    ...[0.95, 1.45].map((y) => part(box(3.5, 0.05, 0.34), CLUB.top, { pos: [0, y, -0.6] })),
+    ...[0.95, 1.45].flatMap((y, row) =>
+      bottles.map((c, i) => part(cyl(0.06, 0.07, 0.3, 8), c, { pos: [-1.5 + i * 0.5 + row * 0.2, y + 0.18, -0.58], mat: (i + row) % 3 === 0 ? 'glow' : 'glass' })),
+    ),
+    // 의자 셋
+    ...[-1.2, 0, 1.2].flatMap((x) => [
+      part(cyl(0.04, 0.05, 0.7, 8), C.metal, { pos: [x, 0.35, 0.95] }),
+      part(cyl(0.22, 0.2, 0.1, 16), CLUB.velvet, { pos: [x, 0.74, 0.95] }),
+    ]),
+  ];
+}
+
+/** 소파 (폭 2.4): 벨벳 방석, 등받이, 팔걸이. 정면(+Z)이 앉는 쪽 */
+export function clubSofaParts(): Part[] {
+  return [
+    part(box(2.4, 0.42, 0.9), CLUB.velvetDark, { pos: [0, 0.21, 0] }),
+    part(box(2.2, 0.14, 0.72), CLUB.velvet, { pos: [0, 0.49, 0.06] }),
+    part(box(2.4, 0.66, 0.24), CLUB.velvet, { pos: [0, 0.75, -0.33] }),
+    ...[-1.1, 1.1].map((x) => part(box(0.22, 0.6, 0.9), CLUB.velvetDark, { pos: [x, 0.42, 0] })),
   ];
 }

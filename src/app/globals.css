@@ -3376,6 +3376,74 @@ a:focus-visible {
 .club-hint {
   opacity: 1;
 }
+/* 클럽 음악: 지금 나오는 곡과 켜기·끄기 */
+.club-music {
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-3);
+  max-width: min(320px, calc(100vw - 150px));
+}
+.club-music__info {
+  display: grid;
+  min-width: 0;
+  line-height: 1.2;
+}
+.club-music__title,
+.club-music__artist {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.club-music__artist {
+  font-size: 11px;
+}
+.club-music__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 32px;
+  min-height: 32px;
+  justify-content: center;
+  padding: 0 var(--space-2);
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-accentText);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  flex: none;
+}
+/* 브라우저가 자동 재생을 막았을 때: 눌러 달라고 살짝 부른다 */
+.club-music--ask .club-music__btn {
+  animation: bite 0.7s ease-in-out infinite alternate;
+}
+.club-music__eq {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+  flex: none;
+}
+.club-music__eq i {
+  width: 3px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+.club-music--on .club-music__eq i {
+  animation: eq 0.9s ease-in-out infinite;
+}
+.club-music--on .club-music__eq i:nth-child(2) {
+  animation-delay: -0.3s;
+}
+.club-music--on .club-music__eq i:nth-child(3) {
+  animation-delay: -0.6s;
+}
+@keyframes eq {
+  0%, 100% { height: 4px; }
+  50% { height: 14px; }
+}
 @keyframes bob {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(5px); }
@@ -3386,7 +3454,9 @@ a:focus-visible {
 }
 @media (prefers-reduced-motion: reduce) {
   .fishing__bobber,
-  .fishing__text--bite {
+  .fishing__text--bite,
+  .club-music--ask .club-music__btn,
+  .club-music--on .club-music__eq i {
     animation: none;
   }
 }

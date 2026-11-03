@@ -8,6 +8,7 @@ import { townConfig } from '@/config/game';
 import { tokens } from '@/design/tokens';
 import { DISTRICTS } from '@/shared/districts';
 import { GROUND_BLEND_RADIUS, WATER_LEVEL, blendWeight, groundHeightAt, type TownMap } from '@/shared/townMap';
+import { isIndoor } from './club';
 import { useTown } from './context';
 import { windUniforms } from './wind';
 
@@ -74,7 +75,7 @@ const smooth = (a: number, b: number, t: number) => {
  * 땅을 한 장의 매끈한 지형으로 만든다. 칸 하나를 SUB×SUB로 나누고, 꼭짓점마다 주변 칸의 높이와 색을 거리로 섞는다.
  * 그래서 길·모래·물의 경계가 계단이 아니라 둥글게 이어지고, 모래사장은 물로 완만하게 내려간다.
  */
-function buildGround(map: TownMap): THREE.BufferGeometry {
+function buildGround(map: TownMap, indoor: boolean): THREE.BufferGeometry {
   const kinds = Int8Array.from(map.ground, (gid) => KINDS.indexOf(kindOf(map.terrain[gid] ?? 'grass')));
   const n = map.width * SUB + 1;
   const m = map.height * SUB + 1;
@@ -82,9 +83,10 @@ function buildGround(map: TownMap): THREE.BufferGeometry {
   const col = new Float32Array(n * m * 3);
   const colors = {
     path: new THREE.Color(S.path),
-    stone: new THREE.Color(S.stoneGrout),
+    // 실내(클럽): 바닥은 짙게, 벽 밖(물 자리)은 어둠
+    stone: new THREE.Color(indoor ? S.clubFloorEdge : S.stoneGrout),
     sand: new THREE.Color(S.sand),
-    water: new THREE.Color(S.sandSide),
+    water: new THREE.Color(indoor ? S.clubVoid : S.sandSide),
   };
   const grassA = new THREE.Color(S.grass);
   const grassB = new THREE.Color(S.grassDark);
@@ -314,7 +316,8 @@ const soilGeometry = new THREE.BoxGeometry(0.84, 0.02, 0.84);
 export function Terrain({ onGroundClick }: { onGroundClick: (e: ThreeEvent<MouseEvent>) => void }) {
   const { map } = useTown();
   const all = useMemo(() => cells(map), [map]);
-  const ground = useMemo(() => buildGround(map), [map]);
+  const indoor = useMemo(() => isIndoor(map), [map]);
+  const ground = useMemo(() => buildGround(map, indoor), [map, indoor]);
   useEffect(() => () => ground.dispose(), [ground]);
   const water = useMemo(() => {
     const shore = shoreTexture(map);
@@ -346,7 +349,7 @@ export function Terrain({ onGroundClick }: { onGroundClick: (e: ThreeEvent<Mouse
               p: [x + ox, h, z + oz],
               s: [1, 1, 1],
               r: (r(ox * 10 + oz) - 0.5) * 0.06,
-              color: terrain === 'stone' ? S.stone : S.stoneSide,
+              color: indoor ? (terrain === 'stone' ? S.clubFloor : S.clubFloorEdge) : terrain === 'stone' ? S.stone : S.stoneSide,
               shade: (r(ox + oz * 7) - 0.5) * 0.05,
             });
           }
@@ -390,17 +393,19 @@ export function Terrain({ onGroundClick }: { onGroundClick: (e: ThreeEvent<Mouse
       }
     }
     return { slabs, hedges, leaves, flowers, pebbles, planters, soils };
-  }, [all, map]);
+  }, [all, map, indoor]);
 
   return (
     <>
       <mesh geometry={ground} receiveShadow onClick={onGroundClick}>
         <meshStandardMaterial vertexColors roughness={0.95} />
       </mesh>
-      {/* 바다와 호수 (땅이 수면 아래로 내려간 곳에 보인다) */}
-      <mesh rotation-x={-Math.PI / 2} position={[map.width / 2, WATER_LEVEL, map.height / 2]} receiveShadow material={water.material}>
-        <planeGeometry args={[map.width + 900, map.height + 900]} />
-      </mesh>
+      {/* 바다와 호수 (땅이 수면 아래로 내려간 곳에 보인다). 실내에는 없다 */}
+      {!indoor && (
+        <mesh rotation-x={-Math.PI / 2} position={[map.width / 2, WATER_LEVEL, map.height / 2]} receiveShadow material={water.material}>
+          <planeGeometry args={[map.width + 900, map.height + 900]} />
+        </mesh>
+      )}
       <Instances geometry={planterGeometry} items={deco.planters} castShadow />
       <Instances geometry={soilGeometry} items={deco.soils} />
       <Instances geometry={slabGeometry} items={deco.slabs} roughness={0.85} />

@@ -77,6 +77,22 @@ export function dayLookAt(hour: number): DayLook {
   };
 }
 
+/** 실내 클럽의 빛: 시각과 상관없이 늘 어둡고 보랏빛이다 (등·네온은 켜진다) */
+export function indoorLook(): DayLook {
+  return {
+    skyTop: new THREE.Color(S.clubVoid),
+    skyHorizon: new THREE.Color(S.clubVoid),
+    fog: new THREE.Color(S.clubVoid),
+    sun: new THREE.Color(S.clubLight),
+    sunIntensity: 0.75,
+    hemiSky: new THREE.Color(S.clubHemiSky),
+    hemiGround: new THREE.Color(S.clubHemiGround),
+    hemiIntensity: 1.05,
+    night: 1,
+    day: 0,
+  };
+}
+
 /** 장면이 함께 읽는 지금의 빛 (DayCycle이 몇 초마다 바꾼다) */
 export const day = { look: dayLookAt(12), hour: 12 };
 
