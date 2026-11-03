@@ -824,27 +824,59 @@ a.btn-secondary[aria-disabled='true'] {
 
 /* 로그인 */
 
-.email-form {
-  display: grid;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-
-.email-form__row {
+/* 로그인·가입: 이메일 + 비밀번호 */
+.auth-tabs {
   display: flex;
   gap: var(--space-2);
+  margin-top: var(--space-2);
 }
-
-.email-form input {
-  flex: 1;
-  min-width: 0;
+.auth-form {
+  display: grid;
+  gap: var(--space-3);
+}
+.auth-field {
+  display: grid;
+  gap: var(--space-1);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-textSub);
+}
+.auth-field input {
   min-height: 48px;
   padding: 0 var(--space-4);
   border: 2px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  color: var(--color-text);
   font: inherit;
   font-size: 16px;
+  font-weight: 500;
+}
+.auth-field input:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+}
+.auth-link {
+  justify-self: center;
+  padding: var(--space-1);
+  border: 0;
+  background: none;
+  color: var(--color-accentInk);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.auth-link--inline {
+  padding: 0;
+  font-size: inherit;
+}
+.auth-note {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 /* 관전 판정 */

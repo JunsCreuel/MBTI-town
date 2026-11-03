@@ -124,15 +124,23 @@ Free 플랜은 15분 동안 접속이 없으면 잠들고, 다음 사람이 마�
 
 Supabase **Authentication → URL Configuration**:
 
-- **Site URL**: Vercel 주소 (예: `https://scene.vercel.app`)
-- **Redirect URLs** 에 추가: `https://scene.vercel.app/auth/callback`
+- **Site URL**: 실제 서비스 주소 (지금은 `https://mbti-town-mu.vercel.app`)
+- **Redirect URLs** 에 추가: `https://mbti-town-mu.vercel.app/**` (가입 인증·비밀번호 재설정 메일이 `/auth/callback?next=…` 로 돌아온다)
 
-이게 없으면 로그인 뒤 `/login?error=1` 로 돌아옵니다.
+주소가 다르면 메일 링크가 엉뚱한 곳으로 가거나 `/login?error=…` 로 돌아옵니다.
 
-### 5-2. 이메일 로그인 (기본으로 켜져 있음)
+### 5-2. 이메일 + 비밀번호 로그인 (기본)
 
-로그인 화면의 "이메일로 로그인 링크 받기"가 바로 동작합니다.
-다만 Supabase 기본 메일 발송은 시간당 보낼 수 있는 수가 아주 적어서 테스트용입니다. 실제로 사람을 받기 전에 **Authentication → Emails (SMTP Settings)** 에서 메일 발송 서비스를 연결하세요.
+- **처음 가입할 때만** 이메일 인증을 합니다: 이메일·비밀번호를 적으면 인증 메일이 가고, 링크를 누르면 가입이 끝나 첫 화면(동네 정하기)으로 갑니다.
+- 그다음부터는 **이메일 + 비밀번호**로 바로 들어옵니다 (메일을 보내지 않음).
+- 비밀번호를 잊었거나, 예전에 메일 링크로만 들어왔던 사람은 "비밀번호를 잊었어요"에서 재설정 메일을 받아 비밀번호를 만듭니다 (`/login/reset`).
+- Supabase **Authentication → Sign In / Providers → Email** 에서 **Enable Email provider**, **Confirm email** 이 켜져 있어야 합니다 (기본값).
+
+**메일 발송 서비스 연결 (실제로 사람을 받기 전에 꼭)**: Supabase 기본 메일 발송은 테스트용이라 **프로젝트 팀원 주소로만** 보내고, 시간당 보낼 수 있는 수도 아주 적습니다. 그래서 다른 사람 주소로 가입하면 "지금은 이 주소로 메일을 보낼 수 없어요"가 뜹니다.
+**Authentication → Emails → SMTP Settings** 에서 메일 서비스(예: Resend, 무료 월 3,000통)를 연결하고, **Rate Limits** 에서 시간당 메일 수를 늘리세요.
+
+- Resend 예: Host `smtp.resend.com`, Port `465`, Username `resend`, Password = Resend에서 만든 API 키, 보내는 주소는 Resend에 등록한 도메인 주소.
+- 키는 Supabase 화면에만 넣습니다 (저장소·채팅에 붙이지 않기).
 
 ### 5-3. 카카오 로그인 (선택)
 
