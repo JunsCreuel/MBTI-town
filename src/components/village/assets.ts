@@ -8,6 +8,7 @@ import { allFloraKeys } from '@/shared/flora';
 import type { TownMap } from '@/shared/townMap';
 import { EMOTES, type EmoteKind } from '@/shared/protocol';
 import { EMOTE_INFO } from '../app/gestures';
+import { hasGuideNpc } from './npc';
 
 /** 집터에 세우는 모델 */
 export const HOUSE_KEY = 'prop.town.house';
@@ -24,6 +25,8 @@ export interface TownAssets {
   emotes: Record<EmoteKind, THREE.Texture>;
   /** 낚싯대 (낚시할 때 오른손에 든다) */
   rod: THREE.Object3D;
+  /** 광장 안내 NPC 몬냥이 (광장 맵에서만 받는다) */
+  npc: GLTF | null;
 }
 
 function canvas(w: number, h: number) {
@@ -95,6 +98,7 @@ export function loadEmoteTextures(): Promise<Record<EmoteKind, THREE.Texture>> {
 }
 
 const ROD_KEY = 'prop.tool.rod';
+const NPC_KEY = 'char.npc.monnyang';
 
 export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) => void): Promise<TownAssets> {
   const loader = new GLTFLoader();
@@ -102,7 +106,8 @@ export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) =
   // 맵 소품 + 집 + 화면이 흩뿌리는 풀·꽃 (지역 식물 전부)
   const propKeys = [...new Set([...map.props.map((p) => p.key), HOUSE_KEY, LOT_KEY, ...allFloraKeys()])];
   // 같은 파일을 여러 키가 쓰면 한 번만 받는다
-  const urls = [...new Set(['char.base', ROD_KEY, ...accessoryKeys.map(([, k]) => k), ...propKeys].map(assetUrl))];
+  const npcKey = hasGuideNpc(map) ? NPC_KEY : null;
+  const urls = [...new Set(['char.base', ROD_KEY, ...(npcKey ? [npcKey] : []), ...accessoryKeys.map(([, k]) => k), ...propKeys].map(assetUrl))];
   let done = 0;
   const models = new Map(
     await Promise.all(
@@ -121,6 +126,7 @@ export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) =
     props: Object.fromEntries(propKeys.map((k) => [k, models.get(assetUrl(k))!.scene])),
     emotes,
     rod: models.get(assetUrl(ROD_KEY))!.scene,
+    npc: npcKey ? models.get(assetUrl(npcKey))! : null,
   };
 }
 

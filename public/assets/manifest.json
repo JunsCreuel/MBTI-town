@@ -700,5 +700,8 @@
   },
   "prop.tool.rod": {
     "file": "props/prop_tool_rod_ph.glb"
+  },
+  "char.npc.monnyang": {
+    "file": "characters/char_npc_monnyang_ph.glb"
   }
 }

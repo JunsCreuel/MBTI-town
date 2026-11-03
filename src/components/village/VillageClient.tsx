@@ -25,6 +25,8 @@ import { placePoint } from '@/shared/spawn';
 import { wakeRealtime } from '@/lib/realtime';
 import { TownSession, now } from './session';
 import { ClubMusic } from './ClubMusic';
+import { NpcDialog } from './NpcDialog';
+import { NPC_NAME, NPC_TALK_REACH, guideNpcSpot, markNpcSeen, npcSeen } from './npc';
 import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
 import {
   CLUB_FLOOR_RADIUS, FishingPanel, FortuneFruitSheet, beaconsOf, treesOf,
@@ -180,6 +182,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       camera: initialCamera(),
       drops: [],
       fishing: null,
+      npc: { talking: false, talked: false },
     }),
     [],
   );
@@ -251,6 +254,32 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const trees = useMemo(() => (loaded ? treesOf(loaded.map) : []), [loaded]);
   const beacons = useMemo(() => (loaded ? beaconsOf(loaded.map) : []), [loaded]);
   const [nearBeacon, setNearBeacon] = useState<Spot | null>(null);
+  // 안내 NPC 몬냥이 (광장): 가까우면 말 걸기, 처음 온 사람에게는 먼저 인사한다
+  const npcSpot = useMemo(() => (loaded ? guideNpcSpot(loaded.map) : null), [loaded]);
+  const [nearNpc, setNearNpc] = useState(false);
+  const [npcOpen, setNpcOpen] = useState<{ first: boolean } | null>(null);
+  const openNpc = useCallback(
+    (first: boolean) => {
+      input.npc.talking = true;
+      input.keys.clear();
+      input.tapTarget = null;
+      setNpcOpen({ first });
+    },
+    [input],
+  );
+  const closeNpc = useCallback(() => {
+    input.npc.talking = false;
+    input.npc.talked = true;
+    markNpcSeen();
+    setNpcOpen(null);
+  }, [input]);
+  useEffect(() => {
+    if (!npcSpot) return;
+    input.npc.talked = npcSeen();
+    if (!rendered || input.npc.talked) return;
+    const t = setTimeout(() => openNpc(true), 1500);
+    return () => clearTimeout(t);
+  }, [npcSpot, rendered, input, openNpc]);
   const [canFish, setCanFish] = useState(false);
   const [fishing, setFishing] = useState(false);
   const [onFloor, setOnFloor] = useState(false);
@@ -331,6 +360,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       // 비콘: 본섬에서는 놀이터로, 놀이터에서는 광장으로
       const b = beacons.find((q) => Math.hypot(q.x - input.self.x, q.z - input.self.z) < playConfig.reach + 0.4);
       setNearBeacon(b?.kind ?? null);
+      setNearNpc(!!npcSpot && Math.hypot(npcSpot.x - input.self.x, npcSpot.z - input.self.z) < NPC_TALK_REACH);
       // 낚시터 물가
       setCanFish(spot === 'fishing' && nearWater(loaded.map, input.self.x, input.self.z));
       // 클럽 무대에 서 있으면 저절로 춤춘다 (2초마다, 걷는 중에는 걷기가 먼저)
@@ -345,7 +375,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       }
     }, 300);
     return () => clearInterval(t);
-  }, [loaded, input, here, trees, beacons, spot, session]);
+  }, [loaded, input, here, trees, beacons, spot, session, npcSpot]);
 
   const openMap = useCallback(
     (open: boolean) => {
@@ -635,6 +665,13 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
               </button>
             )}
 
+            {nearNpc && !npcOpen && !picked && !gateFor && !showDoor && (
+              <button className="door-btn" onClick={() => openNpc(false)}>
+                <Icon name="question" size={20} />
+                {NPC_NAME}와 이야기하기
+              </button>
+            )}
+
             {canFish && !nearBeacon && !fishing && (
               <button
                 className="door-btn"
@@ -770,6 +807,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
           }}
         />
       )}
+      {npcOpen && <NpcDialog guest={isGuest} first={npcOpen.first} onClose={closeNpc} />}
       {toast && (
         <div className="toast" role="status">
           {typeof toast === 'string' ? (

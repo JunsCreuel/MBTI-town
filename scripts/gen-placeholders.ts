@@ -16,6 +16,7 @@ import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
 import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
 import { petParts } from './lib/pets';
 import { fishIcons, fruitIcons } from './lib/item-icons';
+import { guideCatSpec } from './lib/npc';
 import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, speakerParts } from './lib/play-props';
 import { FRUITS } from '../src/shared/play';
 import { PET_ANIMALS } from '../src/shared/pet';
@@ -63,6 +64,11 @@ async function genAvatar() {
   save(file, await buildSkinned('char_base', chibiCharacterSpec()));
   register('char.base', { file });
   record(file);
+  // 광장 안내 NPC 몬냥이 (베이스 캐릭터와 같은 뼈대·동작)
+  const npc = 'characters/char_npc_monnyang_ph.glb';
+  save(npc, await buildSkinned('char_npc_monnyang', guideCatSpec()));
+  register('char.npc.monnyang', { file: npc });
+  record(npc);
   const acc = { glasses: 'NT', flower: 'NF', cap: 'SJ', headphones: 'SP' } as const;
   for (const [name, group] of Object.entries(acc)) {
     const f = `characters/char_acc_${name}_ph.glb`;

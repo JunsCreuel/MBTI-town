@@ -27,6 +27,8 @@ export interface TownInput {
   drops: { x: number; z: number; color: string; at: number }[];
   /** 내 낚시 (낚시 판이 열려 있는 동안). 화면이 찌·낚싯줄·물보라를 그린다 */
   fishing: FishingState | null;
+  /** 안내 NPC: 지금 이야기 중인지, 한 번이라도 이야기했는지 (머리 위 느낌표) */
+  npc: { talking: boolean; talked: boolean };
 }
 
 /** 낚시 한 번: 던진 시각, 찌가 떨어질 물 위 자리, 입질·낚아 올린 시각과 잡은 것 */
