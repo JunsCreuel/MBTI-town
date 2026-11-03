@@ -1,6 +1,6 @@
 'use client';
 
-// 새 비밀번호 정하기: 재설정 메일 링크로 로그인된 상태에서 비밀번호를 바꾼다 (처음 만드는 사람도 같다).
+// 새 비밀번호 정하기: 재설정 메일 링크로 로그인된 상태에서 비밀번호를 바꾼다.
 import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';

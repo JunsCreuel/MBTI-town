@@ -1,7 +1,7 @@
 'use client';
 
 // 로그인·가입. 처음 가입할 때만 이메일 인증을 하고, 그다음부터는 이메일 + 비밀번호로 들어온다.
-// 비밀번호를 잊었거나 예전에 메일 링크로만 들어왔던 사람은 재설정 메일로 비밀번호를 만든다.
+// 비밀번호를 잊으면 재설정 메일로 새 비밀번호를 만든다.
 import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
 import { useState } from 'react';
@@ -125,7 +125,7 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
     <main className="entry">
       <Wordmark />
       <header>
-        <h1 className="entry__title">{tab === 'signup' ? '처음 오셨어요?' : tab === 'reset' ? '비밀번호 만들기' : '로그인'}</h1>
+        <h1 className="entry__title">{tab === 'signup' ? '처음 오셨어요?' : tab === 'reset' ? '비밀번호 찾기' : '로그인'}</h1>
         <p className="entry__lead">로그인하면 나만의 방이 생겨요. 방을 꾸미고, 음악과 기록을 남기고, 친구 방에 놀러 가요.</p>
       </header>
 
@@ -157,7 +157,7 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
             </div>
           ) : sent === 'reset' ? (
             <div className="notice">
-              <b>{email}</b>로 비밀번호 만들기 메일을 보냈어요. <b>이 브라우저에서</b> 메일의 링크를 열어 새 비밀번호를 정해 주세요.
+              <b>{email}</b>로 비밀번호 재설정 메일을 보냈어요. <b>이 브라우저에서</b> 메일의 링크를 열어 새 비밀번호를 정해 주세요.
             </div>
           ) : tab === 'login' ? (
             <form className="auth-form" onSubmit={login}>
@@ -170,7 +170,7 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
                 {busy ? '들어가는 중…' : '로그인'}
               </button>
               <button type="button" className="auth-link" onClick={() => go('reset')}>
-                비밀번호를 잊었어요 · 예전에 메일 링크로만 들어왔어요
+                비밀번호를 잊었어요
               </button>
             </form>
           ) : tab === 'signup' ? (
@@ -191,10 +191,10 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
             </form>
           ) : (
             <form className="auth-form" onSubmit={reset}>
-              <p className="muted auth-note">가입한 이메일을 적으면 새 비밀번호를 만드는 링크를 보내 드려요. 예전에 메일 링크로만 들어왔던 분도 여기서 비밀번호를 처음 만들 수 있어요.</p>
+              <p className="muted auth-note">가입한 이메일을 적으면 새 비밀번호를 만드는 링크를 보내 드려요.</p>
               {emailField}
               <button className="btn-primary" disabled={busy}>
-                {busy ? '보내는 중…' : '비밀번호 만들기 메일 받기'}
+                {busy ? '보내는 중…' : '비밀번호 재설정 메일 받기'}
               </button>
               <button type="button" className="auth-link" onClick={() => go('login')}>
                 ‹ 로그인으로 돌아가기

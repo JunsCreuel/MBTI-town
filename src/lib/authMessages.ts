@@ -4,7 +4,7 @@
 export function authErrorMessage(code: string | undefined | null): string {
   switch (code) {
     case 'invalid_credentials':
-      return '이메일이나 비밀번호가 맞지 않아요. 예전에 메일 링크로만 들어왔다면 아래에서 비밀번호를 먼저 만들어 주세요.';
+      return '이메일이나 비밀번호가 맞지 않아요.';
     case 'email_not_confirmed':
       return '아직 이메일 인증을 하지 않았어요. 가입할 때 받은 메일의 링크를 눌러 주세요.';
     case 'email_exists':
