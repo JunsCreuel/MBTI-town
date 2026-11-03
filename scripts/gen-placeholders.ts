@@ -15,6 +15,7 @@ import { Bitmap, hex, type RGBA } from './lib/bitmap';
 import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
 import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
 import { petParts } from './lib/pets';
+import { fishIcons, fruitIcons } from './lib/item-icons';
 import { beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, speakerParts } from './lib/play-props';
 import { FRUITS } from '../src/shared/play';
 import { PET_ANIMALS } from '../src/shared/pet';
@@ -406,6 +407,19 @@ function genIcons() {
   }
 }
 
+// ───────────────────────── 가방 아이템 아이콘 (열매·물고기) ─────────────────────────
+
+function genItems() {
+  for (const [kind, list] of [['fruit', fruitIcons()], ['fish', fishIcons()]] as const) {
+    for (const { id, svg: body } of list) {
+      const file = `items/item_${kind}_${id}_ph.svg`;
+      save(file, body);
+      register(`item.${kind}.${id}`, { file });
+      record(file);
+    }
+  }
+}
+
 // ───────────────────────── BGM ─────────────────────────
 
 function genBgm() {
@@ -483,6 +497,7 @@ await genTownProps();
 genTownMap();
 genViews();
 genIcons();
+genItems();
 genBgm();
 genCardBackground();
 register('font.pretendard', { file: 'fonts/pretendard/pretendard.css' });

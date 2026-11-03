@@ -202,3 +202,23 @@ AI로 생성한 이미지·모델은 출처 칸에 사용한 도구를 적는다
 | audio/club_hella_bumps.mp3 | "Hella Bumps" by The Cynic Project (https://opengameart.org/content/hella-bumps-menu-music), 음량 맞춤·변환 | CC0 1.0 | 2026-11-03 |
 | audio/club_lucid_trigger.ogg | "Lucid Trigger" by Liq_mmry (https://opengameart.org/content/lucid-trigger), 음량 맞춤·변환 | CC0 1.0 | 2026-11-03 |
 | audio/club_lucid_trigger.mp3 | "Lucid Trigger" by Liq_mmry (https://opengameart.org/content/lucid-trigger), 음량 맞춤·변환 | CC0 1.0 | 2026-11-03 |
+| items/item_fruit_apple_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fruit_peach_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fruit_persimmon_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fruit_pear_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fruit_grape_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fruit_fortune_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_crucian_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_minnow_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_killifish_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_carp_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_catfish_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_sweetfish_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_mandarinfish_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_trout_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_eel_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_goldfish_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_golden_carp_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_dragon_fish_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_boot_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| items/item_fish_bottle_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |

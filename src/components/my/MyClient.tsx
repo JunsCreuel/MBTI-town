@@ -7,11 +7,14 @@ import { socialConfig } from '@/config/game';
 import { MBTI_TYPES } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { call, errorMessage } from '@/lib/api';
-import type { MyProfile, RoomCard } from '@/server/scene/service';
+import type { MyProfile, PlayState, RoomCard } from '@/server/scene/service';
 import { DISTRICT } from '@/shared/districts';
 import type { SajuReading } from '@/shared/saju';
 import { VISIBILITY_LABEL, type Visibility } from '@/shared/records';
 import { ResidentCard } from '../app/ResidentCard';
+import { InventorySheet, ItemIcon } from '../app/Inventory';
+import { FISH, FORTUNE_FRUIT, FRUITS } from '@/shared/play';
+import { DISTRICTS } from '@/shared/districts';
 import { Icon } from '../app/Icon';
 import { TabBar } from '../app/TabBar';
 import { useMe } from '../app/useMe';
@@ -48,6 +51,8 @@ export function MyClient() {
   const [blocked, setBlocked] = useState<{ handle: string; displayName: string }[]>([]);
   const [friendHandle, setFriendHandle] = useState('');
   const [toast, setToast] = useState<string | null>(null);
+  const [play, setPlay] = useState<PlayState | null>(null);
+  const [bagOpen, setBagOpen] = useState(false);
   /** 생일 고치기: 고친 값과 미리 본 사주 */
   const [birthEdit, setBirthEdit] = useState<BirthDraft | null>(null);
   const [birthPreview, setBirthPreview] = useState<SajuReading | null>(null);
@@ -69,6 +74,11 @@ export function MyClient() {
   useEffect(() => {
     if (me) loadSocial();
   }, [me, loadSocial]);
+
+  // 가방: 집이 있는 주민만 (놀거리 기록)
+  useEffect(() => {
+    if (me?.profile?.district) call<PlayState>('GET', '/api/play').then(setPlay).catch(() => {});
+  }, [me]);
 
   useEffect(() => {
     if (!toast) return;
@@ -168,6 +178,17 @@ export function MyClient() {
           <p className="muted">닉네임·취미·MBTI를 고치면 주민증도 바뀌어요.</p>
         </section>
       )}
+
+      {profile.district && (
+        <section className="section card" id="bag">
+          <h2 className="section-title">가방</h2>
+          <BagPreview play={play} />
+          <button className="btn-secondary" onClick={() => setBagOpen(true)}>
+            가방 열기 (열매·물고기 도감)
+          </button>
+        </section>
+      )}
+      {bagOpen && <InventorySheet state={play} onClose={() => setBagOpen(false)} />}
 
       <section className="section card">
         <h2 className="section-title">프로필</h2>
@@ -352,5 +373,25 @@ export function MyClient() {
       {toast && <div className="toast" role="status">{toast}</div>}
       <TabBar />
     </main>
+  );
+}
+
+/** 가방 미리보기: 모은 것 몇 가지를 아이콘으로 */
+function BagPreview({ play }: { play: PlayState | null }) {
+  if (!play) return <div className="loader" aria-hidden />;
+  const items = [
+    ...[...DISTRICTS.map((d) => FRUITS[d]), FORTUNE_FRUIT].map((f) => ({ kind: 'fruit' as const, id: f.id, name: f.name, n: play.fruits[f.id] ?? 0 })),
+    ...FISH.map((f) => ({ kind: 'fish' as const, id: f.id, name: f.name, n: play.fish[f.id] ?? 0 })),
+  ].filter((i) => i.n > 0);
+  if (!items.length) return <p className="muted">아직 모은 게 없어요. 마을에서 열매를 따고 낚시를 해 봐요!</p>;
+  return (
+    <ul className="bag-preview">
+      {items.slice(0, 12).map((i) => (
+        <li key={`${i.kind}.${i.id}`} title={`${i.name} ${i.n}`}>
+          <ItemIcon kind={i.kind} id={i.id} size={36} />
+          <b>{i.n}</b>
+        </li>
+      ))}
+    </ul>
   );
 }

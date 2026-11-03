@@ -1,14 +1,15 @@
 'use client';
 
-// 마을 놀거리 화면: 나무 자리 찾기, 운세 열매 카드(공유), 바구니(도감).
+// 마을 놀거리 화면: 나무 자리 찾기, 운세 열매 카드(공유), 낚시 판. 가방(도감)은 app/Inventory.
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { tokens } from '@/design/tokens';
 import type { FishResult, PickResult, PlayState } from '@/server/scene/service';
-import { DISTRICTS, isDistrict, type District } from '@/shared/districts';
-import { FISH, FORTUNE_FRUIT, FRUITS, type FishDef, type FortuneFruit } from '@/shared/play';
+import { isDistrict, type District } from '@/shared/districts';
+import { FORTUNE_FRUIT, type FortuneFruit } from '@/shared/play';
 import { parseSpot, type Spot } from '@/shared/protocol';
 import type { TownMap } from '@/shared/townMap';
 import { CARD_H, CARD_W, blankCard, canvasToBlob, cardFont, shareImage, wrapText } from '@/lib/shareCard';
+import { ItemIcon, RARITY } from '../app/Inventory';
 import { Sheet } from '../app/Sheet';
 
 export interface TreeInfo {
@@ -48,13 +49,6 @@ export function beaconsOf(map: TownMap): { kind: Spot; x: number; z: number }[] 
     return p.key.startsWith('prop.plaza.beacon_') && kind ? [{ kind, x: p.x, z: p.z }] : [];
   });
 }
-
-const RARITY: Record<FishDef['rarity'], { label: string; color: string }> = {
-  common: { label: '흔해요', color: tokens.color.textSub },
-  rare: { label: '드물어요', color: tokens.color.sky },
-  legend: { label: '전설', color: tokens.emotion.joy },
-  junk: { label: '꽝', color: tokens.color.lose },
-};
 
 /**
  * 낚시: 찌를 던지고 → 기다리다 → 입질! → 잡은 것을 보여 준다. 결과는 던지는 순간 서버가 정하고, 화면은 기다리는 연출만 한다.
@@ -113,7 +107,9 @@ export function FishingPanel({
       {stage === 'bite' && <p className="fishing__text fishing__text--bite">앗! 물었다!</p>}
       {stage === 'caught' && result && (
         <>
-          <span className="fishing__fish" style={{ background: result.fish.color }} aria-hidden />
+          <span className="fishing__fish" aria-hidden>
+            <ItemIcon kind="fish" id={result.fish.id} size={64} />
+          </span>
           <p className="fishing__name">
             {result.fish.name}
             {result.size > 0 && <small> {result.size}cm</small>}
@@ -235,48 +231,6 @@ export function FortuneFruitSheet({
         {note && <p className="muted" role="status">{note}</p>}
         <p className="muted fortune-fruit__note">재미로 보는 운세예요. 운세 나무는 하루에 한 번 열매를 줘요.</p>
       </div>
-    </Sheet>
-  );
-}
-
-/** 바구니: 모은 열매와 물고기 도감 */
-export function BasketSheet({ state, onClose }: { state: PlayState | null; onClose: () => void }) {
-  const fruits = [...DISTRICTS.map((d) => FRUITS[d]), FORTUNE_FRUIT];
-  const caught = FISH.filter((f) => state?.fish[f.id]).length;
-  return (
-    <Sheet title="바구니와 도감" onClose={onClose}>
-      {!state ? (
-        <div className="loader" aria-hidden />
-      ) : (
-        <div className="basket">
-          <h3 className="section-title">열매</h3>
-          <ul className="basket__grid">
-            {fruits.map((f) => (
-              <li key={f.id} className="basket__item">
-                <span className="basket__dot" style={{ background: f.color }} aria-hidden />
-                <span className="basket__name">{f.name}</span>
-                <b>{state.fruits[f.id] ?? 0}</b>
-              </li>
-            ))}
-          </ul>
-          <h3 className="section-title">
-            물고기 도감 <span className="muted">{caught}/{FISH.length}</span>
-          </h3>
-          <ul className="basket__grid">
-            {FISH.map((f) => {
-              const n = state.fish[f.id] ?? 0;
-              return (
-                <li key={f.id} className={`basket__item${n ? '' : ' basket__item--unknown'}`}>
-                  <span className="basket__dot" style={{ background: n ? f.color : tokens.color.border }} aria-hidden />
-                  <span className="basket__name">{n ? f.name : '???'}</span>
-                  {n > 0 && <b>{n}</b>}
-                </li>
-              );
-            })}
-          </ul>
-          <p className="muted">낚시는 광장의 낚시터 비콘으로 가서 해요. 오늘 남은 낚시 {state.fishLeft}번.</p>
-        </div>
-      )}
     </Sheet>
   );
 }

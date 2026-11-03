@@ -6,14 +6,22 @@ import { DISTRICTS, isDistrict, type District } from './districts';
 // ───────────────────────── 열매 ─────────────────────────
 
 /** 지역마다 나무에 열리는 열매 (manifest 아이콘 없이 색으로 그린다) */
-export const FRUITS: Record<District, { id: string; name: string; color: string }> = {
-  wood: { id: 'apple', name: '사과', color: '#7CC36A' },
-  fire: { id: 'peach', name: '복숭아', color: '#F4A08C' },
-  earth: { id: 'persimmon', name: '감', color: '#F09A3A' },
-  metal: { id: 'pear', name: '배', color: '#E9D98A' },
-  water: { id: 'grape', name: '포도', color: '#7C6BC4' },
+export interface FruitDef {
+  id: string;
+  name: string;
+  color: string;
+  /** 가방에서 보여 주는 한 줄 */
+  desc: string;
+}
+
+export const FRUITS: Record<District, FruitDef> = {
+  wood: { id: 'apple', name: '사과', color: '#7CC36A', desc: '숲 지역 나무에 열려요. 아삭하고 새콤해요.' },
+  fire: { id: 'peach', name: '복숭아', color: '#F4A08C', desc: '노을 지역 나무에 열려요. 말랑하고 달콤해요.' },
+  earth: { id: 'persimmon', name: '감', color: '#F09A3A', desc: '언덕 지역 나무에 열려요. 가을 햇살 맛이에요.' },
+  metal: { id: 'pear', name: '배', color: '#E9D98A', desc: '은빛 지역 나무에 열려요. 시원하고 물이 많아요.' },
+  water: { id: 'grape', name: '포도', color: '#7C6BC4', desc: '호수 지역 나무에 열려요. 송이송이 알이 꽉 찼어요.' },
 };
-export const FORTUNE_FRUIT = { id: 'fortune', name: '운세 열매', color: '#F2C14E' };
+export const FORTUNE_FRUIT: FruitDef = { id: 'fortune', name: '운세 열매', color: '#F2C14E', desc: '광장 운세 나무에 하루 한 번 열려요. 그날의 운세가 적혀 있어요.' };
 
 /** 열매 이름 (도감) */
 export function fruitName(id: string): string {
@@ -84,23 +92,25 @@ export interface FishDef {
   /** 몸 색 (낚은 장면에 그린다) */
   color: string;
   rarity: 'common' | 'rare' | 'legend' | 'junk';
+  /** 도감에 보여 주는 한 줄 */
+  desc: string;
 }
 
 export const FISH: readonly FishDef[] = [
-  { id: 'crucian', name: '붕어', weight: 22, size: [12, 30], color: '#9FA77A', rarity: 'common' },
-  { id: 'minnow', name: '피라미', weight: 20, size: [6, 14], color: '#BFD3DA', rarity: 'common' },
-  { id: 'killifish', name: '송사리', weight: 18, size: [2, 5], color: '#D7E3E8', rarity: 'common' },
-  { id: 'carp', name: '잉어', weight: 12, size: [30, 80], color: '#C9965B', rarity: 'common' },
-  { id: 'catfish', name: '메기', weight: 8, size: [30, 90], color: '#6D6A5E', rarity: 'common' },
-  { id: 'sweetfish', name: '은어', weight: 6, size: [12, 25], color: '#C7D2D9', rarity: 'rare' },
-  { id: 'mandarinfish', name: '쏘가리', weight: 4, size: [20, 50], color: '#C9A35C', rarity: 'rare' },
-  { id: 'trout', name: '무지개송어', weight: 4, size: [25, 60], color: '#E89A9A', rarity: 'rare' },
-  { id: 'eel', name: '뱀장어', weight: 3, size: [40, 100], color: '#5E6B52', rarity: 'rare' },
-  { id: 'goldfish', name: '금붕어', weight: 2, size: [5, 15], color: '#F2A23A', rarity: 'rare' },
-  { id: 'golden_carp', name: '황금 잉어', weight: 0.6, size: [60, 120], color: '#F2C14E', rarity: 'legend' },
-  { id: 'dragon_fish', name: '용궁 물고기', weight: 0.3, size: [80, 150], color: '#5BC0C8', rarity: 'legend' },
-  { id: 'boot', name: '낡은 장화', weight: 5, size: [0, 0], color: '#6B5A4A', rarity: 'junk' },
-  { id: 'bottle', name: '편지 든 병', weight: 2, size: [0, 0], color: '#9ED6C9', rarity: 'junk' },
+  { id: 'crucian', name: '붕어', weight: 22, size: [12, 30], color: '#9FA77A', rarity: 'common', desc: '연못 어디서나 만나는 친구. 낚시의 시작이에요.' },
+  { id: 'minnow', name: '피라미', weight: 20, size: [6, 14], color: '#BFD3DA', rarity: 'common', desc: '반짝이며 떼 지어 다녀요. 몸에 줄무늬가 있어요.' },
+  { id: 'killifish', name: '송사리', weight: 18, size: [2, 5], color: '#D7E3E8', rarity: 'common', desc: '아주 작은 물고기. 손가락만 해요.' },
+  { id: 'carp', name: '잉어', weight: 12, size: [30, 80], color: '#C9965B', rarity: 'common', desc: '수염이 멋진 연못의 터줏대감이에요.' },
+  { id: 'catfish', name: '메기', weight: 8, size: [30, 90], color: '#6D6A5E', rarity: 'common', desc: '긴 수염으로 바닥을 더듬어요. 밤을 좋아해요.' },
+  { id: 'sweetfish', name: '은어', weight: 6, size: [12, 25], color: '#C7D2D9', rarity: 'rare', desc: '맑은 물에만 살아요. 은은한 향이 나요.' },
+  { id: 'mandarinfish', name: '쏘가리', weight: 4, size: [20, 50], color: '#C9A35C', rarity: 'rare', desc: '점박이 무늬가 멋진 물고기예요.' },
+  { id: 'trout', name: '무지개송어', weight: 4, size: [25, 60], color: '#E89A9A', rarity: 'rare', desc: '몸에 분홍빛 무지개 띠가 있어요.' },
+  { id: 'eel', name: '뱀장어', weight: 3, size: [40, 100], color: '#5E6B52', rarity: 'rare', desc: '구불구불 길쭉해요. 미끄러워서 잡기 어려워요.' },
+  { id: 'goldfish', name: '금붕어', weight: 2, size: [5, 15], color: '#F2A23A', rarity: 'rare', desc: '누가 연못에 놓아준 걸까요? 꼬리가 하늘하늘해요.' },
+  { id: 'golden_carp', name: '황금 잉어', weight: 0.6, size: [60, 120], color: '#F2C14E', rarity: 'legend', desc: '전설의 황금 잉어! 잡으면 좋은 일이 생긴대요.' },
+  { id: 'dragon_fish', name: '용궁 물고기', weight: 0.3, size: [80, 150], color: '#5BC0C8', rarity: 'legend', desc: '용궁에서 왔다는 전설의 물고기예요.' },
+  { id: 'boot', name: '낡은 장화', weight: 5, size: [0, 0], color: '#6B5A4A', rarity: 'junk', desc: '누가 연못에 장화를 버렸을까요…' },
+  { id: 'bottle', name: '편지 든 병', weight: 2, size: [0, 0], color: '#9ED6C9', rarity: 'junk', desc: '병 안에 누군가의 편지가 들어 있어요.' },
 ];
 
 export const fishDef = (id: string) => FISH.find((f) => f.id === id);

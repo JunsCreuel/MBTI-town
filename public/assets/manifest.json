@@ -637,5 +637,65 @@
     "seconds": 135.2,
     "bpm": 150,
     "beat": 0
+  },
+  "item.fruit.apple": {
+    "file": "items/item_fruit_apple_ph.svg"
+  },
+  "item.fruit.peach": {
+    "file": "items/item_fruit_peach_ph.svg"
+  },
+  "item.fruit.persimmon": {
+    "file": "items/item_fruit_persimmon_ph.svg"
+  },
+  "item.fruit.pear": {
+    "file": "items/item_fruit_pear_ph.svg"
+  },
+  "item.fruit.grape": {
+    "file": "items/item_fruit_grape_ph.svg"
+  },
+  "item.fruit.fortune": {
+    "file": "items/item_fruit_fortune_ph.svg"
+  },
+  "item.fish.crucian": {
+    "file": "items/item_fish_crucian_ph.svg"
+  },
+  "item.fish.minnow": {
+    "file": "items/item_fish_minnow_ph.svg"
+  },
+  "item.fish.killifish": {
+    "file": "items/item_fish_killifish_ph.svg"
+  },
+  "item.fish.carp": {
+    "file": "items/item_fish_carp_ph.svg"
+  },
+  "item.fish.catfish": {
+    "file": "items/item_fish_catfish_ph.svg"
+  },
+  "item.fish.sweetfish": {
+    "file": "items/item_fish_sweetfish_ph.svg"
+  },
+  "item.fish.mandarinfish": {
+    "file": "items/item_fish_mandarinfish_ph.svg"
+  },
+  "item.fish.trout": {
+    "file": "items/item_fish_trout_ph.svg"
+  },
+  "item.fish.eel": {
+    "file": "items/item_fish_eel_ph.svg"
+  },
+  "item.fish.goldfish": {
+    "file": "items/item_fish_goldfish_ph.svg"
+  },
+  "item.fish.golden_carp": {
+    "file": "items/item_fish_golden_carp_ph.svg"
+  },
+  "item.fish.dragon_fish": {
+    "file": "items/item_fish_dragon_fish_ph.svg"
+  },
+  "item.fish.boot": {
+    "file": "items/item_fish_boot_ph.svg"
+  },
+  "item.fish.bottle": {
+    "file": "items/item_fish_bottle_ph.svg"
   }
 }

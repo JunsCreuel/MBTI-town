@@ -1121,6 +1121,11 @@ a:focus-visible {
   box-shadow: inset 0 0 0 1.5px rgb(0 0 0 / 0.08);
 }
 
+.toast__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
 .toast {
   position: fixed;
   left: 50%;
@@ -3238,14 +3243,7 @@ a:focus-visible {
   box-shadow: 0 0 0 2px var(--color-surface);
 }
 
-/* 놀거리: 열매 따기 버튼의 열매 점, 운세 열매, 바구니 */
-.fruit-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  box-shadow: inset 0 -2px 0 rgb(0 0 0 / 0.12);
-  flex: none;
-}
+/* 놀거리: 운세 열매 */
 .fortune-fruit {
   display: grid;
   gap: var(--space-3);
@@ -3273,43 +3271,144 @@ a:focus-visible {
   margin: 0;
   font-size: 12px;
 }
-.basket {
+/* 가방(인벤토리): 열매·물고기 도감 */
+.item-icon {
+  display: block;
+  flex: none;
+  object-fit: contain;
+}
+/* 아직 못 모은 것: 실루엣 */
+.item-icon--unknown {
+  filter: brightness(0);
+  opacity: 0.16;
+}
+.inventory {
   display: grid;
+  gap: var(--space-3);
+}
+.inventory__tabs {
+  display: flex;
   gap: var(--space-2);
 }
-.basket__grid {
+.inventory__tabs b {
+  margin-left: var(--space-1);
+  font-variant-numeric: tabular-nums;
+}
+.inventory__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(86px, 1fr));
   gap: var(--space-2);
-  margin: 0 0 var(--space-2);
+  margin: 0;
   padding: 0;
   list-style: none;
 }
-.basket__item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
+.inventory__item {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-3) var(--space-1) var(--space-2);
+  border: 2px solid transparent;
   border-radius: var(--radius-md);
   background: var(--color-bg);
-  font-size: 14px;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
 }
-.basket__item b {
-  margin-left: auto;
+.inventory__item:disabled {
+  cursor: default;
 }
-.basket__item--unknown {
+.inventory__item--empty {
   color: var(--color-textSub);
+  font-weight: 500;
 }
-.basket__dot {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  flex: none;
+.inventory__item--on {
+  border-color: var(--color-accent);
+  background: var(--color-surface);
 }
-.basket__name {
+.inventory__name {
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.inventory__count {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-accentText);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.inventory__badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--emotion-joy);
+  color: var(--color-text);
+  font-size: 10px;
+}
+.inventory__detail {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+.inventory__detail-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.inventory__detail-text p {
+  margin: 0;
+}
+.inventory__detail-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: 17px;
+  font-weight: 800;
+}
+.inventory__rarity {
+  font-size: 12px;
+}
+.inventory__detail-desc {
+  font-size: 14px;
+  line-height: 1.5;
+}
+.bag-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.bag-preview li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-1);
+  border-radius: 999px;
+  background: var(--color-bg);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.inventory__detail-meta,
+.inventory__note {
+  margin: 0;
+  font-size: 12px;
 }
 
 /* 낚시: 아래쪽에 뜨는 작은 판 */
@@ -3349,10 +3448,9 @@ a:focus-visible {
   animation: bob 1.2s ease-in-out infinite;
 }
 .fishing__fish {
-  width: 72px;
-  height: 36px;
-  border-radius: 50% 40% 40% 50%;
-  box-shadow: inset 0 -4px 0 rgb(0 0 0 / 0.12);
+  display: grid;
+  place-items: center;
+  animation: toast-in 0.35s ease;
 }
 .fishing__name {
   margin: 0;

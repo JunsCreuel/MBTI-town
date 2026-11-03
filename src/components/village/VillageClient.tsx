@@ -12,6 +12,7 @@ import { withMaxLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { Guide } from '@/components/app/Guide';
 import { Icon } from '@/components/app/Icon';
+import { InventorySheet, ItemIcon } from '@/components/app/Inventory';
 import { GesturePicker } from '@/components/app/GesturePicker';
 import { TabBar } from '@/components/app/TabBar';
 import type { HouseView, TownView } from '@/server/scene/service';
@@ -26,7 +27,7 @@ import { TownSession, now } from './session';
 import { ClubMusic } from './ClubMusic';
 import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
 import {
-  BasketSheet, CLUB_FLOOR_RADIUS, FishingPanel, FortuneFruitSheet, beaconsOf, treesOf,
+  CLUB_FLOOR_RADIUS, FishingPanel, FortuneFruitSheet, beaconsOf, treesOf,
   type FishResult, type PickResult, type PlayState, type TreeInfo,
 } from './Play';
 
@@ -102,7 +103,8 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const [fortuneFruit, setFortuneFruit] = useState<FortuneFruit | null>(null);
   const [basketOpen, setBasketOpen] = useState(false);
   const [picking, setPicking] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  /** 잠깐 뜨는 알림. 아이템을 얻었으면 아이콘을 함께 보인다 */
+  const [toast, setToast] = useState<string | { text: string; fruit: string } | null>(null);
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 2600);
@@ -275,7 +277,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       const r = await call<PickResult>('POST', '/api/play/pick', { spot: t.spot });
       if (!r.already) input.drops.push({ x: t.x, z: t.z, color: r.fruit.color, at: now() });
       if (r.fortune) setFortuneFruit(r.fortune);
-      else setToast(r.already ? `이 나무는 오늘 이미 땄어요 (${r.fruit.name} ${r.count}개)` : `${r.fruit.name} ${r.added}개를 땄어요! 바구니에 ${r.count}개`);
+      else setToast({ text: r.already ? `이 나무는 오늘 이미 땄어요 (${r.fruit.name} ${r.count}개)` : `${r.fruit.name} ${r.added}개를 땄어요! 가방에 ${r.count}개`, fruit: r.fruit.id });
       if (!r.already) session.sendAction('jump');
       refreshPlay();
     } catch (e) {
@@ -515,7 +517,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
                       setBasketOpen(true);
                       refreshPlay();
                     }}
-                    aria-label="바구니와 도감"
+                    aria-label="가방 (열매·물고기 도감)"
                   >
                     <Icon name="basket" />
                   </button>
@@ -646,7 +648,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
 
             {nearTree && !picked && !gateFor && !showDoor && !nearGate && (
               <button className="door-btn" onClick={() => pickTree(nearTree)} disabled={picking}>
-                <span className="fruit-dot" style={{ background: nearTree.kind === 'fortune' ? FORTUNE_FRUIT.color : FRUITS[nearTree.district!].color }} aria-hidden />
+                <ItemIcon kind="fruit" id={nearTree.kind === 'fortune' ? FORTUNE_FRUIT.id : FRUITS[nearTree.district!].id} size={24} />
                 {nearTree.kind === 'fortune'
                   ? play?.pickedTrees.includes('fortune')
                     ? '오늘의 운세 다시 보기'
@@ -734,7 +736,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
           onClose={() => setFortuneFruit(null)}
         />
       )}
-      {basketOpen && <BasketSheet state={play} onClose={() => setBasketOpen(false)} />}
+      {basketOpen && <InventorySheet state={play} onClose={() => setBasketOpen(false)} />}
       {fishing && (
         <FishingPanel
           onCast={async () => {
@@ -749,7 +751,18 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
           onClose={() => setFishing(false)}
         />
       )}
-      {toast && <div className="toast" role="status">{toast}</div>}
+      {toast && (
+        <div className="toast" role="status">
+          {typeof toast === 'string' ? (
+            toast
+          ) : (
+            <span className="toast__item">
+              <ItemIcon kind="fruit" id={toast.fruit} size={28} />
+              {toast.text}
+            </span>
+          )}
+        </div>
+      )}
 
       {failed && (
         <div className="overlay">
