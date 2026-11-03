@@ -110,6 +110,22 @@ export class TownSession {
         syncIds();
       });
       $.listen('channel', (channel: number) => this.update({ channel }));
+      // 내 캐릭터가 서버 상태에 들어온 뒤에 준비 완료로 본다.
+      // (에셋을 이미 받아 둔 채 다시 들어오면 화면이 상태보다 먼저 준비될 수 있다)
+      await new Promise<void>((resolve, reject) => {
+        if (room.state?.players?.get(room.sessionId)) return resolve();
+        const timer = setTimeout(() => reject(new Error('내 캐릭터 상태를 받지 못했습니다')), 15_000);
+        $.onAdd('players', (_: unknown, id: unknown) => {
+          if (id === room.sessionId) {
+            clearTimeout(timer);
+            resolve();
+          }
+        });
+      });
+      if (attempt !== this.attempt) {
+        room.leave();
+        return;
+      }
       room.onMessage(MSG.action, (m: ActionBroadcast) => this.applyAction(m.id, m.kind));
       room.onMessage(MSG.emote, (m: EmoteBroadcast) => this.applyEmote(m.id, m.kind));
       room.onMessage(MSG.snap, (m: SnapMessage) => this.snapListeners.forEach((fn) => fn(m)));
@@ -130,8 +146,9 @@ export class TownSession {
     this.room = null;
   }
 
+  /** 서버 상태가 아직 오지 않았으면 undefined */
   player(id: string): PlayerView | undefined {
-    return this.room?.state.players.get(id) as PlayerView | undefined;
+    return this.room?.state?.players?.get(id) as PlayerView | undefined;
   }
 
   onSnap(fn: (s: SnapMessage) => void) {

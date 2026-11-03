@@ -15,7 +15,7 @@ import { groundHeightAt } from '@/shared/townMap';
 import type { EmoteKind } from '@/shared/protocol';
 import { tagTexture } from './assets';
 import { useTown } from './context';
-import { now, type TownSession } from './session';
+import { now, type PlayerView, type TownSession } from './session';
 
 /** 화면에 그릴 캐릭터 상태. 소유 컴포넌트가 매 프레임 고친다. */
 export interface Actor {
@@ -149,9 +149,15 @@ function applyGesture(a: Actor, id: string, session: TownSession, walking: boole
 /** 방향 전환은 부드럽게 (초당 회전 비율) */
 const TURN_RATE = 12;
 
+/** 내 캐릭터. 서버 상태에 내가 들어오기 전에는 그리지 않는다 */
 export function LocalPlayer() {
+  const { session, selfId } = useTown();
+  const me = session.player(selfId);
+  return me ? <LocalPlayerInner me={me} /> : null;
+}
+
+function LocalPlayerInner({ me }: { me: PlayerView }) {
   const { session, selfId, map, input } = useTown();
-  const me = session.player(selfId)!;
   const actor = useRef<Actor>({
     x: me.x, y: groundHeightAt(map, me.x, me.z), z: me.z, rot: me.rot, clip: 'idle', emote: null, emoteStart: 0,
   });
