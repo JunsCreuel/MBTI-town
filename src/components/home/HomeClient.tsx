@@ -20,6 +20,8 @@ import {
 } from '@/shared/room';
 import { BgmPlayer, type BgmHandle } from '../app/BgmPlayer';
 import { GesturePicker } from '../app/GesturePicker';
+import { FortuneLetter, fortuneRead, markFortuneRead } from './FortuneLetter';
+import type { DailyFortune } from '@/shared/fortune';
 import { Guide } from '../app/Guide';
 import { Icon } from '../app/Icon';
 import { Sheet } from '../app/Sheet';
@@ -33,7 +35,7 @@ import { useHudInsets } from '../room/useHudInsets';
 const RoomScene = dynamic(() => import('../room/RoomScene'), { ssr: false });
 const AvatarPreview = dynamic(() => import('../room/AvatarPreview'), { ssr: false });
 
-type SheetKind = 'guestbook' | 'visitors' | 'wardrobe' | 'frame' | null;
+type SheetKind = 'guestbook' | 'visitors' | 'wardrobe' | 'frame' | 'letter' | null;
 type EditTab = 'items' | 'wall' | 'floor' | 'bgm';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
@@ -87,12 +89,34 @@ export function HomeClient() {
   const profile = me?.profile;
   const shown = mode === 'edit' && draft ? draft.layout : layout;
 
+  // 오늘의 일진 편지 (우편함). 이 기기에서 읽었는지 기억해 새 편지 표시를 한다
+  const [fortune, setFortune] = useState<DailyFortune | null>(null);
+  const [letterRead, setLetterRead] = useState(true);
+  const fortuneRef = useRef<DailyFortune | null>(null);
+  fortuneRef.current = fortune;
+  const onboarded = !!profile?.district;
+  useEffect(() => {
+    if (!onboarded) return;
+    call<DailyFortune>('GET', '/api/fortune')
+      .then((f) => {
+        setFortune(f);
+        setLetterRead(fortuneRead(f.date));
+      })
+      .catch(() => {});
+  }, [onboarded]);
+  useEffect(() => {
+    if (sheet !== 'letter' || !fortune) return;
+    markFortuneRead(fortune.date);
+    setLetterRead(true);
+  }, [sheet, fortune]);
+
   const onAction = useCallback(
     (action: FurnitureAction, item: PlacedItem) => {
       setWelcome(false);
       if (action === 'bgm') player.current?.toggle();
       else if (action === 'archive') router.push('/archive');
-      else if (action === 'guestbook') setSheet('guestbook');
+      // 우편함: 오늘의 일진 편지가 있으면 편지부터, 없으면 방명록
+      else if (action === 'guestbook') setSheet(fortuneRef.current ? 'letter' : 'guestbook');
       else if (action === 'wardrobe') setSheet('wardrobe');
       else if (action === 'frame') {
         setFrameItem(item.id);
@@ -229,6 +253,7 @@ export function HomeClient() {
             selfName={profile.displayName}
             selfTag={profileTag(profile.mbti, profile.saju?.day.ko)}
             presence={presence}
+            mailUnread={!!fortune && !letterRead}
             mode={mode}
             selectedId={selected}
             onSelect={setSelected}
@@ -263,6 +288,15 @@ export function HomeClient() {
             </div>
             <div className="room-top__actions">
               {/* 문을 나서면 마을의 내 집 앞이다 */}
+              {fortune && (
+                <button
+                  className={`icon-btn${letterRead ? '' : ' icon-btn--dot'}`}
+                  aria-label={letterRead ? '오늘의 편지' : '오늘의 편지 (새 편지)'}
+                  onClick={() => setSheet('letter')}
+                >
+                  <Icon name="mail" size={20} />
+                </button>
+              )}
               <Link className="icon-btn" href="/village" aria-label="마을로 나가기">
                 <Icon name="exit" size={20} />
               </Link>
@@ -402,6 +436,9 @@ export function HomeClient() {
         </>
       )}
 
+      {sheet === 'letter' && fortune && (
+        <FortuneLetter fortune={fortune} onClose={() => setSheet(null)} onGuestbook={() => setSheet('guestbook')} />
+      )}
       {sheet === 'guestbook' && <OwnerGuestbook handle={profile.handle} onClose={() => setSheet(null)} />}
       {sheet === 'visitors' && <Visitors handle={profile.handle} onClose={() => setSheet(null)} />}
       {sheet === 'wardrobe' && assets && (

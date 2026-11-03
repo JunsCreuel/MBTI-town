@@ -3177,3 +3177,63 @@ a:focus-visible {
   border-radius: var(--radius-md);
   background: var(--color-bg);
 }
+
+/* 우편함: 오늘의 일진 편지 */
+.letter {
+  display: grid;
+  gap: var(--space-3);
+}
+.letter__date {
+  margin: 0;
+  color: var(--color-textSub);
+  font-size: 13px;
+}
+.letter__pillar {
+  color: var(--color-text);
+  border-bottom: 3px solid var(--chip-color);
+}
+.letter__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+}
+.letter__body {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.6;
+}
+.letter__why,
+.letter__note {
+  margin: 0;
+  font-size: 13px;
+}
+.letter__lucky {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-size: 14px;
+}
+.letter__swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  flex: none;
+}
+/* 새 편지 표시 */
+.icon-btn--dot {
+  position: relative;
+}
+.icon-btn--dot::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  box-shadow: 0 0 0 2px var(--color-surface);
+}

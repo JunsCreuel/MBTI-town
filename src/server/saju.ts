@@ -109,6 +109,14 @@ const iso = (c: { y: number; m: number; d: number }) =>
   `${c.y}-${String(c.m).padStart(2, '0')}-${String(c.d).padStart(2, '0')}`;
 
 /** 생일로 사주를 풀고 거주 지역을 정한다 */
+/** 한국 날짜(YYYY-MM-DD)의 일진 (그날 정오, 서울 지방시 기준) */
+export function dayPillarOn(date: string): Pillar {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) throw new SajuError(`날짜를 읽지 못했습니다: ${date}`);
+  const instant = seoulClockToUtc(Number(m[1]), Number(m[2]), Number(m[3]), 12, 0);
+  return pillar(eightChar(clockAt(instant, SEOUL_LMT_MINUTES)).getDay());
+}
+
 export function computeSaju(input: BirthInput, today = new Date()): SajuReading {
   const solar = toSolarDate(input, today);
   let timeKnown = false;

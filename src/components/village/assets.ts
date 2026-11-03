@@ -40,8 +40,26 @@ async function iconImage(key: string, color: string): Promise<HTMLImageElement> 
   return img;
 }
 
-async function emoteTexture(kind: EmoteKind): Promise<THREE.Texture> {
-  const { icon: key, color } = EMOTE_INFO[kind];
+function emoteTexture(kind: EmoteKind): Promise<THREE.Texture> {
+  const { icon, color } = EMOTE_INFO[kind];
+  return bubbleTexture(icon, color);
+}
+
+const bubbleCache = new Map<string, Promise<THREE.Texture>>();
+
+/** 말풍선 그림: 아이콘(manifest 키)을 색으로 칠해 말풍선 안에 넣는다. 같은 것은 한 번만 만든다 */
+export function bubbleTexture(key: string, color: string): Promise<THREE.Texture> {
+  const id = `${key}|${color}`;
+  let p = bubbleCache.get(id);
+  if (!p) {
+    p = drawBubble(key, color);
+    bubbleCache.set(id, p);
+    p.catch(() => bubbleCache.delete(id));
+  }
+  return p;
+}
+
+async function drawBubble(key: string, color: string): Promise<THREE.Texture> {
   const icon = await iconImage(key, color);
   const S = 128;
   const { c, ctx } = canvas(S, S);

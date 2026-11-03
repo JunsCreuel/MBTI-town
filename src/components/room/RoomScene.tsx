@@ -19,7 +19,7 @@ import {
   type FurnitureAction, type PlacedItem, type Point, type RoomLayout,
 } from '@/shared/room';
 import type { EmoteKind } from '@/shared/protocol';
-import { loadEmoteTextures, tagTexture } from '../village/assets';
+import { bubbleTexture, loadEmoteTextures, tagTexture } from '../village/assets';
 import { SELF_GESTURE, now as clockNow } from '../village/session';
 import type { RoomAssets } from './assets';
 import type { HousePresence } from './presence';
@@ -59,6 +59,8 @@ export interface RoomSceneProps {
   onAction?: (action: FurnitureAction, item: PlacedItem) => void;
   /** BGM이 나오는 중이면 턴테이블 위에 음표가 뜬다 */
   playing?: boolean;
+  /** 오늘의 편지를 아직 안 읽었으면 우편함 위에 편지가 뜬다 */
+  mailUnread?: boolean;
   photoUrl?: (id: string) => string;
   /** 화면 위아래를 가리는 HUD 높이 (px). 방이 그 사이에 들어오게 맞춘다. */
   insetTop?: number;
@@ -379,6 +381,29 @@ const noteTexture = (() => {
   };
 })();
 
+/** 새 편지: 우편함 위에서 편지 말풍선이 통통 뛴다 */
+function MailFlag() {
+  const sprite = useRef<THREE.Sprite>(null);
+  const [map, setMap] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    let alive = true;
+    bubbleTexture('ui.icon.mail', tokens.color.accent).then((t) => alive && setMap(t)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  useFrame(({ clock }) => {
+    const s = sprite.current;
+    if (s) s.position.y = 1.45 + Math.abs(Math.sin(clock.elapsedTime * 2.6)) * 0.12;
+  });
+  if (!map) return null;
+  return (
+    <sprite ref={sprite} scale={0.5} renderOrder={1001}>
+      <spriteMaterial map={map} depthTest={false} depthWrite={false} transparent />
+    </sprite>
+  );
+}
+
 function MusicNotes() {
   const a = useRef<THREE.Sprite>(null);
   const b = useRef<THREE.Sprite>(null);
@@ -412,12 +437,13 @@ interface ItemProps {
   mode: RoomMode;
   selected: boolean;
   playing: boolean;
+  mailUnread: boolean;
   photoUrl?: (id: string) => string;
   onPick: (item: PlacedItem, e: ThreeEvent<PointerEvent>) => void;
   onAction?: (action: FurnitureAction, item: PlacedItem) => void;
 }
 
-function Item({ item, assets, district, time, mode, selected, playing, photoUrl, onPick, onAction }: ItemProps) {
+function Item({ item, assets, district, time, mode, selected, playing, mailUnread, photoUrl, onPick, onAction }: ItemProps) {
   const def = furnitureDef(item.key)!;
   const photoMat = useRef<THREE.MeshBasicMaterial | null>(null);
   const object = useMemo(() => {
@@ -505,6 +531,7 @@ function Item({ item, assets, district, time, mode, selected, playing, photoUrl,
         />
       </group>
       {item.key === 'furn.turntable' && playing && <MusicNotes />}
+      {item.key === 'furn.mailbox' && mailUnread && <MailFlag />}
       {selected &&
         (isWall ? (
           <mesh rotation-y={rotationY} position={[0, 0, 0]} renderOrder={5}>
@@ -999,6 +1026,7 @@ function SceneContent(props: RoomSceneProps) {
           mode={mode}
           selected={item.id === selectedId}
           playing={playing}
+          mailUnread={!!props.mailUnread}
           photoUrl={photoUrl}
           onAction={onAction}
           onPick={(it, e) => {

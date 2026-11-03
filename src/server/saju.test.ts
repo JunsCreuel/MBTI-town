@@ -1,7 +1,8 @@
 // 사주 계산 기준 확인: 절기(입춘) 경계, 서울 지방시, 서머타임, 음력·윤달, 시간 모름
 import { describe, expect, it } from 'vitest';
 import { DISTRICTS } from '@/shared/districts';
-import { SajuError, computeSaju } from './saju';
+import { dailyFortune, tenGod } from '@/shared/fortune';
+import { SajuError, computeSaju, dayPillarOn } from './saju';
 
 const today = new Date('2026-11-03T00:00:00Z');
 const saju = (date: string, time: string | null, extra: { calendar?: 'solar' | 'lunar'; leap?: boolean } = {}) =>
@@ -81,5 +82,41 @@ describe('사주 네 기둥', () => {
       counts[saju(d, null).district]++;
     }
     for (const d of DISTRICTS) expect(counts[d] / days).toBeCloseTo(0.2, 2);
+  });
+});
+
+describe('오늘의 일진', () => {
+  it('그날의 일진은 그날 태어난(시간 모름) 사람의 일주와 같다', () => {
+    for (const date of ['1990-05-17', '2000-01-01', '2026-11-03', '2026-12-31']) {
+      expect(dayPillarOn(date)).toEqual(computeSaju({ calendar: 'solar', date, time: null }, new Date('2030-01-01')).day);
+    }
+  });
+
+  it('하루가 지나면 60갑자 순서로 하나씩 넘어간다', () => {
+    const STEMS = '甲乙丙丁戊己庚辛壬癸';
+    const a = dayPillarOn('2026-11-03');
+    const b = dayPillarOn('2026-11-04');
+    expect((STEMS.indexOf(b.stem) - STEMS.indexOf(a.stem) + 10) % 10).toBe(1);
+  });
+});
+
+describe('오늘의 일진 편지', () => {
+  it('내 일간에서 본 십성 (갑목 기준 열 가지)', () => {
+    expect([...'甲乙丙丁戊己庚辛壬癸'].map((s) => tenGod('甲', s))).toEqual([
+      '비견', '겁재', '식신', '상관', '편재', '정재', '편관', '정관', '편인', '정인',
+    ]);
+    // 음간(을목)에서는 음양이 뒤집힌다
+    expect(tenGod('乙', '甲')).toBe('겁재');
+    expect(tenGod('乙', '庚')).toBe('정관');
+  });
+
+  it('행운 오행은 나를 낳아 주는 오행, 같은 날 같은 사람은 같은 편지', () => {
+    const me = { stem: '甲', ko: '갑', element: 'wood' as const };
+    const today = dayPillarOn('2026-11-03');
+    const f = dailyFortune(me, today, '2026-11-03');
+    expect(f.lucky.element).toBe('water');
+    expect(f.todo.href.startsWith('/')).toBe(true);
+    expect(dailyFortune(me, today, '2026-11-03')).toEqual(f);
+    expect(f.message.length).toBeGreaterThan(10);
   });
 });

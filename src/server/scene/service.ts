@@ -14,7 +14,9 @@ import {
 } from '@/shared/records';
 import { framedPhotoIds, starterLayout, validateLayout, type RoomLayout } from '@/shared/room';
 import { guestPid, signTownPass, townPid, type TownPass } from '@/shared/townToken';
-import { SajuError, cleanBirthInput, computeSaju, type BirthInput, type SajuReading } from '../saju';
+import { SajuError, cleanBirthInput, computeSaju, dayPillarOn, type BirthInput, type SajuReading } from '../saju';
+import { localDate } from '@/shared/debate';
+import { dailyFortune, type DailyFortune } from '@/shared/fortune';
 import type { ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
 
 export type SceneErrorCode =
@@ -738,6 +740,14 @@ export class SceneService {
     const pass: TownPass = { ...base.pass, house: townPid(owner.id) };
     const hidden = viewer ? (await this.store.blockRelations(viewer.id)).map((id) => townPid(id)) : [];
     return { token: signTownPass(pass), pass, guest: base.guest, house: pass.house!, hidden };
+  }
+
+  /** 오늘의 일진 편지 (내 일간과 오늘 일진, 한국 날짜 기준). 가입을 마친 주민만 */
+  async fortune(viewer: Viewer | null): Promise<DailyFortune> {
+    const p = await this.requireOnboarded(viewer);
+    if (!p.saju) throw new SceneError('not_found', '사주가 없어요. MY에서 생일을 넣어 주세요.');
+    const date = localDate(this.now());
+    return dailyFortune(p.saju.dayMaster, dayPillarOn(date), date);
   }
 
   // ───────────────────────── 내보내기·삭제 ─────────────────────────
