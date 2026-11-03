@@ -86,8 +86,10 @@ export interface TownMap {
   spawn: Rect;
   /** 이름별 스폰 ("spawn" = 중앙광장, "spawn.wood" = 숲 지역 입구) */
   spawns: Record<string, Rect>;
-  /** 지역별 집터 (번호 순) */
+  /** 지역별 집터 (번호 순). 동네 틀 맵은 withDistrict로 지역을 입힌 뒤에 채워진다. */
   lots: Record<District, Lot[]>;
+  /** 동네 틀 맵(map.hood)의 집터 (지역 없음, "hood.번호") */
+  hoodLots: Omit<Lot, 'district'>[];
   /** 칸별 지역 (DISTRICTS 번호). 광장·길·바닷가는 -1 */
   districtGrid: Int8Array;
 }
@@ -119,13 +121,17 @@ export function parseTownMap(json: TiledMap): TownMap {
   if (!spawnObj) throw new Error('spawn 레이어에 spawn 사각형이 없습니다');
   const lotObjs = optionalLayer(json, 'lots', 'objectgroup')?.objects ?? [];
   const districtData = optionalLayer(json, 'districts', 'tilelayer')?.data;
-  const lots = Object.fromEntries(DISTRICTS.map((d) => [d, [] as Lot[]])) as Record<District, Lot[]>;
+  const lots = emptyLots();
+  const hoodLots: Omit<Lot, 'district'>[] = [];
   for (const o of lotObjs) {
     const [d, n] = o.name.split('.');
-    if (!isDistrict(d) || !/^\d+$/.test(n)) continue;
-    lots[d].push({ district: d, index: Number(n), x: o.x / TILE_PX, z: o.y / TILE_PX, yaw: -((o.rotation ?? 0) * Math.PI) / 180 });
+    if (!/^\d+$/.test(n)) continue;
+    const l = { index: Number(n), x: o.x / TILE_PX, z: o.y / TILE_PX, yaw: -((o.rotation ?? 0) * Math.PI) / 180 };
+    if (isDistrict(d)) lots[d].push({ district: d, ...l });
+    else if (d === 'hood') hoodLots.push(l);
   }
   for (const d of DISTRICTS) lots[d].sort((a, b) => a.index - b.index);
+  hoodLots.sort((a, b) => a.index - b.index);
   const ts = json.tilesets[0];
   const tileHeights: Record<number, number> = {};
   const terrain: Record<number, string> = {};
@@ -161,7 +167,26 @@ export function parseTownMap(json: TiledMap): TownMap {
     spawn: toRect(spawnObj),
     spawns: Object.fromEntries(spawnObjs.map((o) => [o.name, toRect(o)])),
     lots,
+    hoodLots,
     districtGrid: Int8Array.from(districtData ?? new Array(json.width * json.height).fill(0), (v) => (v >= 1 && v <= DISTRICTS.length ? v - 1 : -1)),
+  };
+}
+
+const emptyLots = () => Object.fromEntries(DISTRICTS.map((d) => [d, [] as Lot[]])) as Record<District, Lot[]>;
+
+/**
+ * 동네 틀 맵(map.hood)에 지역을 입힌다: 땅 전체가 그 지역 땅이 되고, 지역 색 소품과 집터도 그 지역 것이 된다.
+ * 2동·3동…은 모두 같은 틀 맵을 쓰고 지역만 다르다.
+ */
+export function withDistrict(map: TownMap, d: District): TownMap {
+  const di = DISTRICTS.indexOf(d);
+  const lots = emptyLots();
+  lots[d] = map.hoodLots.map((l) => ({ ...l, district: d }));
+  return {
+    ...map,
+    lots,
+    districtGrid: map.districtGrid.map((v) => (v >= 0 ? di : -1)),
+    props: map.props.map((p) => (p.district ? { ...p, district: d } : p)),
   };
 }
 
@@ -203,10 +228,14 @@ export function isBlockedAt(map: TownMap, x: number, z: number): boolean {
   return isBlockedTile(map, Math.floor(x), Math.floor(z));
 }
 
-/** 스폰 이름: 중앙광장은 "spawn", 지역은 "spawn.wood" */
+/** 스폰 이름: 중앙광장(동네는 입구)은 "spawn", 지역은 "spawn.wood", 동네 길 앞은 "gate.wood" */
 export const spawnName = (place: District | 'plaza') => (place === 'plaza' ? 'spawn' : `spawn.${place}`);
+export const gateSpawnName = (d: District) => `gate.${d}`;
 
-/** 스폰 사각형 안의 막히지 않은 칸 중앙 하나를 고른다. 그 이름의 스폰이 없으면 광장. */
+/**
+ * 스폰 사각형 안의 막히지 않은 칸 하나를 골라 그 칸 가운데 근처에 세운다 (사각형 밖으로는 나가지 않는다).
+ * 그 이름의 스폰이 없으면 광장.
+ */
 export function randomSpawnPoint(
   map: TownMap,
   rand: () => number = Math.random,
@@ -214,12 +243,17 @@ export function randomSpawnPoint(
 ): { x: number; z: number } {
   const { x, z, w, h } = map.spawns[name] ?? map.spawn;
   const cells: [number, number][] = [];
-  for (let tz = Math.floor(z); tz < Math.ceil(z + h); tz++) {
-    for (let tx = Math.floor(x); tx < Math.ceil(x + w); tx++) {
+  // 칸 가운데가 사각형 안에 있는 칸만 고른다
+  for (let tz = Math.ceil(z - 0.5); tz + 0.5 <= z + h; tz++) {
+    for (let tx = Math.ceil(x - 0.5); tx + 0.5 <= x + w; tx++) {
       if (!isBlockedTile(map, tx, tz)) cells.push([tx, tz]);
     }
   }
   if (!cells.length) throw new Error('스폰 영역에 걸을 수 있는 칸이 없습니다');
   const [tx, tz] = cells[Math.floor(rand() * cells.length)];
-  return { x: tx + 0.35 + rand() * 0.3, z: tz + 0.35 + rand() * 0.3 };
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  return {
+    x: clamp(tx + 0.35 + rand() * 0.3, Math.max(x, tx + 0.05), Math.min(x + w, tx + 0.95)),
+    z: clamp(tz + 0.35 + rand() * 0.3, Math.max(z, tz + 0.05), Math.min(z + h, tz + 0.95)),
+  };
 }

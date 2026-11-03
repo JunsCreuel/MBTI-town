@@ -143,7 +143,14 @@ export function MyClient() {
 
       <section className="section card">
         <h2 className="section-title">나의 동네</h2>
-        <p className="muted">이사해도 방과 기록은 그대로예요. 창밖 풍경과 마을 지도 위치만 바뀌어요.</p>
+        {profile.district && profile.houseLot !== null && (
+          <p>
+            내 집: <b>{DISTRICT[profile.district].short} {profile.houseHood > 1 ? `${profile.houseHood}동` : '지역 1동'} {profile.houseLot + 1}번지</b>
+          </p>
+        )}
+        <p className="muted">
+          이사하면 새 지역의 빈 집터로 집을 옮겨요 (1동이 다 찼으면 2동부터). 방과 기록은 그대로이고, 창밖 풍경과 마을 속 집 자리만 바뀌어요.
+        </p>
         <div className="district-chips">
           {DISTRICTS.map((d) => (
             <button

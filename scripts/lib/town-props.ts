@@ -231,3 +231,25 @@ export function pierParts(): Part[] {
   parts.push(part(cyl(0.03, 0.03, 0.5, 6), W.metal, { pos: [-0.5, 0.48, 1.05] }));
   return parts;
 }
+
+// ───────────────────────── 동네 길 아치 ─────────────────────────
+
+/**
+ * 동네 길: 본섬 큰길 끝과 2동·3동… 입구에 서는 나무 아치. 가운데 지역 색 현판(outfit)이 걸린다.
+ * 폭 2.4, 기둥 사이로 지나갈 수 있다. 정면(+Z) = 마을 안쪽.
+ */
+export function gateParts(): Part[] {
+  const parts: Part[] = [];
+  for (const x of [-1.05, 1.05]) {
+    parts.push(part(box(0.36, 0.16, 0.36), W.stoneDark, { pos: [x, 0.08, 0] }));
+    parts.push(part(cyl(0.11, 0.13, 2.5, 10), W.wood, { pos: [x, 1.33, 0] }));
+    parts.push(part(sphere(0.13, 10, 8), W.woodDark, { pos: [x, 2.62, 0] }));
+  }
+  parts.push(part(box(2.7, 0.16, 0.24), W.woodDark, { pos: [0, 2.42, 0] }));
+  parts.push(part(box(2.4, 0.1, 0.18), W.wood, { pos: [0, 2.2, 0] }));
+  parts.push(part(rbox(1.3, 0.42, 0.08, 0.05), '#FFFFFF', { pos: [0, 1.88, 0.08], mat: 'outfit' }));
+  for (const x of [-0.45, 0.45]) parts.push(part(box(0.03, 0.2, 0.03), W.metal, { pos: [x, 2.1, 0.08] }));
+  // 아치 둘레 꽃덤불
+  for (const x of [-1.45, 1.45]) parts.push(part(sphere(0.26, 12, 8), W.leafLight, { pos: [x, 0.18, 0.15] }));
+  return parts;
+}

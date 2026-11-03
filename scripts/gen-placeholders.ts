@@ -14,9 +14,9 @@ import { encodeTrack, TRACKS } from './lib/bgm';
 import { Bitmap, hex, type RGBA } from './lib/bitmap';
 import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
 import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
-import { TOWN_TILES, buildTownMap } from './lib/town-map';
+import { TOWN_TILES, buildHoodMap, buildTownMap } from './lib/town-map';
 import {
-  PROP_MATERIALS, benchParts, boardParts, flagParts, fountainParts, greenhouseParts, houseParts, lampParts, lotParts,
+  PROP_MATERIALS, benchParts, boardParts, flagParts, fountainParts, gateParts, greenhouseParts, houseParts, lampParts, lotParts,
   pierParts, shopParts, stageParts, treeParts, workshopParts,
 } from './lib/town-props';
 import { TILE_PX } from '../src/shared/townMap';
@@ -129,6 +129,7 @@ async function genTownProps() {
     ['prop.district.shop', 'prop_district_shop', shopParts()],
     ['prop.district.workshop', 'prop_district_workshop', workshopParts()],
     ['prop.district.pier', 'prop_district_pier', pierParts()],
+    ['prop.hood.gate', 'prop_hood_gate', gateParts()],
   ];
   for (const [key, name, parts] of props) {
     const file = `props/${name}_ph.glb`;
@@ -171,6 +172,11 @@ function genTownMap() {
   if (FORCE_MAP || !existsSync(join(ROOT, file))) save(file, JSON.stringify(buildTownMap(tiles)) + '\n');
   register('map.town', { file });
   record(file, '자체 제작 (scripts/lib/town-map.ts, Tiled JSON)');
+  // 2동·3동… 동네가 함께 쓰는 틀 맵
+  const hood = 'maps/hood.json';
+  if (FORCE_MAP || !existsSync(join(ROOT, hood))) save(hood, JSON.stringify(buildHoodMap(tiles)) + '\n');
+  register('map.hood', { file: hood });
+  record(hood, '자체 제작 (scripts/lib/town-map.ts, Tiled JSON)');
 }
 
 // ───────────────────────── 창밖 풍경 (지역마다 512×512) ─────────────────────────

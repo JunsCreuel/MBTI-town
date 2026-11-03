@@ -42,12 +42,13 @@ SCENE(PROJECT SCENE)을 인터넷 주소로 띄우는 순서입니다. 처음 �
 
 ### 1-2. 표 만들기 (마이그레이션)
 
-왼쪽 메뉴 **SQL Editor → New query** 에서 아래 네 파일 내용을 **순서대로** 붙여 넣고 각각 **Run** 합니다.
+왼쪽 메뉴 **SQL Editor → New query** 에서 아래 다섯 파일 내용을 **순서대로** 붙여 넣고 각각 **Run** 합니다.
 
 1. `supabase/migrations/20261102000000_debate.sql`
 2. `supabase/migrations/20261102010000_spectator_judging.sql`
 3. `supabase/migrations/20261102020000_scene.sql` (나의 방, 기록, 사진, 친구, 방명록, 차단, 신고, 방문)
 4. `supabase/migrations/20261102030000_town.sql` (마을 집터)
+5. `supabase/migrations/20261103000000_hoods.sql` (집터가 다 차면 열리는 새 동네)
 
 모든 표는 보안 규칙(RLS)으로 잠겨 있어서, 브라우저에서 직접 읽거나 쓸 수 없습니다. 읽기·쓰기는 모두 웹 서버(Vercel)가 규칙을 검사한 뒤에 합니다.
 
@@ -169,6 +170,7 @@ Vercel 환경변수 `NEXT_PUBLIC_AUTH_PROVIDERS` 에 켠 것만 적고 Redeploy 
 - [ ] 문 앞의 "내 집 들어가기"를 누르면 나의 방이 열리고, 방의 나가기 버튼으로 다시 마을에 나온다
 - [ ] 다른 계정(다른 브라우저)으로도 마을에 들어가면 서로 보이고, 몸짓·이모티콘이 상대에게 보인다
 - [ ] 지도 버튼으로 전체 지도를 열고 다른 지역·중앙광장을 누르면 그곳으로 간다
+- [ ] 큰길 끝 바닷가의 동네 길 아치를 누르면 1동·2동… 목록이 열린다 (1동만 있으면 "다 차면 2동이 열려요")
 - [ ] 로그인하지 않은 창으로 "마을 먼저 구경하기"를 누르면 손님으로 중앙광장에서 시작한다
 - [ ] 바닥을 누르면 캐릭터가 걸어가고, 턴테이블이나 플레이어를 누르면 BGM이 나온다 (자동 재생은 하지 않는다)
 - [ ] 연필 버튼으로 소품을 추가·이동·돌리기·빼기, 벽지·바닥을 바꾸고 저장하면 다시 들어와도 그대로다
@@ -201,9 +203,9 @@ Vercel 환경변수 `NEXT_PUBLIC_AUTH_PROVIDERS` 에 켠 것만 적고 Redeploy 
 
 | 증상 | 확인할 것 |
 |---|---|
-| 화면마다 "잠시 후 다시 시도해 주세요" | `DATABASE_URL` 이 Transaction pooler(포트 6543) 주소이고 비밀번호가 맞는지. 1-2의 SQL 네 개를 모두 실행했는지. Vercel **Logs** 에서 오류 확인 |
+| 화면마다 "잠시 후 다시 시도해 주세요" | `DATABASE_URL` 이 Transaction pooler(포트 6543) 주소이고 비밀번호가 맞는지. 1-2의 SQL 다섯 개를 모두 실행했는지. Vercel **Logs** 에서 오류 확인 |
 | 마을 화면에서 "마을 서버에 연결하지 못했어요" | `NEXT_PUBLIC_REALTIME_URL` 이 Render 주소와 같은지 (`https://`, 끝에 `/` 없이. 바꿨다면 Redeploy). `TOWN_TOKEN_SECRET` 이 Vercel과 Render에 똑같이 들어 있는지. Render Free가 자고 있었다면 1분 뒤 다시 |
-| 마을에 내 집이 없음 | 1-2의 4번 SQL(`…_town.sql`)을 실행했는지. 그 지역 집터 20곳이 다 찼으면 집 없이 지역 입구에서 시작한다 (MY에서 다른 지역으로 이사) |
+| 마을에 내 집이 없음 | 1-2의 4·5번 SQL(`…_town.sql`, `…_hoods.sql`)을 실행했는지. 1동이 다 찼으면 집은 2동부터 서고, 접속하면 그 동네로 바로 간다 (본섬에서는 큰길 끝 동네 길 아치로 오간다) |
 | 사진을 올리면 "사진이 너무 커요" | 화면에서 긴 변 1600px JPEG로 줄여 올립니다. 그래도 크면 `recordConfig.photoMaxBytes` 확인 |
 | 로그인 뒤 `/login?error=1` | 5-1의 Redirect URLs에 `…/auth/callback` 이 있는지 |
 | 카카오·구글 버튼을 누르면 오류 | Supabase에서 그 로그인을 켰는지, `NEXT_PUBLIC_AUTH_PROVIDERS` 에 켠 것만 적었는지 |

@@ -10,6 +10,8 @@ import { EMOTES, type EmoteKind } from '@/shared/protocol';
 /** 집터에 세우는 모델 */
 export const HOUSE_KEY = 'prop.town.house';
 export const LOT_KEY = 'prop.town.lot';
+/** 동네 길 아치 (본섬 ↔ 2동·3동…) */
+export const GATE_KEY = 'prop.hood.gate';
 
 export interface TownAssets {
   character: GLTF;

@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { HouseView } from '@/server/scene/service';
-import type { Lot, TownMap } from '@/shared/townMap';
+import type { Lot, PropPlacement, TownMap } from '@/shared/townMap';
 import type { TownSession } from './session';
 import type { TownAssets } from './assets';
 
@@ -31,12 +31,16 @@ export interface TownContextValue {
   map: TownMap;
   assets: TownAssets;
   input: TownInput;
-  /** 집터 키 → 그 자리에 선 집 (빈 집터는 없음) */
+  /** 지금 있는 동네 번호 (1 = 본섬) */
+  hood: number;
+  /** 집터 키 → 그 자리에 선 집 (지금 동네 것만, 빈 집터는 없음) */
   houses: ReadonlyMap<string, HouseView>;
   /** 화면에서 숨길 마을 사람 번호 (차단 관계) */
   hidden: ReadonlySet<string>;
   /** 집을 눌렀을 때 */
   onHouse: (lot: Lot) => void;
+  /** 동네 길 아치를 눌렀을 때 */
+  onGate: (gate: PropPlacement) => void;
 }
 
 export const TownContext = createContext<TownContextValue | null>(null);

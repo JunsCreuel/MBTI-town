@@ -3,9 +3,10 @@ import { Client, type Room } from '@colyseus/sdk';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MSG, type EmoteBroadcast, type JoinOptions, type SnapMessage } from '../src/shared/protocol';
 import { loadTownMapForTest } from '../src/shared/testMap';
-import { lotDoor, spawnName } from '../src/shared/townMap';
+import { gateSpawnName, lotDoor, spawnName, type TownMap } from '../src/shared/townMap';
 import { guestPid, signTownPass, townPid, type TownPass } from '../src/shared/townToken';
 import { createRealtimeServer } from './app';
+import { getHoodMap } from './assets';
 
 const map = loadTownMapForTest();
 const near = (p: { x: number; z: number }, q: { x: number; z: number } | undefined, r: number) =>
@@ -23,22 +24,22 @@ async function until(check: () => boolean, ms = 3000): Promise<void> {
   }
 }
 
-const inSpawn = (p: { x: number; z: number }, name: string) => {
-  const { x, z, w, h } = map.spawns[name];
+const inSpawn = (p: { x: number; z: number }, name: string, m: TownMap = map) => {
+  const { x, z, w, h } = m.spawns[name];
   return p.x >= x && p.x <= x + w && p.z >= z && p.z <= z + h;
 };
 
 function pass(over: Partial<TownPass> = {}): TownPass {
   return {
-    pid: guestPid(), name: '손님', handle: '', district: '', lot: -1, color: 'mint', acc: 'none',
+    pid: guestPid(), name: '손님', handle: '', district: '', hood: 1, lot: -1, color: 'mint', acc: 'none',
     exp: Math.floor(Date.now() / 1000) + 600, ...over,
   };
 }
 
 const connect = (options: Partial<JoinOptions>) => new Client(`http://localhost:${PORT}`).joinOrCreate('town', options);
 
-async function join(p: TownPass, at?: JoinOptions['at']): Promise<Room> {
-  const room = await connect({ token: signTownPass(p), at });
+async function join(p: TownPass, at?: JoinOptions['at'], place?: JoinOptions['place']): Promise<Room> {
+  const room = await connect({ token: signTownPass(p), at, place });
   rooms.push(room);
   await until(() => room.state.players?.size !== undefined);
   return room;
@@ -167,6 +168,35 @@ describe('마을 실시간 서버', () => {
     await until(() => left);
     await until(() => again.state.players.size === 1);
     expect(again.state.players.get(again.sessionId).pid).toBe(haru.pid);
+  });
+});
+
+describe('새 동네 (2동·3동…)', () => {
+  const hood = getHoodMap('water');
+  const sea = pass({ name: '바다', district: 'water', hood: 2, lot: 5 });
+
+  it('동네마다 방이 따로 열리고, 내 집이 있는 동네에서는 문 앞에서 시작한다', async () => {
+    const mine = await join(sea, 'home', 'water.2');
+    await until(() => mine.state.players.size === 1);
+    expect(near(mine.state.players.get(mine.sessionId), lotDoor(hood.lots.water[5]), 0.5)).toBe(true);
+    // 같은 동네에 들어온 사람은 같은 방, 다른 동네는 다른 방
+    const visitor = await join(pass({ name: '손님2' }), 'home', 'water.2');
+    expect(visitor.roomId).toBe(mine.roomId);
+    expect(inSpawn(visitor.state.players.get(visitor.sessionId), 'spawn', hood)).toBe(true);
+    const other = await join(pass(), 'home', 'water.3');
+    expect(other.roomId).not.toBe(mine.roomId);
+    expect(other.state.channel).toBe(1);
+  });
+
+  it('본섬에서 내 집이 다른 동네에 있으면 내 지역 동네 길 아치 앞에서 시작한다', async () => {
+    const r = await join(sea);
+    expect(inSpawn(r.state.players.get(r.sessionId), gateSpawnName('water'))).toBe(true);
+  });
+
+  it('없는 곳으로는 들어가지 못한다', async () => {
+    for (const place of ['moon.2', 'water.1', 'water.0', 'water.100', 'water']) {
+      await expect(connect({ token: signTownPass(pass()), place: place as JoinOptions['place'] })).rejects.toThrow();
+    }
   });
 });
 

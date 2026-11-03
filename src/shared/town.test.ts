@@ -3,8 +3,12 @@ import { townConfig } from '../config/game';
 import { findPath, hasLineOfSight } from './pathfinding';
 import { MOVE_BUDGET_MAX, isMoveAllowed, lerpAngle, moveWithCollision, refillMoveBudget, yawFromVector } from './movement';
 import { DISTRICTS } from './districts';
-import { districtAt, groundHeightAt, isBlockedAt, isBlockedTile, lotDoor, randomSpawnPoint, spawnName } from './townMap';
-import { loadTownMapForTest } from './testMap';
+import {
+  districtAt, gateSpawnName, groundHeightAt, isBlockedAt, isBlockedTile, lotDoor, randomSpawnPoint, spawnName, withDistrict,
+  type TownMap,
+} from './townMap';
+import { loadHoodMapForTest, loadTownMapForTest } from './testMap';
+import { parseRoomPlace } from './protocol';
 import { guestPid, signTownPass, townPid, verifyTownPass, type TownPass } from './townToken';
 
 const map = loadTownMapForTest();
@@ -13,10 +17,10 @@ const C = map.width / 2;
 const plaza = randomSpawnPoint(map, () => 0.5);
 
 /** 경로의 모든 점이 걸을 수 있고 점 사이가 막히지 않았는지 */
-function walkable(start: { x: number; z: number }, path: { x: number; z: number }[]) {
+function walkable(start: { x: number; z: number }, path: { x: number; z: number }[], m: TownMap = map) {
   let from = start;
   for (const p of path) {
-    if (isBlockedAt(map, p.x, p.z) || !hasLineOfSight(map, from, p, 0)) return false;
+    if (isBlockedAt(m, p.x, p.z) || !hasLineOfSight(m, from, p, 0)) return false;
     from = p;
   }
   return true;
@@ -81,6 +85,54 @@ describe('마을 맵', () => {
       const r = map.spawns[spawnName(d)];
       expect(districtAt(map, r.x + r.w / 2, r.z + r.h / 2)).toBe(d);
     }
+  });
+});
+
+describe('새 동네 (2동·3동…)', () => {
+  const template = loadHoodMapForTest();
+  const GATE = 'prop.hood.gate';
+
+  it('본섬 지역마다 큰길 끝에 동네 길 아치가 있고, 광장에서 걸어갈 수 있다', () => {
+    for (const d of DISTRICTS) {
+      const gates = map.props.filter((p) => p.key === GATE && p.district === d);
+      expect(gates).toHaveLength(1);
+      const r = map.spawns[gateSpawnName(d)];
+      expect(r).toBeDefined();
+      const p = randomSpawnPoint(map, () => 0.5, gateSpawnName(d));
+      expect(walkable(plaza, findPath(map, plaza, p)!)).toBe(true);
+      expect(Math.hypot(p.x - gates[0].x, p.z - gates[0].z)).toBeLessThan(4);
+    }
+  });
+
+  it('동네 틀 맵에 지역을 입히면 땅·집터·지역 소품이 그 지역 것이 된다', () => {
+    expect(template.hoodLots).toHaveLength(townConfig.hoodLots);
+    expect(template.hoodLots.map((l) => l.index)).toEqual([...Array(townConfig.hoodLots).keys()]);
+    const hood = withDistrict(template, 'fire');
+    expect(hood.lots.fire).toHaveLength(townConfig.hoodLots);
+    expect(hood.lots.wood).toEqual([]);
+    expect(districtAt(hood, hood.width / 2 + 0.5, hood.height / 2 + 6.5)).toBe('fire');
+    expect(hood.props.filter((p) => p.key === GATE).map((p) => p.district)).toEqual(['fire']);
+    // 틀 맵은 그대로다
+    expect(template.lots.fire).toEqual([]);
+  });
+
+  it('동네 집 문 앞은 모두 입구에서 걸어갈 수 있다', () => {
+    const hood = withDistrict(template, 'water');
+    const start = randomSpawnPoint(hood, () => 0.5);
+    for (const lot of hood.lots.water) {
+      expect(isBlockedAt(hood, lot.x, lot.z)).toBe(true);
+      const door = lotDoor(lot);
+      expect(isBlockedAt(hood, door.x, door.z)).toBe(false);
+      const path = findPath(hood, start, door);
+      expect(path && walkable(start, path, hood)).toBe(true);
+    }
+  });
+
+  it('방 이름: 본섬은 town, 동네는 "지역.번호"(2부터)', () => {
+    expect(parseRoomPlace(undefined)).toBeNull();
+    expect(parseRoomPlace('town')).toBeNull();
+    expect(parseRoomPlace('water.2')).toEqual({ district: 'water', hood: 2 });
+    for (const bad of ['water.1', 'moon.2', 'water.x', 'water.100', 'water', 3]) expect(parseRoomPlace(bad)).toBeUndefined();
   });
 });
 
@@ -160,7 +212,7 @@ describe('입체 타일', () => {
 });
 
 describe('입장 토큰', () => {
-  const pass: TownPass = { pid: townPid('user-1'), name: '하루', handle: 'haru', district: 'water', lot: 3, color: 'sky', acc: 'cap', exp: 2_000_000_000 };
+  const pass: TownPass = { pid: townPid('user-1'), name: '하루', handle: 'haru', district: 'water', hood: 2, lot: 3, color: 'sky', acc: 'cap', exp: 2_000_000_000 };
 
   it('서명한 토큰을 그대로 읽는다', () => {
     expect(verifyTownPass(signTownPass(pass), 1_000)).toEqual(pass);
@@ -178,8 +230,8 @@ describe('입장 토큰', () => {
   });
 
   it('이상한 값은 안전한 기본값으로 바꾼다', () => {
-    const odd = signTownPass({ ...pass, district: 'moon' as never, lot: -5, color: 'gold' as never, acc: 'crown' as never });
-    expect(verifyTownPass(odd, 1_000)).toMatchObject({ district: '', lot: -1, color: 'mint', acc: 'none' });
+    const odd = signTownPass({ ...pass, district: 'moon' as never, hood: 0, lot: -5, color: 'gold' as never, acc: 'crown' as never });
+    expect(verifyTownPass(odd, 1_000)).toMatchObject({ district: '', hood: 1, lot: -1, color: 'mint', acc: 'none' });
   });
 
   it('사람 번호는 계정마다 같고, 계정 id를 드러내지 않는다', () => {

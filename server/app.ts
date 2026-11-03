@@ -14,7 +14,8 @@ export function createRealtimeServer(redisUrl = process.env.REDIS_URL) {
     transport: new WebSocketTransport(),
     ...(redisUrl ? { presence: new RedisPresence(redisUrl), driver: new RedisDriver(redisUrl) } : {}),
     rooms: {
-      [townConfig.roomName]: defineRoom(TownRoom),
+      // 본섬과 동네(2동·3동…)마다 따로 방을 연다. 같은 곳끼리만 채널이 나뉜다.
+      [townConfig.roomName]: defineRoom(TownRoom).filterBy(['place']),
     },
   });
 }

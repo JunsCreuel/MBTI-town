@@ -13,14 +13,15 @@ import { Icon } from '@/components/app/Icon';
 import { TabBar } from '@/components/app/TabBar';
 import type { HouseView, TownView } from '@/server/scene/service';
 import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
-import type { ActionKind, EmoteKind, TownPlace } from '@/shared/protocol';
-import { districtAt, lotDoor, parseTownMap, type Lot, type TownMap } from '@/shared/townMap';
+import { parseRoomPlace, type ActionKind, type EmoteKind, type RoomPlace, type TownPlace } from '@/shared/protocol';
+import { districtAt, lotDoor, parseTownMap, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
 import { lotKey, type TownContextValue, type TownInput } from './context';
 import { TownSession, now } from './session';
-import { loadTownAssets, type TownAssets } from './assets';
+import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
 
 // 마을 화면: 3D 장면 + 머리 위 HUD + 전체 지도.
 // 마을이 이 서비스의 기본 틀이다. 나의 방은 마을 속 내 집 안이다 (문 앞에서 "들어가기").
+// 본섬(중앙광장 + 다섯 지역 1동)과 새로 열린 동네(2동·3동…)는 큰길 끝 "동네 길" 아치로 오간다.
 // three.js 장면은 브라우저에서만 불러온다 (첫 화면 코드에서 분리)
 const VillageScene = dynamic(() => import('./VillageScene'), { ssr: false });
 
@@ -36,6 +37,15 @@ const EMOTE_BUTTONS: { kind: EmoteKind; label: string; icon: string }[] = [
 
 /** 중앙광장으로 치는 반지름 (광장 둘레 순환로까지) */
 const PLAZA_RADIUS = 13.2;
+/** 아치 앞 이만큼 안에 서면 "동네 길" 버튼이 뜬다 (칸) */
+const GATE_DISTANCE = 2.6;
+
+/** 동네 이름: 1동은 지역 이름, 2동부터는 번호 */
+const hoodName = (d: District, hood: number) => (hood > 1 ? `${DISTRICT[d].short} ${hood}동` : `${DISTRICT[d].short} 지역`);
+/** 동네로 가는 주소: 1동은 본섬 동네 길 앞 */
+const hoodHref = (d: District, hood: number) => (hood > 1 ? `/village?hood=${d}.${hood}` : `/village?at=gate.${d}`);
+/** 아치 앞 (아치는 마을 안쪽을 본다) */
+const gateFront = (g: PropPlacement) => ({ x: g.x + Math.sin(g.yaw) * 1.6, z: g.z + Math.cos(g.yaw) * 1.6 });
 
 const districtStyle = (d: District) =>
   ({ '--chip-color': tokens.district[d], '--chip-ink': withMaxLightness(tokens.district[d], 0.4) }) as CSSProperties;
@@ -62,9 +72,12 @@ function houseHref(h: HouseView | undefined): string | null {
   return h.handle ? `/r/${h.handle}` : null;
 }
 
-export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean }) {
+export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: TownPlace; welcome: boolean }) {
   const router = useRouter();
-  const session = useMemo(() => new TownSession(at), [at]);
+  /** 지금 있는 동네 (본섬이면 null) */
+  const here = useMemo(() => parseRoomPlace(place) ?? null, [place]);
+  const hoodNo = here?.hood ?? 1;
+  const session = useMemo(() => new TownSession(place, at), [place, at]);
   const snap = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const [loaded, setLoaded] = useState<{ map: TownMap; assets: TownAssets } | null>(null);
   const [progress, setProgress] = useState(0);
@@ -78,12 +91,17 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
   const [area, setArea] = useState<{ label: string; district: District | null }>({ label: '마을', district: null });
   const [picked, setPicked] = useState<Lot | null>(null);
   const [door, setDoor] = useState<Lot | null>(null);
+  /** 동네 길 카드를 연 지역 */
+  const [gateFor, setGateFor] = useState<District | null>(null);
+  const [nearGate, setNearGate] = useState<District | null>(null);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const map = parseTownMap(await (await fetch(assetUrl('map.town'))).json());
+        // 2동부터는 동네 틀 맵에 그 지역을 입혀 쓴다
+        const raw = parseTownMap(await (await fetch(assetUrl(here ? 'map.hood' : 'map.town'))).json());
+        const map = here ? withDistrict(raw, here.district) : raw;
         const assets = await loadTownAssets(map, (r) => alive && setProgress(r));
         await document.fonts?.ready;
         if (alive) setLoaded({ map, assets });
@@ -95,7 +113,7 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
     return () => {
       alive = false;
     };
-  }, []);
+  }, [here]);
 
   // 집 이름표: 새 이웃이 이사 오거나 친구가 되면 바뀐다. 받아 오지 못하면 지난 목록을 그대로 쓴다.
   useEffect(() => {
@@ -141,7 +159,11 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
     }),
     [],
   );
-  const houses = useMemo(() => new Map(town.houses.map((h) => [lotKey(h), h])), [town.houses]);
+  // 지금 동네에 선 집만 (본섬 = 다섯 지역의 1동)
+  const houses = useMemo(
+    () => new Map(town.houses.filter((h) => h.hood === hoodNo && (!here || h.district === here.district)).map((h) => [lotKey(h), h])),
+    [town.houses, here, hoodNo],
+  );
   const hidden = useMemo(() => new Set(town.hidden), [town.hidden]);
 
   // 집을 누르면 문 앞으로 걸어가고 집 카드를 연다
@@ -151,6 +173,21 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
       input.tapTarget = d;
       input.marker = { ...d, at: now() };
       setPicked(lot);
+      setGateFor(null);
+      setHint(false);
+    },
+    [input],
+  );
+
+  // 동네 길 아치를 누르면 아치 앞으로 걸어가고 동네 카드를 연다
+  const onGate = useCallback(
+    (g: PropPlacement) => {
+      if (!g.district) return;
+      const f = gateFront(g);
+      input.tapTarget = f;
+      input.marker = { ...f, at: now() };
+      setGateFor(g.district);
+      setPicked(null);
       setHint(false);
     },
     [input],
@@ -158,17 +195,23 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
 
   const ready = snap.status === 'ready' && loaded !== null;
   const value = useMemo<TownContextValue | null>(
-    () => (ready ? { session, selfId: snap.selfId, map: loaded.map, assets: loaded.assets, input, houses, hidden, onHouse } : null),
-    [ready, session, snap.selfId, loaded, input, houses, hidden, onHouse],
+    () =>
+      ready
+        ? { session, selfId: snap.selfId, map: loaded.map, assets: loaded.assets, input, hood: hoodNo, houses, hidden, onHouse, onGate }
+        : null,
+    [ready, session, snap.selfId, loaded, input, hoodNo, houses, hidden, onHouse, onGate],
   );
 
-  // 지금 서 있는 곳 이름과, 문 앞에 섰는지 (HUD)
+  // 지금 서 있는 곳 이름과, 문 앞·아치 앞에 섰는지 (HUD)
   useEffect(() => {
     if (!loaded) return;
     const lots = Object.values(loaded.map.lots).flat();
+    const gates = loaded.map.props.filter((p) => p.key === GATE_KEY && p.district);
     const t = setInterval(() => {
       if (!input.self.ready) return;
-      const next = areaAt(loaded.map, input.self.x, input.self.z);
+      const next = here
+        ? { label: hoodName(here.district, here.hood), district: here.district }
+        : areaAt(loaded.map, input.self.x, input.self.z);
       setArea((a) => (a.label === next.label ? a : next));
       let best: Lot | null = null;
       let bestD: number = townConfig.doorDistance;
@@ -181,9 +224,14 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
         }
       }
       setDoor((cur) => (cur === best ? cur : best));
+      const g = gates.find((p) => {
+        const f = gateFront(p);
+        return Math.hypot(f.x - input.self.x, f.z - input.self.z) < GATE_DISTANCE;
+      });
+      setNearGate(g?.district ?? null);
     }, 300);
     return () => clearInterval(t);
-  }, [loaded, input]);
+  }, [loaded, input, here]);
 
   const openMap = useCallback(
     (open: boolean) => {
@@ -193,6 +241,7 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
       setView(input.view);
       setHint(false);
       setPicked(null);
+      setGateFor(null);
     },
     [input],
   );
@@ -210,7 +259,10 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (view === 'map') openMap(false);
-      else setPicked(null);
+      else {
+        setPicked(null);
+        setGateFor(null);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -232,17 +284,24 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
   const pass = snap.pass;
   const guest = snap.guest;
   const hasHome = !!pass?.district && pass.lot >= 0;
+  /** 내 집이 지금 이 동네에 있는지 */
+  const homeHere = hasHome && pass.hood === hoodNo && (!here || pass.district === here.district);
+  // 지역별·동네별 집 수 (이름 없는 집도 센다)
   const counts = useMemo(() => {
-    const c = Object.fromEntries(DISTRICTS.map((d) => [d, 0])) as Record<District, number>;
-    for (const h of town.houses) c[h.district]++;
+    const c = Object.fromEntries(DISTRICTS.map((d) => [d, new Map<number, number>()])) as Record<District, Map<number, number>>;
+    for (const h of town.houses) c[h.district].set(h.hood, (c[h.district].get(h.hood) ?? 0) + 1);
     return c;
   }, [town.houses]);
+  /** 그 지역에 열린 동네 수 (1동 포함) */
+  const hoodCount = (d: District) => Math.max(1, ...counts[d].keys());
+  /** 내 집으로: 이 동네에 있으면 문 앞으로, 다른 동네면 그 동네로 간다 */
+  const goHome = () => (homeHere ? goTo('home') : router.push('/village'));
 
   const pickedHouse = picked ? houses.get(lotKey(picked)) : undefined;
   const pickedHref = houseHref(pickedHouse);
   const doorHouse = door ? houses.get(lotKey(door)) : undefined;
   const doorHref = houseHref(doorHouse);
-  const showDoor = !!doorHref && !picked && view === 'walk';
+  const showDoor = !!doorHref && !picked && !gateFor && view === 'walk';
 
   return (
     <div className="village">
@@ -250,10 +309,27 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
 
       {value && rendered && (
         <div className={`map-labels${view === 'map' ? ' map-labels--on' : ''}`} aria-hidden={view !== 'map'}>
-          <button className="map-label map-label--plaza" ref={label('plaza')} onClick={() => goTo('plaza')} tabIndex={view === 'map' ? 0 : -1}>
-            중앙광장
-          </button>
-          {DISTRICTS.map((d) => (
+          {!here && (
+            <button className="map-label map-label--plaza" ref={label('plaza')} onClick={() => goTo('plaza')} tabIndex={view === 'map' ? 0 : -1}>
+              중앙광장
+            </button>
+          )}
+          {here && (
+            <button
+              className="map-label"
+              ref={label(here.district)}
+              style={districtStyle(here.district)}
+              onClick={() => goTo('plaza')}
+              tabIndex={view === 'map' ? 0 : -1}
+              aria-label={`${hoodName(here.district, here.hood)} 입구로 가기`}
+            >
+              <span className="map-label__code">{hoodName(here.district, here.hood)}</span>
+              <span className="map-label__share">
+                집 {counts[here.district].get(here.hood) ?? 0}/{townConfig.hoodLots}채
+              </span>
+            </button>
+          )}
+          {!here && DISTRICTS.map((d) => (
             <button
               key={d}
               ref={label(d)}
@@ -261,15 +337,15 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
               style={districtStyle(d)}
               onClick={() => goTo(d)}
               tabIndex={view === 'map' ? 0 : -1}
-              aria-label={`${DISTRICT[d].short} 지역으로 가기, 집 ${counts[d]}채`}
+              aria-label={`${DISTRICT[d].short} 지역으로 가기, 1동 집 ${counts[d].get(1) ?? 0}채`}
             >
               <span className="map-label__code">{DISTRICT[d].short} 지역</span>
               <span className="map-label__share">
-                {DISTRICT[d].element} · 집 {counts[d]}채
+                {DISTRICT[d].element} · 집 {counts[d].get(1) ?? 0}채{hoodCount(d) > 1 && ` · ${hoodCount(d)}동까지`}
               </span>
             </button>
           ))}
-          {hasHome && (
+          {homeHere && (
             <button className="map-label map-label--home" ref={label('home')} onClick={() => goTo('home')} tabIndex={view === 'map' ? 0 : -1}>
               <Icon name="home" size={14} /> 내 집
             </button>
@@ -295,7 +371,7 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
             </div>
             <div className="hud__right">
               {hasHome && (
-                <button className="icon-btn" onClick={() => goTo('home')} aria-label="내 집 앞으로 가기">
+                <button className="icon-btn" onClick={goHome} aria-label="내 집 앞으로 가기">
                   <Icon name="home" />
                 </button>
               )}
@@ -311,7 +387,7 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
           {showWelcome && (
             <div className="village-welcome">
               <Guide who="monnyang">
-                {DISTRICT[pass?.district || 'wood'].short} 지역에 내 집이 생겼어요! 문 앞에서 &lsquo;들어가기&rsquo;를 누르면 나의 방이에요.
+                {hoodName(pass?.district || 'wood', pass?.hood ?? 1)}에 내 집이 생겼어요! 문 앞에서 &lsquo;들어가기&rsquo;를 누르면 나의 방이에요.
               </Guide>
               <button className="icon-btn icon-btn--plain" onClick={() => setShowWelcome(false)} aria-label="안내 닫기">
                 <Icon name="close" size={18} />
@@ -333,7 +409,7 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
                     {pickedHouse?.friend && <span className="tag">친구</span>}
                   </b>
                   <span>
-                    {DISTRICT[picked.district].short} 지역 {picked.index + 1}번지
+                    {hoodName(picked.district, hoodNo)} {picked.index + 1}번지
                     {!pickedHouse && ' · 아직 아무도 살지 않아요'}
                     {pickedHouse && !pickedHref && ' · 방을 공개하지 않은 이웃이에요'}
                   </span>
@@ -347,6 +423,50 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
                   <Icon name="close" size={18} />
                 </button>
               </div>
+            )}
+
+            {gateFor && (
+              <div className="house-card hood-card" role="dialog" aria-label={`${DISTRICT[gateFor].short} 동네 길`}>
+                <span className="house-card__dot" style={districtStyle(gateFor)} aria-hidden />
+                <div className="house-card__text">
+                  <b>{DISTRICT[gateFor].short} 동네 길</b>
+                  <span>
+                    {hoodCount(gateFor) > 1
+                      ? '가고 싶은 동네를 고르세요'
+                      : `1동 집터 ${townConfig.lotsPerDistrict}곳이 다 차면 2동이 열려요`}
+                  </span>
+                  <div className="hood-list">
+                    {Array.from({ length: hoodCount(gateFor) }, (_, i) => i + 1).map((n) => {
+                      const current = n === hoodNo && (n === 1 ? !here : here?.district === gateFor);
+                      const total = n === 1 ? townConfig.lotsPerDistrict : townConfig.hoodLots;
+                      return (
+                        <button
+                          key={n}
+                          className={`hood-chip${current ? ' hood-chip--on' : ''}`}
+                          disabled={current}
+                          onClick={() => router.push(hoodHref(gateFor, n))}
+                        >
+                          <b>{n}동{n === 1 && ' · 본섬'}</b>
+                          <span>
+                            {current ? '여기' : `집 ${counts[gateFor].get(n) ?? 0}/${total}`}
+                            {hasHome && pass.district === gateFor && pass.hood === n && ' · 내 집'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <button className="icon-btn icon-btn--plain" onClick={() => setGateFor(null)} aria-label="닫기">
+                  <Icon name="close" size={18} />
+                </button>
+              </div>
+            )}
+
+            {nearGate && !gateFor && !picked && !showDoor && (
+              <button className="door-btn" onClick={() => setGateFor(nearGate)}>
+                <Icon name="map" size={20} />
+                {here ? '동네 길 · 본섬으로' : `${DISTRICT[nearGate].short} 동네 길`}
+              </button>
             )}
 
             {showDoor && (
@@ -388,17 +508,26 @@ export function VillageClient({ at, welcome }: { at: TownPlace; welcome: boolean
         <div className="hud hud--map">
           <div className="map-card">
             <div className="map-card__head">
-              <h1 className="map-card__title">마을 지도</h1>
+              <h1 className="map-card__title">{here ? `${hoodName(here.district, here.hood)} 지도` : '마을 지도'}</h1>
               <button className="icon-btn" onClick={() => openMap(false)} aria-label="지도 닫기">
                 <Icon name="close" size={18} />
               </button>
             </div>
-            <p className="map-card__sub">
-              다섯 지역이 중앙광장을 둘러싸고 있어요. 지역마다 집터 {townConfig.lotsPerDistrict}곳에 이웃이 살아요.
-            </p>
+            {here ? (
+              <>
+                <p className="map-card__sub">본섬 {DISTRICT[here.district].short} 지역 큰길 끝 동네 길과 이어져 있어요.</p>
+                <button className="btn-secondary map-card__action" onClick={() => router.push(hoodHref(here.district, 1))}>
+                  본섬으로 나가기
+                </button>
+              </>
+            ) : (
+              <p className="map-card__sub">
+                다섯 지역이 중앙광장을 둘러싸고 있어요. 지역마다 1동 집터 {townConfig.lotsPerDistrict}곳이 다 차면 큰길 끝 동네 길 너머에 2동이 열려요.
+              </p>
+            )}
           </div>
           <div className="hud__bottom">
-            <div className="hud__hint">가고 싶은 지역이나 광장을 누르세요</div>
+            <div className="hud__hint">{here ? '이름표를 누르면 동네 입구로 가요' : '가고 싶은 지역이나 광장을 누르세요'}</div>
           </div>
         </div>
       )}

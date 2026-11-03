@@ -239,21 +239,39 @@ describe('마을 집터', () => {
     expect((await onboard(s, '에스', { district: 'fire' })).houseLot).toBe(0);
   });
 
-  it('지역 집터가 다 차면 집 없이 이사한다 (방은 그대로)', async () => {
-    const full = Array.from({ length: townConfig.lotsPerDistrict }, () => user());
-    const people = await Promise.all(full);
-    for (const [i, v] of people.entries()) await onboard(v, `주민${i}`, { district: 'earth' });
+  it('1동(본섬) 집터가 다 차면 2동이 열리고, 2동이 다 차면 3동이 열린다', async () => {
+    const first = await Promise.all(Array.from({ length: townConfig.lotsPerDistrict }, () => user()));
+    for (const [i, v] of first.entries()) await onboard(v, `주민${i}`, { district: 'earth' });
     const late = await user();
     const mine = await onboard(late, '늦은 주민', { district: 'earth' });
-    expect(mine.houseLot).toBeNull();
-    expect(mine.district).toBe('earth');
-    // 한 집이 나가면 빈 집터가 생기고, 이사(같은 지역 다시 고르기)로 들어갈 수 있다
-    await service.updateProfile(people[4], { district: 'wood' });
-    expect((await service.updateProfile(late, { district: 'earth' })).houseLot).toBe(4);
+    expect(mine).toMatchObject({ district: 'earth', houseHood: 2, houseLot: 0 });
+    // 2동을 채우면 다음 사람은 3동 0번
+    const second = await Promise.all(Array.from({ length: townConfig.hoodLots - 1 }, () => user()));
+    for (const [i, v] of second.entries()) await onboard(v, `이웃${i}`, { district: 'earth' });
+    const third = await onboard(await user(), '셋째 동네', { district: 'earth' });
+    expect(third).toMatchObject({ houseHood: 3, houseLot: 0 });
+    // 1동에 빈 집터가 생기면 다음 사람은 1동으로 (작은 동네부터 채운다)
+    await service.updateProfile(first[4], { district: 'wood' });
+    const next = await onboard(await user(), '빈자리', { district: 'earth' });
+    expect(next).toMatchObject({ houseHood: 1, houseLot: 4 });
+    // 같은 동네·같은 집터에 두 집이 서지 않는다
     const [{ n }] = await sql.query<{ n: number }>(
-      `select count(*)::int as n from (select district, house_lot from public.profiles where house_lot is not null group by 1, 2 having count(*) > 1) d`,
+      `select count(*)::int as n from (select district, house_hood, house_lot from public.profiles where house_lot is not null group by 1, 2, 3 having count(*) > 1) d`,
     );
     expect(Number(n)).toBe(0);
+    // 마을 집 목록에도 동네 번호가 붙는다
+    const houses = (await service.town(null)).houses.filter((h) => h.district === 'earth');
+    expect(new Set(houses.map((h) => h.hood))).toEqual(new Set([1, 2, 3]));
+    expect(houses.filter((h) => h.hood === 2)).toHaveLength(townConfig.hoodLots);
+  });
+
+  it('예전에 집 없이 들어온 주민은 다음 접속 때 빈 집터를 받는다', async () => {
+    const v = await user();
+    await onboard(v, '집 없던 주민', { district: 'metal' });
+    await sql.query(`update public.profiles set house_lot = null where id = $1`, [v.id]);
+    const ticket = await service.townTicket(v);
+    expect(ticket.pass.lot).toBeGreaterThanOrEqual(0);
+    expect((await service.me(v)).profile.houseLot).toBe(ticket.pass.lot);
   });
 
   it('마을 집 이름표: 내 집·친구 집·공개 방만 이름이 붙고, 차단하면 이름이 지워진다', async () => {
@@ -261,7 +279,7 @@ describe('마을 집터', () => {
     const hq = (await service.me(q)).profile.handle;
     await service.updateProfile(q, { discoverable: false });
     const named = (v: Viewer | null) =>
-      service.town(v).then((t) => Object.fromEntries(t.houses.filter((h) => h.district !== 'earth').map((h) => [`${h.district}.${h.lot}`, h.name])));
+      service.town(v).then((t) => Object.fromEntries(t.houses.filter((h) => h.district !== 'earth' && h.hood === 1).map((h) => [`${h.district}.${h.lot}`, h.name])));
 
     // 손님: 발견을 끈 큐의 집은 이름이 없다
     expect(await named(null)).toMatchObject({ 'metal.1': '파랑', 'fire.1': null });
@@ -283,13 +301,13 @@ describe('마을 집터', () => {
   it('입장 토큰: 가입한 사람은 이름·집터를, 아니면 손님으로 담는다', async () => {
     const tp = await service.townTicket(p);
     expect(tp.guest).toBe(false);
-    expect(verifyTownPass(tp.token)).toMatchObject({ name: '파랑', district: 'metal', lot: 1, color: 'sky', acc: 'cap' });
+    expect(verifyTownPass(tp.token)).toMatchObject({ name: '파랑', district: 'metal', hood: 1, lot: 1, color: 'sky', acc: 'cap' });
     expect(tp.pass.handle).not.toBe('');
     // 발견을 끈 사람은 방 주소를 담지 않는다
     expect((await service.townTicket(q)).pass.handle).toBe('');
     const guest = await service.townTicket(null);
     expect(guest.guest).toBe(true);
-    expect(guest.pass).toMatchObject({ name: '손님', district: '', lot: -1 });
+    expect(guest.pass).toMatchObject({ name: '손님', district: '', hood: 1, lot: -1 });
     expect(guest.pass.pid).not.toBe((await service.townTicket(null)).pass.pid);
     const fresh = await user();
     expect((await service.townTicket(fresh)).guest).toBe(true);

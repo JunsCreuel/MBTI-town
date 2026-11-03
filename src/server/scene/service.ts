@@ -61,13 +61,17 @@ export interface MyProfile extends PublicProfile {
   roomVisibility: Visibility;
   showVisits: boolean;
   discoverable: boolean;
-  /** 마을 집터 번호. 지역 집터가 다 찼으면 null (방은 그대로 쓴다) */
+  /** 집이 있는 동네 번호 (1 = 본섬 1동, 2부터 = 새로 열린 동네) */
+  houseHood: number;
+  /** 동네 안 집터 번호 (가입 전이면 null) */
   houseLot: number | null;
 }
 
 /** 마을에 서 있는 집 하나. 이름은 볼 수 있는 사람에게만 붙는다. */
 export interface HouseView {
   district: District;
+  /** 동네 번호 (1 = 본섬) */
+  hood: number;
   lot: number;
   /** 이름표 (내 집, 친구 집, 공개·발견 켠 집만. 나머지는 null = 이름 없는 집) */
   name: string | null;
@@ -224,9 +228,16 @@ export class SceneService {
   async me(viewer: Viewer): Promise<{ profile: MyProfile; room: { layout: RoomLayout; bgm: string | null } | null }> {
     await this.store.ensureProfile(viewer.id);
     await this.store.touch(viewer.id, this.now());
-    const p = (await this.store.getProfile(viewer.id))!;
+    const p = await this.ensureHouse((await this.store.getProfile(viewer.id))!);
     const room = await this.store.getRoom(viewer.id);
     return { profile: this.toMine(p), room: room ? { layout: room.layout, bgm: room.bgm } : null };
+  }
+
+  /** 가입을 마쳤는데 집이 없으면 (예전에 집터가 다 찼던 지역) 지금 빈 집터를 준다 */
+  private async ensureHouse(p: ProfileRow): Promise<ProfileRow> {
+    if (!p.onboarded_at || !p.district || p.house_lot !== null) return p;
+    await this.store.moveHouse(p.id, p.district, townConfig.lotsPerDistrict, townConfig.hoodLots);
+    return (await this.store.getProfile(p.id))!;
   }
 
   private toMine(p: ProfileRow): MyProfile {
@@ -238,6 +249,7 @@ export class SceneService {
       roomVisibility: p.room_visibility,
       showVisits: p.show_visits,
       discoverable: p.discoverable,
+      houseHood: p.house_hood,
       houseLot: p.house_lot,
     };
   }
@@ -278,9 +290,9 @@ export class SceneService {
       avatar: cleanAvatar(input.avatar),
       onboarded_at: p.onboarded_at ?? now,
     });
-    // 고른 지역의 빈 집터에 집이 선다
+    // 고른 지역의 빈 집터에 집이 선다 (1동이 다 찼으면 2동, 3동… 새 동네가 열린다)
     if (p.district !== input.district || p.house_lot === null) {
-      await this.store.moveHouse(viewer.id, input.district, townConfig.lotsPerDistrict);
+      await this.store.moveHouse(viewer.id, input.district, townConfig.lotsPerDistrict, townConfig.hoodLots);
     }
     // MBTI는 선택 입력. 처음 정할 때만 여기서 저장한다 (바꾸기는 7일에 한 번, 설정 화면에서)
     if (input.mbti && isMbtiType(input.mbti) && !p.mbti) await this.store.setMbti(viewer.id, input.mbti, now);
@@ -305,7 +317,7 @@ export class SceneService {
     if ('district' in patch) {
       if (!isDistrict(patch.district)) throw new SceneError('bad_request', '거주 지역이 올바르지 않아요.');
       if (patch.district !== p.district || p.house_lot === null) {
-        await this.store.moveHouse(id, patch.district, townConfig.lotsPerDistrict);
+        await this.store.moveHouse(id, patch.district, townConfig.lotsPerDistrict, townConfig.hoodLots);
       }
     }
     if ('avatar' in patch) next.avatar = cleanAvatar(patch.avatar);
@@ -640,6 +652,7 @@ export class SceneService {
           (mine || (friend && h.room_visibility !== 'private') || (h.room_visibility === 'public' && h.discoverable));
         return {
           district: h.district,
+          hood: Number(h.house_hood),
           lot: h.house_lot,
           name: named ? displayNameOf(h) : null,
           handle: named ? h.handle : null,
@@ -656,7 +669,8 @@ export class SceneService {
    * 방 주소는 방을 찾아갈 수 있게 한 사람(공개 + 발견 켜기)만 담는다.
    */
   async townTicket(viewer: Viewer | null): Promise<TownTicket> {
-    const p = viewer ? await this.store.getProfile(viewer.id) : null;
+    const found = viewer ? await this.store.getProfile(viewer.id) : null;
+    const p = found && (await this.ensureHouse(found));
     // 만료는 실시간 서버 시계와 맞춰야 하므로 개발용 시계가 아니라 실제 시각으로 정한다
     const exp = Math.floor(Date.now() / 1000) + townConfig.tokenTtlSeconds;
     let pass: TownPass;
@@ -667,6 +681,7 @@ export class SceneService {
         name: displayNameOf(p),
         handle: p.handle && p.room_visibility === 'public' && p.discoverable ? p.handle : '',
         district: p.district,
+        hood: p.house_hood,
         lot: p.house_lot ?? -1,
         color: avatar.color,
         acc: avatar.accessory,
@@ -674,7 +689,7 @@ export class SceneService {
       };
     } else {
       pass = {
-        pid: guestPid(), name: '손님', handle: '', district: '', lot: -1,
+        pid: guestPid(), name: '손님', handle: '', district: '', hood: 1, lot: -1,
         color: AVATAR_COLORS[randomBytes(1)[0] % AVATAR_COLORS.length], acc: 'none', exp,
       };
     }

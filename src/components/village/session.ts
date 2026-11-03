@@ -8,7 +8,7 @@ import type { District } from '@/shared/districts';
 import {
   MSG,
   type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type JoinOptions,
-  type MoveMessage, type SnapMessage, type TownPlace, type WarpMessage,
+  type MoveMessage, type RoomPlace, type SnapMessage, type TownPlace, type WarpMessage,
 } from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
 
@@ -65,8 +65,14 @@ export class TownSession {
   /** 연결 시도 번호. dispose 후 늦게 도착한 연결은 버린다 (개발 모드에서 effect가 두 번 실행된다). */
   private attempt = 0;
 
-  /** @param at 처음 설 곳 (기본: 내 집 문 앞) */
-  constructor(readonly at: TownPlace = 'home') {}
+  /**
+   * @param place 들어갈 곳 (본섬 또는 2동·3동… 동네)
+   * @param at 처음 설 곳 (기본: 내 집 문 앞)
+   */
+  constructor(
+    readonly place: RoomPlace = 'town',
+    readonly at: TownPlace = 'home',
+  ) {}
 
   subscribe = (fn: () => void) => {
     this.listeners.add(fn);
@@ -89,7 +95,7 @@ export class TownSession {
       // 웹 서버에서 입장 토큰을 받아 실시간 서버에 낸다
       const ticket = await call<TownTicket>('POST', '/api/town/token');
       if (attempt !== this.attempt) return;
-      const options: JoinOptions = { token: ticket.token, at: this.at };
+      const options: JoinOptions = { token: ticket.token, place: this.place, at: this.at };
       const room = await new Client(realtimeUrl()).joinOrCreate(townConfig.roomName, options);
       if (attempt !== this.attempt) {
         room.leave();

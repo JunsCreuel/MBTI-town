@@ -8,7 +8,7 @@ import { townConfig } from '@/config/game';
 import { tokens } from '@/design/tokens';
 import { TINT_MATERIAL } from '@/shared/character';
 import { groundHeightAt, type Lot, type PropPlacement } from '@/shared/townMap';
-import { HOUSE_KEY, LOT_KEY, tagTexture, type TownAssets } from './assets';
+import { GATE_KEY, HOUSE_KEY, LOT_KEY, tagTexture, type TownAssets } from './assets';
 import { lotKey, useTown } from './context';
 
 // 맵의 소품과 주민의 집을 세운다. 같은 소품(나무·집)이 수백 개라 종류마다 인스턴싱으로 한 번에 그린다.
@@ -16,6 +16,8 @@ import { lotKey, useTown } from './context';
 
 /** 누르면 오늘의 토론으로 가는 소품 */
 const DEBATE_BOARD_KEY = 'prop.plaza.board';
+/** 누를 수 있는 소품: 오늘의 토론 게시판, 동네 길 아치 */
+const CLICKABLE = new Set([DEBATE_BOARD_KEY, GATE_KEY]);
 /** 이보다 키가 큰 소품은 카메라와 내 캐릭터 사이에 오면 흐려진다 */
 const FADE_MIN_HEIGHT = 1.4;
 const FADE_OPACITY = 0.3;
@@ -223,9 +225,9 @@ function InstancedProps({ group, onPick }: { group: PropGroup; onPick?: (index: 
   );
 }
 
-/** 토론 게시판: 누르면 오늘의 토론으로 간다 */
-function DebateBoard({ placement }: { placement: PropPlacement }) {
-  const { map, assets, input } = useTown();
+/** 누를 수 있는 소품 하나 (게시판 → 오늘의 토론, 동네 길 아치 → 동네 고르기) */
+function ClickableProp({ placement }: { placement: PropPlacement }) {
+  const { map, assets, input, onGate } = useTown();
   const router = useRouter();
   const item = useMemo(() => {
     const o = assets.props[placement.key].clone();
@@ -238,8 +240,11 @@ function DebateBoard({ placement }: { placement: PropPlacement }) {
       if (!mesh.isMesh) return;
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      mesh.material = (mesh.material as THREE.Material).clone();
-      materials.push(mesh.material);
+      const mat = (mesh.material as THREE.MeshStandardMaterial).clone();
+      // 지역 색 현판 (아치)
+      if (mat.name === TINT_MATERIAL && placement.district) mat.color.set(tokens.district[placement.district]);
+      mesh.material = mat;
+      materials.push(mat);
     });
     return { o, materials, halfWidth: (box.max.x - box.min.x) / 2, tall: box.max.y - box.min.y > FADE_MIN_HEIGHT, opacity: 1 };
   }, [assets, map, placement]);
@@ -262,9 +267,11 @@ function DebateBoard({ placement }: { placement: PropPlacement }) {
     <primitive
       object={item.o}
       onClick={(e: ThreeEvent<MouseEvent>) => {
-        // 게시판 뒤 바닥으로 걸어가지 않게 막는다
+        // 소품 뒤 바닥으로 걸어가지 않게 막는다
         e.stopPropagation();
-        if (e.delta <= 10 && input.view === 'walk') router.push('/debate');
+        if (e.delta > 10 || input.view !== 'walk') return;
+        if (placement.key === GATE_KEY) onGate(placement);
+        else router.push('/debate');
       }}
       onPointerOver={() => (document.body.style.cursor = 'pointer')}
       onPointerOut={() => (document.body.style.cursor = '')}
@@ -294,7 +301,7 @@ export function Props() {
     const boards: PropPlacement[] = [];
     for (const p of map.props) {
       if (!assets.props[p.key]) continue;
-      if (p.key === DEBATE_BOARD_KEY) boards.push(p);
+      if (CLICKABLE.has(p.key)) boards.push(p);
       else byKey.set(p.key, [...(byKey.get(p.key) ?? []), p]);
     }
     return { groups: [...byKey].map(([key, placements]) => buildGroup(key, placements, assets)), boards };
@@ -306,7 +313,7 @@ export function Props() {
         <InstancedProps key={g.key} group={g} />
       ))}
       {boards.map((b, i) => (
-        <DebateBoard key={i} placement={b} />
+        <ClickableProp key={i} placement={b} />
       ))}
     </>
   );

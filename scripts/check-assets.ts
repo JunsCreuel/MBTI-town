@@ -8,7 +8,7 @@ const ROOT = join(import.meta.dirname, '..', 'public', 'assets');
 const SCREEN_BUDGET_BYTES = 3 * 1024 * 1024;
 // 화면마다 처음 불러오는 키 접두사 (BGM은 누를 때 받으므로 뺀다). 화면마다 3MB를 넘지 않는다.
 const SCREENS: { name: string; prefixes: string[] }[] = [
-  { name: '마을 첫 화면', prefixes: ['char.', 'map.town', 'prop.', 'ui.'] },
+  { name: '마을 첫 화면', prefixes: ['char.', 'map.', 'prop.', 'ui.'] },
   { name: '나의 방 첫 화면', prefixes: ['char.', 'furn.', 'room.', 'ui.'] },
 ];
 // 규칙 검사에서 빼는 파일 (폰트 묶음은 외부 배포본의 파일명을 그대로 쓴다)

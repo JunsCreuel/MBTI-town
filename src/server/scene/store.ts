@@ -21,7 +21,9 @@ export interface ProfileRow {
   show_visits: boolean;
   discoverable: boolean;
   onboarded_at: Date | null;
-  /** 지역 집터 번호 (집터가 다 찬 지역이면 null) */
+  /** 집이 있는 동네 번호 (1 = 본섬 1동) */
+  house_hood: number;
+  /** 동네 안 집터 번호 (가입 전이면 null) */
   house_lot: number | null;
 }
 
@@ -30,6 +32,7 @@ export interface HouseRow {
   handle: string | null;
   display_name: string | null;
   district: District;
+  house_hood: number;
   house_lot: number;
   room_visibility: Visibility;
   discoverable: boolean;
@@ -76,7 +79,7 @@ export interface RoomCardRow {
 }
 
 const PROFILE_COLS = `id, handle, display_name, bio, district, to_char(birth_date, 'YYYY-MM-DD') as birth_date, taste, avatar, mbti,
-  room_visibility, show_visits, discoverable, onboarded_at, house_lot`;
+  room_visibility, show_visits, discoverable, onboarded_at, house_hood, house_lot`;
 const RECORD_COLS = `id, owner_id, kind, emotion, body, photo_id, visibility, created_at`;
 const CARD_COLS = `p.id, p.handle, p.display_name, p.bio, p.district, p.avatar, r.bgm`;
 
@@ -137,22 +140,35 @@ export class SceneStore {
   }
 
   /**
-   * 그 지역의 비어 있는 가장 작은 집터로 이사한다. 다 찼으면 집 없이 지역만 옮긴다 (house_lot = null).
+   * 그 지역의 빈 집터 가운데 (동네 번호, 집터 번호)가 가장 작은 곳으로 이사한다.
+   * 1동(본섬)은 firstLots곳, 2동부터는 동네마다 hoodLots곳. 열린 동네가 다 찼으면 다음 동네의 0번 집터가 된다 (새 동네가 열린다).
    * 두 사람이 동시에 같은 집터를 잡으면 유일 색인이 막으므로 다시 고른다.
    */
-  async moveHouse(id: string, district: District, lotCount: number): Promise<number | null> {
+  async moveHouse(id: string, district: District, firstLots: number, hoodLots: number): Promise<{ hood: number; lot: number }> {
     for (let attempt = 0; ; attempt++) {
       try {
-        const [r] = await this.sql.query<{ house_lot: number | null }>(
-          `update public.profiles set district = $2, house_lot = (
-             select n from generate_series(0, $3::int - 1) as n
-             where not exists (select 1 from public.profiles q where q.district = $2 and q.house_lot = n and q.id <> $1)
-             order by n limit 1)
-           where id = $1
-           returning house_lot`,
-          [id, district, lotCount],
+        const [r] = await this.sql.query<{ house_hood: number; house_lot: number }>(
+          `with used as (
+             select house_hood as h, house_lot as l from public.profiles
+             where district = $2 and house_lot is not null and id <> $1
+           ),
+           slots as (
+             select 1 as h, n as l from generate_series(0, $3::int - 1) as n
+             union all
+             select h, l
+             from generate_series(2, (select coalesce(max(h), 1) + 1 from used)) as h, generate_series(0, $4::int - 1) as l
+           ),
+           pick as (
+             select s.h, s.l from slots s where not exists (select 1 from used u where u.h = s.h and u.l = s.l)
+             order by s.h, s.l limit 1
+           )
+           update public.profiles set district = $2, house_hood = pick.h, house_lot = pick.l
+           from pick where id = $1
+           returning house_hood, house_lot`,
+          [id, district, firstLots, hoodLots],
         );
-        return r?.house_lot ?? null;
+        if (!r) throw new Error('집터를 고르지 못했습니다');
+        return { hood: Number(r.house_hood), lot: Number(r.house_lot) };
       } catch (e) {
         if ((e as { code?: string }).code !== '23505' || attempt >= 4) throw e;
       }
@@ -162,10 +178,10 @@ export class SceneStore {
   /** 마을에 서 있는 집 (가입을 마친 사람만) */
   async houses(): Promise<HouseRow[]> {
     return this.sql.query<HouseRow>(
-      `select id, handle, display_name, district, house_lot, room_visibility, discoverable
+      `select id, handle, display_name, district, house_hood, house_lot, room_visibility, discoverable
        from public.profiles
        where onboarded_at is not null and district is not null and house_lot is not null
-       order by district, house_lot`,
+       order by district, house_hood, house_lot`,
     );
   }
 

@@ -14,6 +14,8 @@ export interface TownPass {
   handle: string;
   /** 사는 지역 (손님은 '') */
   district: District | '';
+  /** 집이 있는 동네 번호 (1 = 본섬 1동, 2부터 = 새로 열린 동네) */
+  hood: number;
   /** 집터 번호 (집이 없으면 -1) */
   lot: number;
   color: AvatarColor;
@@ -70,6 +72,7 @@ export function verifyTownPass(token: unknown, nowSec = Math.floor(Date.now() / 
     name: raw.name.slice(0, 40),
     handle: typeof raw.handle === 'string' ? raw.handle.slice(0, 20) : '',
     district: isDistrict(raw.district) ? raw.district : '',
+    hood: Number.isInteger(raw.hood) && (raw.hood as number) >= 1 ? (raw.hood as number) : 1,
     lot: Number.isInteger(raw.lot) && (raw.lot as number) >= 0 ? (raw.lot as number) : -1,
     color: avatar.color,
     acc: avatar.accessory,

@@ -316,5 +316,11 @@
   },
   "ui.icon.wow": {
     "file": "ui/ui_icon_wow_ph.svg"
+  },
+  "prop.hood.gate": {
+    "file": "props/prop_hood_gate_ph.glb"
+  },
+  "map.hood": {
+    "file": "maps/hood.json"
   }
 }

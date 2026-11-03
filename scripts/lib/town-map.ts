@@ -6,9 +6,13 @@
 //   deco      (오브젝트) 소품. name = manifest 키, type = "prop", (x, y) = 바닥 가운데 px, rotation = 방향(도, 시계 방향)
 //             지역 소품은 사용자 속성 district = 지역 id (그 지역 색으로 칠한다)
 //   collision (타일) 0이 아니면 막힘 (바다, 소품, 집터)
-//   spawn     (사각형) "spawn" = 중앙광장, "spawn.wood" 등 = 지역 입구
+//   spawn     (사각형) "spawn" = 중앙광장, "spawn.wood" 등 = 지역 입구, "gate.wood" 등 = 동네 길 앞
 //   lots      (점) 집터. name = "지역.번호", rotation = 집이 바라보는 방향(도). 집터는 늘 막혀 있다(빈 집터는 울타리).
 //   districts (타일) 지역 땅: 1~5 = DISTRICTS 순서, 0 = 광장·길·바닷가
+//
+// 동네 틀 맵(buildHoodMap): 지역 1동(본섬) 집터가 다 차면 열리는 2동·3동…이 함께 쓰는 작은 섬.
+//   지역은 정해 두지 않는다. 화면과 서버가 그 동네의 지역을 입힌다 (townMap.ts withDistrict).
+//   lots 이름은 "hood.번호", districts 레이어는 땅 전체가 1, 지역 색 소품은 district 속성(아무 지역)만 표시해 둔다.
 import { townConfig } from '../../src/config/game';
 import { DISTRICTS, type District } from '../../src/shared/districts';
 
@@ -18,6 +22,8 @@ type TileName = (typeof TOWN_TILES)[number];
 const SIZE = 88;
 const T = 32;
 const C = SIZE / 2;
+/** 동네 틀 맵 크기 */
+const HOOD_SIZE = 48;
 
 /** 가운데에서 잰 반지름 (칸) */
 export const TOWN_RADII = {
@@ -45,6 +51,9 @@ const LANDMARK: Record<District, string> = {
   metal: 'prop.district.workshop',
   water: 'prop.district.pier',
 };
+
+/** 동네 길(본섬 ↔ 2동·3동…) 아치 */
+export const GATE_KEY = 'prop.hood.gate';
 
 /** 지역마다 나무를 얼마나 심을지 */
 const TREES: Record<District, number> = { wood: 46, fire: 16, earth: 20, metal: 12, water: 20 };
@@ -79,81 +88,38 @@ function shoreAt(angle: number): number {
   return TOWN_RADII.shore + Math.sin(angle * 4 + 0.7) * 1.0 + Math.sin(angle * 9 + 2.1) * 0.5;
 }
 
-export function buildTownMap(tilesetFile: string) {
-  const N = SIZE * SIZE;
+/** 지역 i의 동네 길 아치 자리 (큰길 끝, 바닷가 조금 안쪽) */
+function gateRadius(i: number): number {
+  return shoreAt(districtAngle(i)) - 1.6;
+}
+
+/** 맵 하나를 그리는 도구들 (땅·충돌·지역 칸, 소품·집터 점, 좌표 계산) */
+function canvas(size: number) {
+  const N = size * size;
+  const c = size / 2;
   const ground: number[] = new Array(N).fill(gid('water'));
   const collision: number[] = new Array(N).fill(0);
   const districtGrid: number[] = new Array(N).fill(0);
-  const inside = (x: number, y: number) => x >= 0 && y >= 0 && x < SIZE && y < SIZE;
+  const inside = (x: number, y: number) => x >= 0 && y >= 0 && x < size && y < size;
   const set = (layer: number[], x: number, y: number, v: number) => {
-    if (inside(x, y)) layer[y * SIZE + x] = v;
+    if (inside(x, y)) layer[y * size + x] = v;
   };
-  const get = (layer: number[], x: number, y: number) => (inside(x, y) ? layer[y * SIZE + x] : 0);
+  const get = (layer: number[], x: number, y: number) => (inside(x, y) ? layer[y * size + x] : 0);
   const block = (x: number, y: number) => set(collision, x, y, 1);
+  const isBlocked = (x: number, y: number) => get(collision, Math.floor(x), Math.floor(y)) !== 0;
   const polar = (x: number, y: number) => {
-    const dx = x + 0.5 - C;
-    const dy = y + 0.5 - C;
+    const dx = x + 0.5 - c;
+    const dy = y + 0.5 - c;
     return { d: Math.hypot(dx, dy), a: Math.atan2(dy, dx) };
   };
-  const rand = rng(20261102);
-
-  // 1. 섬: 잔디 → 모래사장 → 바다, 지역 땅 표시
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      const { d, a } = polar(x, y);
-      const shore = shoreAt(a);
-      if (d < shore) {
-        set(ground, x, y, rand() < 0.22 ? gid('grass2') : gid('grass'));
-        if (d >= TOWN_RADII.land) set(districtGrid, x, y, districtIndexAt(a) + 1);
-      } else if (d < shore + TOWN_RADII.beach) {
-        set(ground, x, y, gid('sand'));
-      } else {
-        block(x, y);
-      }
-    }
-  }
-
-  // 2. 길: 중앙광장 돌바닥, 둘레 길, 지역으로 가는 큰길 다섯, 지역을 잇는 둥근 거리 둘
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      const { d, a } = polar(x, y);
-      const i = districtIndexAt(a);
-      const across = Math.abs(Math.sin(wrap(a - districtAngle(i))) * d);
-      const toward = Math.cos(wrap(a - districtAngle(i))) > 0;
-      if (d <= TOWN_RADII.stone) set(ground, x, y, gid('stone'));
-      else if (d <= TOWN_RADII.stoneEdge) set(ground, x, y, gid('stoneEdge'));
-      else if (d >= TOWN_RADII.ringIn && d < TOWN_RADII.ringOut) set(ground, x, y, gid('path'));
-      else if (toward && across < 1.2 && d < TOWN_RADII.streetB + 1) set(ground, x, y, gid('path'));
-      else if (Math.abs(d - TOWN_RADII.streetA) < 0.95 || Math.abs(d - TOWN_RADII.streetB) < 0.85) {
-        if (d < shoreAt(a) - 0.5) set(ground, x, y, gid('path'));
-      }
-    }
-  }
-
-  // 3. 지역 경계: 낮은 산울타리 (둥근 거리가 지나는 자리는 열어 둔다)
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      const { d, a } = polar(x, y);
-      if (d < TOWN_RADII.ringOut + 1.5 || d > shoreAt(a) - 0.6) continue;
-      const i = districtIndexAt(a);
-      const offset = Math.abs(wrap(a - (districtAngle(i) + SECTOR / 2)));
-      const offset2 = Math.abs(wrap(a - (districtAngle(i) - SECTOR / 2)));
-      const nearBoundary = Math.min(offset, offset2) * d < 0.72;
-      const onStreet = Math.abs(d - TOWN_RADII.streetA) < 1.4 || Math.abs(d - TOWN_RADII.streetB) < 1.3;
-      if (nearBoundary && !onStreet) {
-        set(ground, x, y, gid('hedge'));
-        block(x, y);
-      }
-    }
-  }
-
-  // 4. 소품
   const objects: Record<string, unknown>[] = [];
+  const lots: Record<string, unknown>[] = [];
   let nextId = 1;
+  const id = () => nextId++;
   const taken: { x: number; y: number; r: number }[] = [];
   const prop = (key: string, x: number, y: number, footprint: [number, number][], rot = 0, district?: District) => {
     objects.push({
-      id: nextId++, name: key, type: 'prop', x: x * T, y: y * T, width: 0, height: 0, point: true, rotation: rot, visible: true,
+      id: id(), name: key, type: 'prop', x: x * T, y: y * T, width: 0, height: 0, point: true, rotation: rot, visible: true,
       ...(district ? { properties: [{ name: 'district', type: 'string', value: district }] } : {}),
     });
     for (const [fx, fy] of footprint) block(fx, fy);
@@ -180,9 +146,146 @@ export function buildTownMap(tilesetFile: string) {
     for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) out.push([x, y]);
     return out;
   };
-  const at = (r: number, a: number) => ({ x: C + Math.cos(a) * r, y: C + Math.sin(a) * r });
+  const at = (r: number, a: number) => ({ x: c + Math.cos(a) * r, y: c + Math.sin(a) * r });
   const snap = (v: number) => Math.floor(v) + 0.5;
+  /** 집터 하나: 점을 남기고 집 바닥을 막는다 */
+  const lot = (name: string, x: number, y: number, rot: number) => {
+    lots.push({ id: id(), name, type: 'lot', x: x * T, y: y * T, width: 0, height: 0, point: true, rotation: rot, visible: true });
+    for (const [fx, fy] of rectTiles(x, y, 1.25, 1.15, rot)) block(fx, fy);
+    taken.push({ x, y, r: 1.9 });
+  };
+  /** 동네 길 아치: 기둥만 막고, 앞(바라보는 쪽)에 들어서는 자리를 둔다 */
+  const gate = (x: number, y: number, rot: number, district: District) => {
+    const yaw = (-rot * Math.PI) / 180;
+    const side = (s: number): [number, number] => [Math.floor(x + Math.cos(yaw) * s), Math.floor(y - Math.sin(yaw) * s)];
+    prop(GATE_KEY, x, y, [side(-1.05), side(1.05)], rot, district);
+    taken.push({ x, y, r: 2 });
+  };
+  /** 내 둘레 칸 중 길이 있는지 */
+  const onPath = (x: number, y: number) => {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (get(ground, Math.floor(x) + dx, Math.floor(y) + dy) === gid('path')) return true;
+    }
+    return false;
+  };
+  const spawnRect = (name: string, x: number, y: number, w: number, h: number) => ({
+    id: id(), name, type: 'spawn', x: x * T, y: y * T, width: w * T, height: h * T, rotation: 0, visible: true,
+  });
+  const toTiled = (tilesetFile: string, spawns: unknown[]) => {
+    const tileLayer = (lid: number, name: string, data: number[], opacity = 1) => ({
+      id: lid, name, type: 'tilelayer', x: 0, y: 0, width: size, height: size, opacity, visible: true, data,
+    });
+    const objectLayer = (lid: number, name: string, objs: unknown[]) => ({
+      id: lid, name, type: 'objectgroup', draworder: 'topdown', x: 0, y: 0, opacity: 1, visible: true, objects: objs,
+    });
+    return {
+      type: 'map',
+      version: '1.10',
+      tiledversion: '1.10.2',
+      orientation: 'orthogonal',
+      renderorder: 'right-down',
+      infinite: false,
+      width: size,
+      height: size,
+      tilewidth: T,
+      tileheight: T,
+      nextlayerid: 7,
+      nextobjectid: nextId,
+      layers: [
+        tileLayer(1, 'ground', ground),
+        objectLayer(2, 'deco', objects),
+        tileLayer(3, 'collision', collision.map((v) => (v ? gid('hedge') : 0)), 0.5),
+        objectLayer(4, 'spawn', spawns),
+        objectLayer(5, 'lots', lots),
+        tileLayer(6, 'districts', districtGrid, 0.3),
+      ],
+      tilesets: [
+        {
+          firstgid: 1,
+          // name은 manifest 키다. 코드는 image 경로가 아니라 이 키로 타일셋 그림을 찾는다.
+          name: 'tile.town',
+          image: `../${tilesetFile}`,
+          imagewidth: 4 * T,
+          imageheight: Math.ceil(TOWN_TILES.length / 4) * T,
+          tilewidth: T,
+          tileheight: T,
+          columns: 4,
+          tilecount: TOWN_TILES.length,
+          margin: 0,
+          spacing: 0,
+          tiles: TOWN_TILES.map((name, tid) => ({
+            id: tid,
+            properties: [
+              { name: 'terrain', type: 'string', value: name },
+              ...(TILE_HEIGHT[name] ? [{ name: 'height', type: 'float', value: TILE_HEIGHT[name] }] : []),
+            ],
+          })),
+        },
+      ],
+    };
+  };
+  return {
+    ground, districtGrid, set, get, block, isBlocked, polar, taken, prop, facing, rectTiles, square, at, snap,
+    lot, gate, onPath, spawnRect, toTiled,
+  };
+}
 
+export function buildTownMap(tilesetFile: string) {
+  const { ground, districtGrid, set, get, block, isBlocked, polar, taken, prop, facing, rectTiles, square, at, snap, lot, gate, onPath, spawnRect, toTiled } =
+    canvas(SIZE);
+  const rand = rng(20261102);
+
+  // 1. 섬: 잔디 → 모래사장 → 바다, 지역 땅 표시
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const { d, a } = polar(x, y);
+      const shore = shoreAt(a);
+      if (d < shore) {
+        set(ground, x, y, rand() < 0.22 ? gid('grass2') : gid('grass'));
+        if (d >= TOWN_RADII.land) set(districtGrid, x, y, districtIndexAt(a) + 1);
+      } else if (d < shore + TOWN_RADII.beach) {
+        set(ground, x, y, gid('sand'));
+      } else {
+        block(x, y);
+      }
+    }
+  }
+
+  // 2. 길: 중앙광장 돌바닥, 둘레 길, 지역으로 가는 큰길 다섯(바닷가 동네 길까지), 지역을 잇는 둥근 거리 둘
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const { d, a } = polar(x, y);
+      const i = districtIndexAt(a);
+      const across = Math.abs(Math.sin(wrap(a - districtAngle(i))) * d);
+      const toward = Math.cos(wrap(a - districtAngle(i))) > 0;
+      if (d <= TOWN_RADII.stone) set(ground, x, y, gid('stone'));
+      else if (d <= TOWN_RADII.stoneEdge) set(ground, x, y, gid('stoneEdge'));
+      else if (d >= TOWN_RADII.ringIn && d < TOWN_RADII.ringOut) set(ground, x, y, gid('path'));
+      else if (toward && across < 1.2 && d < gateRadius(i) + 0.6) set(ground, x, y, gid('path'));
+      else if (Math.abs(d - TOWN_RADII.streetA) < 0.95 || Math.abs(d - TOWN_RADII.streetB) < 0.85) {
+        if (d < shoreAt(a) - 0.5) set(ground, x, y, gid('path'));
+      }
+    }
+  }
+
+  // 3. 지역 경계: 낮은 산울타리 (둥근 거리가 지나는 자리는 열어 둔다)
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const { d, a } = polar(x, y);
+      if (d < TOWN_RADII.ringOut + 1.5 || d > shoreAt(a) - 0.6) continue;
+      const i = districtIndexAt(a);
+      const offset = Math.abs(wrap(a - (districtAngle(i) + SECTOR / 2)));
+      const offset2 = Math.abs(wrap(a - (districtAngle(i) - SECTOR / 2)));
+      const nearBoundary = Math.min(offset, offset2) * d < 0.72;
+      const onStreet = Math.abs(d - TOWN_RADII.streetA) < 1.4 || Math.abs(d - TOWN_RADII.streetB) < 1.3;
+      if (nearBoundary && !onStreet) {
+        set(ground, x, y, gid('hedge'));
+        block(x, y);
+      }
+    }
+  }
+
+  // 4. 소품
   // 중앙광장: 분수, 게시판(오늘의 토론), 깃발, 벤치, 가로등, 화단, 나무. 큰길 사이 방향에 둔다.
   prop('prop.plaza.fountain', C, C, square(C - 1, C - 1, 3, 3));
   const between = (k: number) => districtAngle(k) + SECTOR / 2;
@@ -220,7 +323,6 @@ export function buildTownMap(tilesetFile: string) {
   }
 
   // 지역: 집터 3줄, 명소, 호수
-  const lots: Record<string, unknown>[] = [];
   DISTRICTS.forEach((district, i) => {
     const a0 = districtAngle(i);
     // 명소: 큰길 오른쪽, 2번째와 3번째 집 줄 사이
@@ -264,20 +366,16 @@ export function buildTownMap(tilesetFile: string) {
     candidates.sort((p, q) => p.row - q.row || p.off - q.off);
     const usable = candidates.filter((c) => !taken.some((t) => Math.hypot(t.x - c.x, t.y - c.y) < t.r + 1.2));
     if (usable.length < townConfig.lotsPerDistrict) throw new Error(`${district} 지역 집터가 ${usable.length}개뿐입니다`);
-    usable.slice(0, townConfig.lotsPerDistrict).forEach((c, n) => {
-      lots.push({ id: nextId++, name: `${district}.${n}`, type: 'lot', x: c.x * T, y: c.y * T, width: 0, height: 0, point: true, rotation: c.rot, visible: true });
-      for (const [fx, fy] of rectTiles(c.x, c.y, 1.25, 1.15, c.rot)) block(fx, fy);
-      taken.push({ x: c.x, y: c.y, r: 1.9 });
-    });
+    usable.slice(0, townConfig.lotsPerDistrict).forEach((c, n) => lot(`${district}.${n}`, c.x, c.y, c.rot));
+  });
+
+  // 동네 길: 큰길 끝 바닷가의 아치. 1동 집터가 다 차면 열리는 2동·3동…으로 간다.
+  DISTRICTS.forEach((district, i) => {
+    const g = at(gateRadius(i), districtAngle(i));
+    gate(g.x, g.y, facing(g.x, g.y, C, C), district);
   });
 
   // 나무: 지역마다 정해진 수만큼 흩어 심는다 (길·집터·명소와 떨어뜨린다)
-  const onPath = (x: number, y: number) => {
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-      if (get(ground, Math.floor(x) + dx, Math.floor(y) + dy) === gid('path')) return true;
-    }
-    return false;
-  };
   DISTRICTS.forEach((district, i) => {
     let planted = 0;
     for (let tries = 0; tries < 4000 && planted < TREES[district]; tries++) {
@@ -285,7 +383,7 @@ export function buildTownMap(tilesetFile: string) {
       const d = TOWN_RADII.land + 1.5 + Math.sqrt(rand()) * (shoreAt(a) - TOWN_RADII.land - 2.5);
       const x = snap(C + Math.cos(a) * d);
       const y = snap(C + Math.sin(a) * d);
-      if (get(collision, Math.floor(x), Math.floor(y)) || onPath(x, y)) continue;
+      if (isBlocked(x, y) || onPath(x, y)) continue;
       if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + 1.1)) continue;
       prop('prop.plaza.tree', x, y, [[Math.floor(x), Math.floor(y)]], 0, district);
       taken.push({ x, y, r: 1.1 });
@@ -293,65 +391,136 @@ export function buildTownMap(tilesetFile: string) {
     }
   });
 
-  // 5. 스폰: 광장은 분수 남쪽, 지역은 큰길 입구
+  // 5. 스폰: 광장은 분수 남쪽, 지역은 큰길 입구, 동네 길은 아치 앞
   const spawns = [
-    { id: nextId++, name: 'spawn', type: 'spawn', x: (C - 3) * T, y: (C + 3) * T, width: 6 * T, height: 2 * T, rotation: 0, visible: true },
+    spawnRect('spawn', C - 3, C + 3, 6, 2),
     ...DISTRICTS.map((d, i) => {
       const p = at(16.2, districtAngle(i));
-      return { id: nextId++, name: `spawn.${d}`, type: 'spawn', x: (p.x - 1.5) * T, y: (p.y - 1.5) * T, width: 3 * T, height: 3 * T, rotation: 0, visible: true };
+      return spawnRect(`spawn.${d}`, p.x - 1.5, p.y - 1.5, 3, 3);
+    }),
+    ...DISTRICTS.map((d, i) => {
+      const p = at(gateRadius(i) - 2.6, districtAngle(i));
+      return spawnRect(`gate.${d}`, p.x - 1, p.y - 1, 2, 2);
     }),
   ];
+  return toTiled(tilesetFile, spawns);
+}
 
-  const tileLayer = (id: number, name: string, data: number[], opacity = 1) => ({
-    id, name, type: 'tilelayer', x: 0, y: 0, width: SIZE, height: SIZE, opacity, visible: true, data,
-  });
-  const objectLayer = (id: number, name: string, objs: unknown[]) => ({
-    id, name, type: 'objectgroup', draworder: 'topdown', x: 0, y: 0, opacity: 1, visible: true, objects: objs,
-  });
+// ───────────────────────── 동네 틀 맵 (2동·3동…) ─────────────────────────
 
-  return {
-    type: 'map',
-    version: '1.10',
-    tiledversion: '1.10.2',
-    orientation: 'orthogonal',
-    renderorder: 'right-down',
-    infinite: false,
-    width: SIZE,
-    height: SIZE,
-    tilewidth: T,
-    tileheight: T,
-    nextlayerid: 7,
-    nextobjectid: nextId,
-    layers: [
-      tileLayer(1, 'ground', ground),
-      objectLayer(2, 'deco', objects),
-      tileLayer(3, 'collision', collision.map((v) => (v ? gid('hedge') : 0)), 0.5),
-      objectLayer(4, 'spawn', spawns),
-      objectLayer(5, 'lots', lots),
-      tileLayer(6, 'districts', districtGrid, 0.3),
-    ],
-    tilesets: [
-      {
-        firstgid: 1,
-        // name은 manifest 키다. 코드는 image 경로가 아니라 이 키로 타일셋 그림을 찾는다.
-        name: 'tile.town',
-        image: `../${tilesetFile}`,
-        imagewidth: 4 * T,
-        imageheight: Math.ceil(TOWN_TILES.length / 4) * T,
-        tilewidth: T,
-        tileheight: T,
-        columns: 4,
-        tilecount: TOWN_TILES.length,
-        margin: 0,
-        spacing: 0,
-        tiles: TOWN_TILES.map((name, id) => ({
-          id,
-          properties: [
-            { name: 'terrain', type: 'string', value: name },
-            ...(TILE_HEIGHT[name] ? [{ name: 'height', type: 'float', value: TILE_HEIGHT[name] }] : []),
-          ],
-        })),
-      },
-    ],
-  };
+/** 동네 틀 맵에서 가운데부터 잰 반지름 (칸) */
+export const HOOD_RADII = {
+  stone: 3.2,
+  stoneEdge: 3.9,
+  /** 안쪽 집 줄 (바깥을 본다) */
+  inner: 6.9,
+  ringIn: 9.4,
+  ringOut: 10.8,
+  /** 바깥 집 줄 (안쪽 둘레 길을 본다) */
+  outer: 13.6,
+  shore: 19.6,
+  beach: 2.2,
+} as const;
+
+/** 들어오는 길(동네 길 아치)은 남쪽 */
+const HOOD_ENTRANCE = Math.PI / 2;
+/** 가운데에서 둘레 길로 가는 길 넷 (북·동·남·서). 남쪽 길만 바닷가 아치까지 이어진다. */
+const HOOD_SPOKES = [-Math.PI / 2, 0, Math.PI / 2, Math.PI];
+const HOOD_TREES = 26;
+
+function hoodShoreAt(angle: number): number {
+  return HOOD_RADII.shore + Math.sin(angle * 3 + 0.4) * 0.8 + Math.sin(angle * 7 + 1.3) * 0.4;
+}
+
+export function buildHoodMap(tilesetFile: string) {
+  const { ground, districtGrid, set, block, isBlocked, polar, taken, prop, facing, square, at, snap, lot, gate, onPath, spawnRect, toTiled } =
+    canvas(HOOD_SIZE);
+  const c = HOOD_SIZE / 2;
+  const rand = rng(20261103);
+  // 지역 색 소품에는 아무 지역이나 표시해 둔다. 실제 지역은 화면·서버가 입힌다.
+  const ANY: District = DISTRICTS[0];
+  const gateR = hoodShoreAt(HOOD_ENTRANCE) - 1.6;
+
+  // 1. 섬과 길
+  for (let y = 0; y < HOOD_SIZE; y++) {
+    for (let x = 0; x < HOOD_SIZE; x++) {
+      const { d, a } = polar(x, y);
+      const shore = hoodShoreAt(a);
+      if (d < shore) {
+        set(ground, x, y, rand() < 0.22 ? gid('grass2') : gid('grass'));
+        set(districtGrid, x, y, 1);
+      } else if (d < shore + HOOD_RADII.beach) {
+        set(ground, x, y, gid('sand'));
+        continue;
+      } else {
+        block(x, y);
+        continue;
+      }
+      const spoke = HOOD_SPOKES.some((s) => {
+        const across = Math.abs(Math.sin(wrap(a - s)) * d);
+        const toward = Math.cos(wrap(a - s)) > 0;
+        const end = s === HOOD_ENTRANCE ? gateR + 0.6 : HOOD_RADII.ringOut;
+        return toward && across < 1.1 && d < end;
+      });
+      if (d <= HOOD_RADII.stone) set(ground, x, y, gid('stone'));
+      else if (d <= HOOD_RADII.stoneEdge) set(ground, x, y, gid('stoneEdge'));
+      else if ((d >= HOOD_RADII.ringIn && d < HOOD_RADII.ringOut) || spoke) set(ground, x, y, gid('path'));
+    }
+  }
+
+  // 2. 동네 쉼터: 가운데 큰 나무, 벤치 둘, 가로등 둘
+  prop('prop.plaza.tree', c, c, square(c - 1, c - 1, 2, 2), 0, ANY);
+  taken.push({ x: c, y: c, r: 3.9 });
+  for (const a of [-Math.PI / 4, (-3 * Math.PI) / 4]) {
+    const b = at(2.6, a);
+    prop('prop.plaza.bench', b.x, b.y, [[Math.floor(b.x), Math.floor(b.y)]], facing(b.x, b.y, c, c));
+  }
+  for (const a of [Math.PI / 4, (3 * Math.PI) / 4]) {
+    const l = at(3.5, a);
+    prop('prop.plaza.lamp', snap(l.x), snap(l.y), [[Math.floor(l.x), Math.floor(l.y)]]);
+  }
+
+  // 3. 동네 길 아치 (본섬으로 돌아가는 길)
+  {
+    const g = at(gateR, HOOD_ENTRANCE);
+    gate(g.x, g.y, facing(g.x, g.y, c, c), ANY);
+  }
+
+  // 4. 집터: 안쪽 줄(바깥을 본다) → 바깥 줄(안쪽 둘레 길을 본다), 줄마다 들어오는 길에서 가까운 순서
+  const candidates: { x: number; y: number; rot: number; row: number; off: number }[] = [];
+  [
+    { r: HOOD_RADII.inner, face: HOOD_RADII.ringIn, spokes: HOOD_SPOKES },
+    { r: HOOD_RADII.outer, face: HOOD_RADII.ringOut, spokes: [HOOD_ENTRANCE] },
+  ].forEach((row, ri) => {
+    const n = Math.floor((2 * Math.PI * row.r) / 3.35);
+    for (let k = 0; k < n; k++) {
+      const a = HOOD_ENTRANCE + (k * 2 * Math.PI) / n;
+      if (row.spokes.some((s) => Math.abs(wrap(a - s)) * row.r < 2.6)) continue;
+      const p = at(row.r, a);
+      const t = at(row.face, a);
+      candidates.push({ x: p.x, y: p.y, rot: facing(p.x, p.y, t.x, t.y), row: ri, off: Math.abs(wrap(a - HOOD_ENTRANCE)) });
+    }
+  });
+  candidates.sort((p, q) => p.row - q.row || p.off - q.off);
+  const usable = candidates.filter((cd) => !taken.some((t) => Math.hypot(t.x - cd.x, t.y - cd.y) < t.r + 1.2));
+  if (usable.length < townConfig.hoodLots) throw new Error(`동네 집터가 ${usable.length}개뿐입니다`);
+  usable.slice(0, townConfig.hoodLots).forEach((cd, n) => lot(`hood.${n}`, cd.x, cd.y, cd.rot));
+
+  // 5. 나무: 바깥 집 줄과 바닷가 사이
+  let planted = 0;
+  for (let tries = 0; tries < 4000 && planted < HOOD_TREES; tries++) {
+    const a = rand() * 2 * Math.PI;
+    const d = HOOD_RADII.outer + 1.8 + rand() * (hoodShoreAt(a) - HOOD_RADII.outer - 2.8);
+    const x = snap(c + Math.cos(a) * d);
+    const y = snap(c + Math.sin(a) * d);
+    if (isBlocked(x, y) || onPath(x, y)) continue;
+    if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + 1.1)) continue;
+    prop('prop.plaza.tree', x, y, [[Math.floor(x), Math.floor(y)]], 0, ANY);
+    taken.push({ x, y, r: 1.1 });
+    planted++;
+  }
+
+  // 6. 스폰: 아치 앞 (들어오는 곳)
+  const s = at(gateR - 2.6, HOOD_ENTRANCE);
+  return toTiled(tilesetFile, [spawnRect('spawn', s.x - 1.5, s.y - 1, 3, 2)]);
 }

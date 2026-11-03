@@ -130,8 +130,8 @@ function SelfMarker() {
   );
 }
 
-/** 지역 땅 칸들의 가운데 (지도 이름표 자리) */
-export function districtCentroids(map: TownMap): Record<District, { x: number; z: number }> {
+/** 지역 땅 칸들의 가운데 (지도 이름표 자리). 땅이 없는 지역은 빠진다. */
+export function districtCentroids(map: TownMap): Partial<Record<District, { x: number; z: number }>> {
   const sum = DISTRICTS.map(() => ({ x: 0, z: 0, n: 0 }));
   map.districtGrid.forEach((d, i) => {
     if (d < 0) return;
@@ -139,15 +139,14 @@ export function districtCentroids(map: TownMap): Record<District, { x: number; z
     sum[d].z += Math.floor(i / map.width) + 0.5;
     sum[d].n++;
   });
-  return Object.fromEntries(DISTRICTS.map((d, i) => [d, { x: sum[i].x / sum[i].n, z: sum[i].z / sum[i].n }])) as Record<
-    District,
-    { x: number; z: number }
-  >;
+  return Object.fromEntries(
+    DISTRICTS.flatMap((d, i) => (sum[i].n ? [[d, { x: sum[i].x / sum[i].n, z: sum[i].z / sum[i].n }]] : [])),
+  );
 }
 
 /** 전체 지도 이름표를 지역 한가운데·중앙광장·내 집 위에 붙인다 (HTML이라 글자가 또렷하다) */
 export function MapLabelSync() {
-  const { map, input, session } = useTown();
+  const { map, input, session, hood } = useTown();
   const { camera, size } = useThree();
   const v = useMemo(() => new THREE.Vector3(), []);
   const pass = session.getSnapshot().pass;
@@ -156,10 +155,10 @@ export function MapLabelSync() {
       ['plaza', { x: map.width / 2, z: map.height / 2 }],
       ...Object.entries(districtCentroids(map)),
     ];
-    const home = pass?.district ? map.lots[pass.district].find((l) => l.index === pass.lot) : undefined;
+    const home = pass?.district && pass.hood === hood ? map.lots[pass.district].find((l) => l.index === pass.lot) : undefined;
     if (home) out.push(['home', lotDoor(home)]);
     return out;
-  }, [map, pass]);
+  }, [map, pass, hood]);
   useFrame(() => {
     const b = input.mapBlend;
     for (const [key, p] of anchors) {
