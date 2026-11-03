@@ -181,14 +181,18 @@ function LocalPlayerInner({ me }: { me: PlayerView }) {
     const dt = Math.min(rawDt, 0.1);
     const step = townConfig.walkSpeed * dt;
 
-    // 방향키 입력. 카메라가 남쪽에서 북쪽을 보므로 위쪽 키 = -z
-    let kx = 0;
-    let kz = 0;
+    // 방향키 입력은 화면 기준이다 (위쪽 키 = 화면 안쪽). 카메라가 돈 만큼 돌려서 마을 방향으로 바꾼다.
+    let sx = 0;
+    let sz = 0;
     const k = input.keys;
-    if (k.has('ArrowLeft') || k.has('KeyA')) kx -= 1;
-    if (k.has('ArrowRight') || k.has('KeyD')) kx += 1;
-    if (k.has('ArrowUp') || k.has('KeyW')) kz -= 1;
-    if (k.has('ArrowDown') || k.has('KeyS')) kz += 1;
+    if (k.has('ArrowLeft') || k.has('KeyA')) sx -= 1;
+    if (k.has('ArrowRight') || k.has('KeyD')) sx += 1;
+    if (k.has('ArrowUp') || k.has('KeyW')) sz -= 1;
+    if (k.has('ArrowDown') || k.has('KeyS')) sz += 1;
+    const cy = Math.cos(input.camera.yawNow);
+    const sy = Math.sin(input.camera.yawNow);
+    const kx = cy * sx + sy * sz;
+    const kz = -sy * sx + cy * sz;
 
     if (input.tapTarget) {
       path.current = findPath(map, a, input.tapTarget);

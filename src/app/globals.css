@@ -2601,6 +2601,54 @@ a:focus-visible {
   display: flex;
   gap: var(--space-2);
 }
+/* 위: 집·이웃·지도 아이콘, 아래: 카메라 버튼 */
+.hud__right--stack {
+  display: grid;
+  justify-items: end;
+}
+.hud__icons {
+  display: flex;
+  gap: var(--space-2);
+}
+.cam-ctrl {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--color-surface);
+  box-shadow: 0 2px 10px var(--color-shadow);
+}
+.cam-ctrl button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-textSub);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cam-ctrl button:hover,
+.cam-ctrl button:active {
+  background: var(--color-bg);
+}
+.cam-ctrl .cam-ctrl__view {
+  min-width: 56px;
+  padding: 0 var(--space-2);
+  color: var(--color-text);
+}
+.cam-ctrl .cam-ctrl__reset {
+  padding: 0 var(--space-2);
+  color: var(--color-accent);
+}
+.icon--flip {
+  transform: scaleX(-1);
+}
 .hud__bottom {
   margin-top: auto;
   display: flex;

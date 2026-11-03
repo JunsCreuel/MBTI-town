@@ -53,10 +53,16 @@ interface PropGroup {
   halfWidth: number;
 }
 
-/** 카메라(남쪽)와 내 캐릭터 사이를 가리는지 */
-function blocks(p: { x: number; z: number }, self: { x: number; z: number }, halfWidth: number) {
+/** 카메라와 내 캐릭터 사이를 가리는지. yaw = 카메라 방향 (0 = 남쪽에서 북쪽을 본다) */
+function blocks(p: { x: number; z: number }, self: { x: number; z: number }, halfWidth: number, yaw: number) {
+  const dx = p.x - self.x;
   const dz = p.z - self.z;
-  return dz > 0.4 && dz < 8 && Math.abs(p.x - self.x) < halfWidth + 0.6;
+  const c = Math.cos(yaw);
+  const s = Math.sin(yaw);
+  // 캐릭터에서 카메라 쪽으로 얼마나 앞에 있는지, 화면 옆으로 얼마나 비켜 있는지
+  const toward = dx * s + dz * c;
+  const side = dx * c - dz * s;
+  return toward > 0.4 && toward < 8 && Math.abs(side) < halfWidth + 0.6;
 }
 
 const WHITE = new THREE.Color('#FFFFFF');
@@ -140,7 +146,7 @@ export function InstancedProps({ group, onPick }: { group: PropGroup; onPick?: (
     const { opacity, fadeSlot } = state;
     let changed = false;
     group.placements.forEach((p, i) => {
-      const target = walking && blocks(p, input.self, group.halfWidth) ? FADE_OPACITY : 1;
+      const target = walking && blocks(p, input.self, group.halfWidth, input.camera.yawNow) ? FADE_OPACITY : 1;
       const cur = opacity[i];
       if (cur === target) return;
       opacity[i] = Math.abs(target - cur) < 0.01 ? target : cur + (target - cur) * k;
@@ -255,7 +261,7 @@ function ClickableProp({ placement }: { placement: PropPlacement }) {
   useFrame((_, dt) => {
     if (!item.tall) return;
     const k = 1 - Math.exp(-Math.min(dt, 0.1) * 8);
-    const target = input.view === 'walk' && blocks(item.o.position, input.self, item.halfWidth) ? FADE_OPACITY : 1;
+    const target = input.view === 'walk' && blocks(item.o.position, input.self, item.halfWidth, input.camera.yawNow) ? FADE_OPACITY : 1;
     const next = item.opacity + (target - item.opacity) * k;
     if (Math.abs(next - item.opacity) < 1e-3) return;
     item.opacity = next;
