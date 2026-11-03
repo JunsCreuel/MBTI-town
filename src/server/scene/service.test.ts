@@ -443,12 +443,15 @@ describe('운영자', () => {
     await onboard(admin, '운영자');
     ho = (await onboard(owner, '비밀방')).handle;
     await onboard(other, '이웃');
-    await expectError(service.adminOverview(other), 'forbidden');
-    await expectError(service.adminReports(null), 'login_required');
-    await expectError(service.adminUsers(other, ''), 'forbidden');
+    // 운영자가 아니면 운영 기능이 없는 것처럼 보인다
+    await expectError(service.adminOverview(other), 'not_found');
+    await expectError(service.adminReports(null), 'not_found');
+    await expectError(service.adminUsers(other, ''), 'not_found');
+    expect(await service.isAdminViewer(other)).toBe(false);
     expect((await service.me(admin)).profile.admin).toBe(false);
     await sql.query(`insert into public.admins (user_id) values ($1)`, [admin.id]);
     expect((await service.me(admin)).profile.admin).toBe(true);
+    expect(await service.isAdminViewer(admin)).toBe(true);
   });
 
   it('운영자는 나만 보기 방과 기록, 차단 관계와 상관없이 본다 (방문 기록은 남기지 않는다)', async () => {
@@ -477,7 +480,7 @@ describe('운영자', () => {
     const rg = reports.find((r) => r.preview === '신고될 글이에요')!;
     expect(rg).toMatchObject({ preview: '신고될 글이에요', roomHandle: ho, resolved: null, reason: '불편해요' });
     expect((await service.adminOverview(admin)).open_reports).toBe(base + 2);
-    await expectError(service.adminResolveReport(other, rg.id, 'remove'), 'forbidden');
+    await expectError(service.adminResolveReport(other, rg.id, 'remove'), 'not_found');
     await service.adminResolveReport(admin, rg.id, 'remove');
     expect((await service.roomView(owner, ho)).guestbook.some((x) => x.id === g.id)).toBe(false);
     const ru = (await service.adminReports(admin)).find((r) => r.kind === 'user' && r.preview === '이웃' && !r.resolved)!;
@@ -501,7 +504,7 @@ describe('운영자', () => {
     expect((await service.adminUsers(admin, '')).length).toBeGreaterThanOrEqual(3);
     expect((await service.adminUsers(admin, '%')).length).toBe(0);
     await expectError(service.adminDeleteUser(admin, admin.id), 'forbidden');
-    await expectError(service.adminDeleteUser(other, found[0].id), 'forbidden');
+    await expectError(service.adminDeleteUser(other, found[0].id), 'not_found');
     await service.adminDeleteUser(admin, found[0].id);
     await expectError(service.roomView(admin, ho), 'not_found');
   });

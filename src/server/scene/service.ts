@@ -35,8 +35,11 @@ const STATUS: Record<SceneErrorCode, number> = {
 
 export class SceneError extends Error {
   readonly status: number;
+  /** 사용자에게 그대로 보여 줄 오류 표시 (http.ts가 읽는다). 모듈 사본이 달라도 instanceof 없이 알아본다 */
+  readonly userFacing = true;
   constructor(readonly code: SceneErrorCode, message: string) {
     super(message);
+    this.name = 'SceneError';
     this.status = STATUS[code];
   }
 }
@@ -738,9 +741,14 @@ export class SceneService {
 
   // ───────────────────────── 운영자 ─────────────────────────
 
+  /** 운영자인지 (운영 화면 /admin이 쓴다) */
+  async isAdminViewer(viewer: Viewer | null): Promise<boolean> {
+    return this.isAdmin(viewer);
+  }
+
+  /** 운영자가 아니면 운영 기능이 있다는 것도 알리지 않는다 (없는 것처럼 404) */
   private async requireAdmin(viewer: Viewer | null): Promise<string> {
-    if (!viewer) throw new SceneError('login_required', '로그인이 필요해요.');
-    if (!(await this.store.isAdmin(viewer.id))) throw new SceneError('forbidden', '운영자만 볼 수 있어요.');
+    if (!viewer || !(await this.store.isAdmin(viewer.id))) throw new SceneError('not_found', '찾을 수 없어요.');
     return viewer.id;
   }
 

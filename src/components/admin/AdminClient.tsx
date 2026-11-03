@@ -24,7 +24,8 @@ const COUNT_LABEL: [keyof AdminCounts, string][] = [
 const when = (iso: string) => new Date(iso).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 export function AdminClient() {
-  const [state, setState] = useState<'loading' | 'ok' | 'denied' | 'login'>('loading');
+  // 운영자가 아니면 서버가 이 화면 자체를 404로 돌려보낸다 (src/app/admin/page.tsx)
+  const [state, setState] = useState<'loading' | 'ok' | 'error'>('loading');
   const [counts, setCounts] = useState<AdminCounts | null>(null);
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -38,9 +39,8 @@ export function AdminClient() {
       setCounts(c);
       setReports(r.reports);
       setState('ok');
-    } catch (e) {
-      const status = (e as { status?: number }).status;
-      setState(status === 401 ? 'login' : 'denied');
+    } catch {
+      setState('error');
     }
   }, []);
 
@@ -93,12 +93,12 @@ export function AdminClient() {
   }
 
   if (state === 'loading') return <main className="page"><div className="loader" aria-hidden /></main>;
-  if (state !== 'ok')
+  if (state === 'error')
     return (
       <main className="page">
         <header className="page__head"><h1>운영</h1></header>
-        <p className="notice">{state === 'login' ? '로그인이 필요해요.' : '운영자만 볼 수 있는 화면이에요.'}</p>
-        <Link className="back-link" href={state === 'login' ? '/login?next=/admin' : '/village'}>‹ {state === 'login' ? '로그인하기' : '마을로'}</Link>
+        <p className="notice">운영 정보를 불러오지 못했어요. 잠시 뒤에 다시 열어 주세요.</p>
+        <button className="btn-secondary" onClick={() => void load()}>다시 불러오기</button>
         <TabBar />
       </main>
     );

@@ -27,8 +27,11 @@ const STATUS: Record<DebateErrorCode, number> = {
 
 export class DebateError extends Error {
   readonly status: number;
+  /** 사용자에게 그대로 보여 줄 오류 표시 (http.ts가 읽는다). 모듈 사본이 달라도 instanceof 없이 알아본다 */
+  readonly userFacing = true;
   constructor(readonly code: DebateErrorCode, message: string) {
     super(message);
+    this.name = 'DebateError';
     this.status = STATUS[code];
   }
 }
@@ -264,8 +267,8 @@ export class DebateService {
 
   /** 운영자: 논거 지우기 (추천·대표 논거 투표도 같이 지워진다) */
   async adminDeleteArgument(viewer: Viewer | null, argumentId: unknown): Promise<void> {
-    if (!viewer) throw new DebateError('login_required', '로그인이 필요해요.');
-    if (!(await this.store.isAdmin(viewer.id))) throw new DebateError('forbidden', '운영자만 지울 수 있어요.');
+    // 운영자가 아니면 이 기능이 있다는 것도 알리지 않는다
+    if (!viewer || !(await this.store.isAdmin(viewer.id))) throw new DebateError('not_found', '찾을 수 없어요.');
     const a = typeof argumentId === 'string' ? await this.store.getArgument(argumentId).catch(() => null) : null;
     if (!a) throw new DebateError('not_found', '논거를 찾을 수 없어요.');
     await this.store.deleteArgument(a.id);
