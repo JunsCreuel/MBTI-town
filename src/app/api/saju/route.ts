@@ -9,7 +9,15 @@ export async function GET() {
   return handle(async () => (await getSceneService()).sajuOffice(await currentUser()));
 }
 
-/** 풀이 보기: { kind: 'today' | 'tomorrow' | 'week' | 'month' | 'premium', useTicket? } */
+/**
+ * 풀이 보기: { kind: 'today' | 'tomorrow' | 'week' | 'month' | 'premium', useTicket? }
+ * 예전 화면(가입·MY의 사주 미리 보기)은 이 주소로 생일을 보냈다: 생일이 오면 미리 보기로 답한다 (새 화면은 /api/saju/preview)
+ */
 export async function POST(request: Request) {
-  return handle(async () => (await getSceneService()).readSaju(await currentUser(), await readJson(request)));
+  return handle(async () => {
+    const body = await readJson(request);
+    const service = await getSceneService();
+    if (!('kind' in body) && ('date' in body || 'calendar' in body)) return service.previewSaju(body);
+    return service.readSaju(await currentUser(), body);
+  });
 }

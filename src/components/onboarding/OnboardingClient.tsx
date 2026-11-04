@@ -80,7 +80,7 @@ export function OnboardingClient() {
     setBusy(true);
     setError(null);
     try {
-      setReading(await call<SajuReading>('POST', '/api/saju', birthInput));
+      setReading(await call<SajuReading>('POST', '/api/saju/preview', birthInput));
       if (!name.trim() && sajuName.trim()) setName(sajuName.trim().slice(0, socialConfig.displayNameMax));
       setStep(1);
     } catch (e) {

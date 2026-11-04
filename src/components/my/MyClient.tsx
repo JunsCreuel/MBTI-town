@@ -99,7 +99,7 @@ export function MyClient() {
     const b = birthEdit && birthFromDraft(birthEdit);
     if (!b) return;
     try {
-      setBirthPreview(await call<SajuReading>('POST', '/api/saju', b));
+      setBirthPreview(await call<SajuReading>('POST', '/api/saju/preview', b));
     } catch (e) {
       setToast(errorMessage(e));
     }
