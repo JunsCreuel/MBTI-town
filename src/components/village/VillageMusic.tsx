@@ -3,9 +3,9 @@
 // 마을 음악 (Village Waltz): 마을(광장·동네·놀이터)을 걷는 동안 잔잔하게 나오고, 곡이 끝나면 처음부터 다시 반복한다.
 // 클럽 안에서는 클럽 음악만 나오고, 다른 화면으로 가거나 다른 탭을 보면 멈춘다.
 // 기본은 켜짐. 위쪽 음표 버튼으로 끄고 켜며, 끈 것은 기억해서 다음에 와도 꺼 둔다.
-// 브라우저가 자동 재생을 막으면 화면을 처음 누르는(또는 키를 누르는) 순간 시작한다.
+// 브라우저가 자동 재생을 막으면 화면을 처음 누르는(손을 떼는, 또는 키를 누르는) 순간 시작한다. 휴대폰에서는 MP3로 튼다.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { assetAltUrl, assetUrl } from '@/assets/manifest';
+import { audioSource, onUserGesture } from '@/lib/audio';
 import { VILLAGE_TRACK } from '@/shared/music';
 import { Icon } from '../app/Icon';
 
@@ -22,8 +22,7 @@ let pauseTimer: ReturnType<typeof setTimeout> | undefined;
 function element(): HTMLAudioElement {
   if (shared) return shared;
   const a = new Audio();
-  const alt = assetAltUrl(VILLAGE_TRACK.key);
-  a.src = a.canPlayType('audio/ogg; codecs="vorbis"') || !alt ? assetUrl(VILLAGE_TRACK.key) : alt;
+  a.src = audioSource(VILLAGE_TRACK.key);
   // 끈 사람은 받지 않는다 (틀 때 받는다)
   a.preload = 'none';
   a.loop = true;
@@ -104,19 +103,14 @@ export function useVillageMusic(active: boolean): VillageMusicControl {
     };
   }, []);
 
-  // 자동 재생이 막혔으면 화면을 처음 누르는 순간 시작한다 (음표 버튼을 누른 건 버튼이 처리한다)
+  // 자동 재생이 막혔으면 화면을 처음 누르는(손을 떼는) 순간 시작한다 (음표 버튼을 누른 건 버튼이 처리한다).
+  // 휴대폰은 누르는 순간이 아니라 뗄 때만 소리를 허락해서, 뗄 때·탭할 때·키를 누를 때를 모두 기다린다
   useEffect(() => {
     if (!active || !want || playing) return;
-    const onGesture = (e: Event) => {
+    return onUserGesture((e) => {
       if ((e.target as Element | null)?.closest?.('[data-village-music]')) return;
       start();
-    };
-    window.addEventListener('pointerdown', onGesture, true);
-    window.addEventListener('keydown', onGesture, true);
-    return () => {
-      window.removeEventListener('pointerdown', onGesture, true);
-      window.removeEventListener('keydown', onGesture, true);
-    };
+    });
   }, [active, want, playing, start]);
 
   // 다른 탭을 보면 멈추고, 돌아오면 이어서 튼다. 다른 플레이어가 틀면 멈춘다

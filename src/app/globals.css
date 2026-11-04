@@ -4959,3 +4959,10 @@ canvas {
 .admin-yt__switch b {
   color: var(--color-accentInk);
 }
+/* 클럽 유튜브: 소리가 막혔을 때 안내 (아래 영상을 누를 수 있게 터치를 지나 보낸다) */
+.club-yt__hint {
+  pointer-events: none;
+  background: var(--color-goldSoft);
+  color: var(--color-goldInk);
+  font-weight: 700;
+}

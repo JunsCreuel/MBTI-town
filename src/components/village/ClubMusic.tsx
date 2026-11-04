@@ -4,7 +4,7 @@
 // 끄면 기억해 두고 다음에 와도 꺼 둔다. 무대에서 멀어지면 조금 작게 들린다. 다른 화면으로 가면 멈춘다.
 // 유튜브 신청곡은 화면에 보이는 유튜브 플레이어(200×200 이상, 유튜브 정책)로 튼다. 그동안 클럽 음원은 쉰다.
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { assetAltUrl, assetUrl } from '@/assets/manifest';
+import { audioSource, onUserGesture } from '@/lib/audio';
 import { CLUB_TRACKS, type YoutubeSong } from '@/shared/clubMusic';
 import { creditLine } from '@/shared/music';
 import { Icon } from '../app/Icon';
@@ -20,11 +20,6 @@ const YT_RESYNC_SEC = 4;
 
 type Status = 'off' | 'loading' | 'playing' | 'blocked';
 
-function sourceFor(key: string): string {
-  const a = document.createElement('audio');
-  const alt = assetAltUrl(key);
-  return a.canPlayType('audio/ogg; codecs="vorbis"') || !alt ? assetUrl(key) : alt;
-}
 
 function wantMusic(): boolean {
   try {
@@ -177,7 +172,7 @@ export function ClubMusic({ distance }: { distance: () => number }) {
     pauseYoutube();
     const a = element();
     if (current.current !== key || !a.src) {
-      a.src = sourceFor(CLUB_TRACKS[s.index].key);
+      a.src = audioSource(CLUB_TRACKS[s.index].key);
       current.current = key;
     } else if (Math.abs(a.currentTime - s.offset) > RESYNC_SEC) {
       a.currentTime = s.offset;
@@ -311,6 +306,16 @@ export function ClubMusic({ distance }: { distance: () => number }) {
     return () => clearInterval(t);
   }, [distance, play]);
 
+  // 브라우저가 자동 재생을 막았으면 화면을 처음 누르는(손을 떼는) 순간 튼다 (휴대폰은 뗄 때만 소리를 허락한다).
+  // 음악 버튼을 누른 건 버튼이 처리한다
+  useEffect(() => {
+    if (status !== 'blocked' || !want.current) return;
+    return onUserGesture((e) => {
+      if ((e.target as Element | null)?.closest?.('.club-music__btn, .club-yt')) return;
+      play();
+    });
+  }, [status, play]);
+
   function toggle() {
     if (status === 'playing' || status === 'loading') {
       want.current = false;
@@ -349,7 +354,11 @@ export function ClubMusic({ distance }: { distance: () => number }) {
       </div>
       <div className={`club-yt${showYt ? '' : ' club-yt--hidden'}`} aria-hidden={!showYt}>
         <div className="club-yt__player" ref={ytHost} />
-        {ytError && <p className="club-yt__error">{ytError}</p>}
+        {ytError ? (
+          <p className="club-yt__error">{ytError}</p>
+        ) : (
+          status === 'blocked' && <p className="club-yt__error club-yt__hint">소리가 안 나면 영상을 한 번 눌러 주세요</p>
+        )}
       </div>
     </>
   );

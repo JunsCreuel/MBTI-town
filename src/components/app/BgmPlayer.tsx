@@ -1,8 +1,9 @@
 'use client';
 
-// 레트로 음악 플레이어. 자동 재생하지 않는다 (누르면 재생·멈춤). OGG를 못 트는 브라우저는 MP3로.
+// 레트로 음악 플레이어. 자동 재생하지 않는다 (누르면 재생·멈춤). MP3를 먼저 쓴다 (아이폰도 소리가 나게).
 import { forwardRef, useEffect, useId, useImperativeHandle, useRef, useState } from 'react';
-import { asset, assetAltUrl, assetUrl } from '@/assets/manifest';
+import { asset } from '@/assets/manifest';
+import { audioSource } from '@/lib/audio';
 import { bgmTrack } from '@/shared/bgm';
 import { Icon } from './Icon';
 
@@ -10,11 +11,6 @@ export interface BgmHandle {
   toggle: () => void;
 }
 
-function sourceFor(key: string): string {
-  const a = document.createElement('audio');
-  const alt = assetAltUrl(key);
-  return a.canPlayType('audio/ogg; codecs="vorbis"') || !alt ? assetUrl(key) : alt;
-}
 
 export const BgmPlayer = forwardRef<BgmHandle, { trackKey: string | null; onPlayingChange?: (playing: boolean) => void; compact?: boolean }>(
   function BgmPlayer({ trackKey, onPlayingChange, compact = false }, ref) {
@@ -50,7 +46,7 @@ export const BgmPlayer = forwardRef<BgmHandle, { trackKey: string | null; onPlay
     function toggle() {
       if (!track) return;
       if (!audio.current) {
-        const a = new Audio(sourceFor(track.key));
+        const a = new Audio(audioSource(track.key));
         a.loop = true;
         a.volume = 0.7;
         a.addEventListener('pause', () => setPlaying(false));
