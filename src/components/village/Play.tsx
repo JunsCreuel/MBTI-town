@@ -75,6 +75,13 @@ export function FishingPanel({
     try {
       const [r] = await Promise.all([onCast(), new Promise((res) => setTimeout(res, wait))]);
       if (my !== round.current) return;
+      // 꽝: 입질 없이 그대로 감아올린다
+      if (!r.fish) {
+        setResult(r);
+        setStage('caught');
+        onCaught(r);
+        return;
+      }
       setStage('bite');
       onBite?.();
       setTimeout(() => {
@@ -109,7 +116,18 @@ export function FishingPanel({
         </>
       )}
       {stage === 'bite' && <p className="fishing__text fishing__text--bite">앗! 물었다!</p>}
-      {stage === 'caught' && result && (
+      {stage === 'caught' && result && !result.fish && (
+        <div className="fishing__result">
+          <span className="fishing__miss" aria-hidden>
+            ✕
+          </span>
+          <div className="fishing__info">
+            <p className="fishing__name">꽝!</p>
+            <p className="fishing__meta">아무것도 안 걸렸어요. 다시 던져 볼까요?</p>
+          </div>
+        </div>
+      )}
+      {stage === 'caught' && result?.fish && (
         <div className="fishing__result">
           <span className="fishing__fish" aria-hidden>
             <ItemIcon kind="fish" id={result.fish.id} size={56} />
@@ -120,14 +138,14 @@ export function FishingPanel({
               {result.size > 0 && <small> {result.size}cm</small>}
             </p>
             <p className="fishing__meta">
-              <span style={{ color: RARITY[result.fish.rarity].color }}>{RARITY[result.fish.rarity].label}</span> · 도감 {result.count}마리째 · 오늘 {result.left}번 남음
+              <span style={{ color: RARITY[result.fish.rarity].color }}>{RARITY[result.fish.rarity].label}</span> · 도감 {result.count}마리째
             </p>
           </div>
         </div>
       )}
       {stage === 'error' && <p className="fishing__text">{error}</p>}
       <div className="fishing__actions">
-        {done && result && result.left > 0 && (
+        {done && (result || stage === 'caught') && (
           <button className="btn-primary btn-primary--inline" onClick={() => void cast()}>
             또 던지기
           </button>

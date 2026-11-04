@@ -698,7 +698,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
                 onClick={() => (guest ? setToast('집이 있는 주민만 낚시할 수 있어요') : setFishing(true))}
               >
                 <Icon name="fishing" size={20} />
-                낚시하기 {play ? `(오늘 ${play.fishLeft}번 남음)` : ''}
+                낚시하기
               </button>
             )}
 
@@ -816,9 +816,11 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
             if (input.fishing) input.fishing.biteAt = now();
           }}
           onCaught={(r) => {
-            if (input.fishing) Object.assign(input.fishing, { caughtAt: now(), fishId: r.fish.id });
-            // 잡은 물고기를 머리 위로 들어 보인 뒤에 이모티콘
-            setTimeout(() => session.sendEmote(r.fish.rarity === 'legend' ? 'sparkle' : r.fish.rarity === 'junk' ? 'question' : 'joy'), 2600);
+            if (input.fishing) Object.assign(input.fishing, { caughtAt: now(), fishId: r.fish?.id });
+            // 잡은 물고기를 머리 위로 들어 보인 뒤에 이모티콘 (꽝이면 바로 시무룩)
+            const f = r.fish;
+            if (!f) session.sendEmote('sad');
+            else setTimeout(() => session.sendEmote(f.rarity === 'legend' ? 'sparkle' : f.rarity === 'junk' ? 'question' : 'joy'), 2600);
           }}
           onClose={() => {
             input.fishing = null;

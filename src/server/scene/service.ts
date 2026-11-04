@@ -18,7 +18,7 @@ import { SajuError, cleanBirthInput, computeSaju, dayPillarOn, type BirthInput, 
 import { localDate } from '@/shared/debate';
 import { dailyFortune, type DailyFortune } from '@/shared/fortune';
 import {
-  FORTUNE_FRUIT, FRUITS, fishDef, fortuneFor, parseTreeSpot, rollFish, treeSpotId,
+  FORTUNE_FRUIT, FRUITS, fishDef, fortuneFor, parseTreeSpot, rollCatch, treeSpotId,
   type FishDef, type FortuneFruit,
 } from '@/shared/play';
 import { playConfig } from '@/config/game';
@@ -157,11 +157,13 @@ export interface PickResult {
 }
 
 export interface FishResult {
-  fish: FishDef;
-  /** cm (장화·병은 0) */
+  /** 잡은 것. null = 꽝 (아무것도 안 걸렸다) */
+  fish: FishDef | null;
+  /** cm (장화·병·꽝은 0) */
   size: number;
+  /** 도감에 쌓인 수 (꽝이면 0) */
   count: number;
-  /** 오늘 남은 횟수 */
+  /** 오늘 남은 횟수 (화면에는 보여 주지 않는다) */
   left: number;
 }
 
@@ -957,12 +959,15 @@ export class SceneService {
     const day = localDate(this.now());
     for (let attempt = 0; attempt < 3; attempt++) {
       const used = (await this.store.dailySpots(p.id, day, 'fish:')).length;
-      if (used >= playConfig.fishPerDay) throw new SceneError('conflict', `오늘 낚시는 ${playConfig.fishPerDay}번까지예요. 내일 또 와요!`);
-      const { fish, size } = rollFish(Math.random(), Math.random());
+      // 화면에는 횟수를 보여 주지 않는다. 자동으로 계속 던지는 것만 막는 넉넉한 상한
+      if (used >= playConfig.fishPerDay) throw new SceneError('conflict', '물고기들이 오늘은 쉬고 싶대요. 내일 또 와요!');
+      const caught = rollCatch(Math.random(), Math.random(), Math.random());
       // 같은 번호를 동시에 쓰면 다시 센다
-      if (!(await this.store.takeDailySpot(p.id, day, `fish:${used + 1}`, fish.id))) continue;
-      const count = await this.store.addToCollection(p.id, 'fish', fish.id, 1);
-      return { fish, size, count, left: playConfig.fishPerDay - used - 1 };
+      if (!(await this.store.takeDailySpot(p.id, day, `fish:${used + 1}`, caught?.fish.id ?? null))) continue;
+      const left = playConfig.fishPerDay - used - 1;
+      if (!caught) return { fish: null, size: 0, count: 0, left };
+      const count = await this.store.addToCollection(p.id, 'fish', caught.fish.id, 1);
+      return { fish: caught.fish, size: caught.size, count, left };
     }
     throw new SceneError('conflict', '잠깐 뒤에 다시 던져 주세요.');
   }

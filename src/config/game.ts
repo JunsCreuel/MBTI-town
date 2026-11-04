@@ -97,8 +97,10 @@ export const playConfig = {
   fruitTreesPerDistrict: 3,
   /** 나무 하나에서 하루에 따는 열매 수 */
   fruitsPerTree: 3,
-  /** 하루 낚시 횟수 */
-  fishPerDay: 30,
+  /** 하루 낚시 상한 (화면에 보여 주지 않는다. 자동으로 계속 던지는 것만 막는 넉넉한 값) */
+  fishPerDay: 300,
+  /** 던졌는데 아무것도 안 걸릴(꽝) 확률 */
+  fishMissRate: 0.22,
   /** 나무·낚시 자리에서 버튼이 뜨는 거리 (칸) */
   reach: 1.9,
 } as const;

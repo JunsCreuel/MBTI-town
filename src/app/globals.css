@@ -3523,6 +3523,18 @@ a:focus-visible {
   flex: none;
   animation: toast-in 0.35s ease;
 }
+.fishing__miss {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-bg);
+  color: var(--color-textSub);
+  font-size: 24px;
+  font-weight: 800;
+}
 .fishing__info {
   display: grid;
   gap: 2px;

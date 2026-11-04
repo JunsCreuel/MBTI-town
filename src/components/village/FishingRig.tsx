@@ -161,7 +161,9 @@ export function FishingRig({ actor, rod }: { actor: RefObject<FishingActor | nul
           const kt = t - f.caughtAt;
           if (!s.caught) {
             s.caught = true;
-            splash(f.tx, f.tz, 16, 1.5);
+            // 꽝이면 찌만 조용히 감아올린다
+            if (f.fishId) splash(f.tx, f.tz, 16, 1.5);
+            else splash(f.tx, f.tz, 3, 0.5);
             if (f.fishId && s.texFor !== f.fishId) {
               s.texFor = f.fishId;
               const want = f.fishId;

@@ -115,6 +115,15 @@ export const FISH: readonly FishDef[] = [
 
 export const fishDef = (id: string) => FISH.find((f) => f.id === id);
 
+/**
+ * 던진 결과: 가끔은 아무것도 안 걸린다(꽝, null). 아니면 무게대로 하나 뽑는다.
+ * r0, r1, r2: 0~1 난수
+ */
+export function rollCatch(r0: number, r1: number, r2: number): { fish: FishDef; size: number } | null {
+  if (r0 < playConfig.fishMissRate) return null;
+  return rollFish(r1, r2);
+}
+
 /** 무게대로 하나 뽑고 크기를 정한다 (r1, r2: 0~1 난수) */
 export function rollFish(r1: number, r2: number): { fish: FishDef; size: number } {
   const total = FISH.reduce((s, f) => s + f.weight, 0);

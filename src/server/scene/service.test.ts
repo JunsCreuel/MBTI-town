@@ -403,20 +403,27 @@ describe('놀거리: 열매·운세 열매·낚시', () => {
     expect(state.fruits).toMatchObject({ apple: playConfig.fruitsPerTree, fortune: 1 });
   });
 
-  it('낚시는 하루 횟수만큼, 잡은 것은 도감에 쌓인다', async () => {
+  it('낚시: 가끔은 꽝, 잡은 것은 도감에 쌓이고, 넉넉한 하루 상한을 넘으면 쉰다', async () => {
     const v = await user();
     await onboard(v, '낚시꾼');
     let total = 0;
+    let misses = 0;
     for (let i = 0; i < playConfig.fishPerDay; i++) {
       const r = await service.castLine(v);
       expect(r.left).toBe(playConfig.fishPerDay - i - 1);
-      total++;
+      if (r.fish) total++;
+      else {
+        misses++;
+        expect(r).toMatchObject({ size: 0, count: 0 });
+      }
     }
+    // 300번이면 꽝이 한 번도 없을 수는 없다 (확률 0.22)
+    expect(misses).toBeGreaterThan(0);
     await expectError(service.castLine(v), 'conflict');
     const state = await service.playState(v);
     expect(state.fishLeft).toBe(0);
     expect(Object.values(state.fish).reduce((a, b) => a + b, 0)).toBe(total);
-  });
+  }, 60_000);
 });
 
 describe('주민증', () => {

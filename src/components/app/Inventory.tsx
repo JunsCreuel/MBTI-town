@@ -23,7 +23,7 @@ export const RARITY: Record<FishDef['rarity'], { label: string; color: string }>
   common: { label: '흔해요', color: tokens.color.textSub },
   rare: { label: '드물어요', color: tokens.color.sky },
   legend: { label: '전설', color: tokens.emotion.joy },
-  junk: { label: '꽝', color: tokens.color.lose },
+  junk: { label: '잡동사니', color: tokens.color.lose },
 };
 
 const ALL_FRUITS: FruitDef[] = [...DISTRICTS.map((d) => FRUITS[d]), FORTUNE_FRUIT];
@@ -95,7 +95,7 @@ export function InventorySheet({ state, onClose }: { state: PlayState | null; on
           <p className="muted inventory__note">
             {tab === 'fruit'
               ? '열매는 지역마다 있는 열매 나무(하루 한 번)와 광장 운세 나무에서 따요.'
-              : `낚시는 광장의 낚시터 비콘으로 가서 해요. 오늘 남은 낚시 ${state.fishLeft}번 · 지금까지 ${totals.fish}마리.`}
+              : `낚시는 광장의 낚시터 비콘으로 가서 해요. 지금까지 ${totals.fish}마리.`}
           </p>
         </div>
       )}
