@@ -40,7 +40,13 @@ export function AnnounceBanner() {
   return (
     <div className={`announce announce--${current.kind}`} role="status" aria-live="polite" key={`${current.at}:${current.text}`}>
       <span className="announce__icon" aria-hidden>
-        {current.kind === 'golden_whale' ? <ItemIcon kind="fish" id="golden_whale" size={34} /> : <Icon name="sparkle" size={20} />}
+        {current.kind === 'golden_whale' ? (
+          <ItemIcon kind="fish" id="golden_whale" size={34} />
+        ) : current.kind === 'saju_ticket' ? (
+          <ItemIcon kind="ticket" id="saju" size={34} />
+        ) : (
+          <Icon name="sparkle" size={20} />
+        )}
       </span>
       <span className="announce__text">{current.text}</span>
       <button className="announce__close" onClick={() => setQueue((q) => q.slice(1))} aria-label="공지 닫기">

@@ -8,7 +8,8 @@ const ROOT = join(import.meta.dirname, '..', 'public', 'assets');
 const SCREEN_BUDGET_BYTES = 3 * 1024 * 1024;
 // 화면마다 처음 불러오는 키 접두사 (BGM은 누를 때 받으므로 뺀다). 화면마다 3MB를 넘지 않는다.
 // except = 그 화면에서는 받지 않는 키 (놀이터·클럽에서만 받는 것)
-const SPOT_ONLY = ['prop.club.', 'prop.market.', 'char.npc.dj', 'char.npc.bartender', 'map.club', 'map.fishing', 'map.market'];
+// char.npc.saju = 광장 부엉 도사 (첫 화면을 그린 뒤에 받는다)
+const SPOT_ONLY = ['prop.club.', 'prop.market.', 'char.npc.dj', 'char.npc.bartender', 'char.npc.saju', 'map.club', 'map.fishing', 'map.market'];
 const SCREENS: { name: string; prefixes: string[]; except?: string[] }[] = [
   { name: '마을 첫 화면', prefixes: ['char.', 'map.', 'prop.', 'ui.'], except: SPOT_ONLY },
   { name: '나의 방 첫 화면', prefixes: ['char.', 'furn.', 'room.', 'ui.'], except: ['char.npc.'] },

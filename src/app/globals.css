@@ -4085,7 +4085,8 @@ a:focus-visible {
   transform: translateX(-50%);
   animation: announce-in 0.35s ease-out;
 }
-.announce--golden_whale {
+.announce--golden_whale,
+.announce--saju_ticket {
   background: linear-gradient(100deg, var(--color-goldSoft), var(--color-goldBright) 45%, var(--color-goldSoft));
   background-size: 220% 100%;
   color: var(--color-goldInk);
@@ -4126,7 +4127,8 @@ a:focus-visible {
 }
 @media (prefers-reduced-motion: reduce) {
   .announce,
-  .announce--golden_whale {
+  .announce--golden_whale,
+  .announce--saju_ticket {
     animation: none;
   }
 }
@@ -4305,5 +4307,127 @@ a:focus-visible {
   text-overflow: ellipsis;
 }
 .club-queue__by {
+  font-size: 12px;
+}
+
+/* 사주상담소 (부엉 도사) */
+.saju {
+  display: grid;
+  gap: var(--space-3);
+}
+.saju__wallet {
+  margin: 0;
+  font-size: 14px;
+}
+.saju__wallet b {
+  color: var(--color-accentInk);
+}
+.saju__menu {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+.saju__pick {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 48px;
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.saju__pick:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.saju__fee {
+  color: var(--color-goldInk);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.saju__premium {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: linear-gradient(100deg, var(--color-goldSoft), var(--color-goldBright));
+}
+.saju__premium p {
+  margin: 0;
+}
+.saju__premium-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-goldInk);
+  font-weight: 800;
+}
+.saju-reading {
+  display: grid;
+  gap: var(--space-2);
+}
+.saju-reading p,
+.saju-reading h3,
+.saju-reading h4 {
+  margin: 0;
+}
+.saju-reading__period {
+  font-size: 12px;
+}
+.saju-reading__title {
+  font-size: 18px;
+}
+.saju-reading__stars {
+  color: var(--color-gold);
+  font-size: 18px;
+  letter-spacing: 2px;
+}
+.saju-reading__stars span {
+  color: var(--color-border);
+}
+.saju-reading__summary {
+  font-weight: 600;
+}
+.saju-reading__section {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+.saju-reading__section h4 {
+  margin-bottom: 2px;
+  color: var(--color-accentInk);
+  font-size: 13px;
+}
+.saju-reading__lucky {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-2);
+  margin: 0;
+}
+.saju-reading__lucky div {
+  display: grid;
+  justify-items: center;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  background: var(--color-goldSoft);
+}
+.saju-reading__lucky dt {
+  color: var(--color-textSub);
+  font-size: 11px;
+}
+.saju-reading__lucky dd {
+  margin: 0;
+  color: var(--color-goldInk);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+}
+.saju-reading__note {
   font-size: 12px;
 }

@@ -1,7 +1,7 @@
 // 미니홈피 규칙을 실제 Postgres(PGlite, 메모리)로 확인한다. 공개 범위·차단은 서버 규칙이라 여기서 꼼꼼히 본다.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { coinConfig, marketConfig, playConfig, townConfig } from '@/config/game';
+import { coinConfig, marketConfig, playConfig, sajuConfig, townConfig } from '@/config/game';
 import type { Announcement } from '@/shared/announce';
 import { DISTRICTS, type District } from '@/shared/districts';
 import { refundFor } from '@/shared/market';
@@ -637,5 +637,61 @@ describe('코인과 상가', () => {
     await service.releaseShop(admin, 12);
     expect((await service.marketView(owner)).myShop).toBeNull();
     expect((await service.playState(owner)).coins).toBe(refundFor());
+  });
+});
+
+describe('사주상담소', () => {
+  const setCoins = (v: Viewer, n: number) => sql.query(`update public.profiles set coins = $2 where id = $1`, [v.id, n]);
+
+  it('복채를 내고 기간 풀이를 보고, 같은 기간은 다시 봐도 무료', async () => {
+    const v = await user();
+    await onboard(v, '사주손님');
+    await expectError(service.readSaju(null, { kind: 'today' }), 'login_required');
+    await expectError(service.readSaju(v, { kind: 'year' }), 'bad_request');
+    expect(await service.sajuOffice(v)).toMatchObject({ coins: 0, tickets: 0, seen: { today: false, week: false, premium: false } });
+    await expectError(service.readSaju(v, { kind: 'today' }), 'conflict');
+    await setCoins(v, 100);
+    const first = await service.readSaju(v, { kind: 'today' });
+    expect(first).toMatchObject({ paid: sajuConfig.fee.today, usedTicket: false, office: { coins: 100 - sajuConfig.fee.today, seen: { today: true } } });
+    expect(first.reading.kind).toBe('today');
+    expect(first.reading.sections.length).toBeGreaterThan(3);
+    const again = await service.readSaju(v, { kind: 'today' });
+    expect(again.paid).toBe(0);
+    expect(again.reading).toEqual(first.reading);
+    for (const kind of ['tomorrow', 'week', 'month'] as const) {
+      const r = await service.readSaju(v, { kind });
+      expect(r.paid).toBe(sajuConfig.fee[kind]);
+      expect(r.reading.kind).toBe(kind);
+    }
+    expect((await service.sajuOffice(v)).coins).toBe(100 - Object.values(sajuConfig.fee).reduce((a, b) => a + b, 0));
+  });
+
+  it('상세 풀이는 이용권으로만 (결제는 준비 중), 한 장 쓰면 그해에는 다시 무료', async () => {
+    const v = await user();
+    await onboard(v, '상세손님');
+    await expectError(service.readSaju(v, { kind: 'premium' }), 'conflict');
+    await expectError(service.readSaju(v, { kind: 'premium', useTicket: true }), 'conflict');
+    await sql.query(`update public.profiles set saju_tickets = 1 where id = $1`, [v.id]);
+    const r = await service.readSaju(v, { kind: 'premium', useTicket: true });
+    expect(r).toMatchObject({ usedTicket: true, office: { tickets: 0, seen: { premium: true } } });
+    expect(r.reading.sections.length).toBe(8);
+    expect((await service.readSaju(v, { kind: 'premium' })).usedTicket).toBe(false);
+  });
+
+  it('낚시에서 사주 이용권을 낚으면 이용권이 늘고 서버 전체에 공지한다', async () => {
+    const heard: Announcement[] = [];
+    const loud = new SceneService(new SceneStore(sql), () => now, async (a) => (heard.push(a), true));
+    const v = await user();
+    await onboard(v, '이용권낚시꾼');
+    // 첫 난수 = 황금 고래(안 나옴), 둘째 = 이용권(나옴)
+    const spy = vi.spyOn(Math, 'random').mockReturnValueOnce(0.5).mockReturnValueOnce(0);
+    try {
+      const r = await loud.castLine(v);
+      expect(r).toMatchObject({ fish: null, ticket: true, announced: true, earned: 0 });
+    } finally {
+      spy.mockRestore();
+    }
+    expect(heard).toEqual([{ kind: 'saju_ticket', name: '이용권낚시꾼' }]);
+    expect((await loud.playState(v)).tickets).toBe(1);
   });
 });

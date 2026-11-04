@@ -7,6 +7,7 @@ import { isMbtiType, type MbtiType } from '@/design/mbti';
 import { NOTICE_MAX, parseAnnouncement, type Announcement } from '@/shared/announce';
 import { AVATAR_COLORS, cleanAvatar, type Avatar } from '@/shared/avatar';
 import { isShopColor, isShopSlot, refundFor, shopLabel, type MarketView, type ShopColor } from '@/shared/market';
+import { SAJU_KINDS, periodReading, premiumReading, weekReading, type SajuKind, type SajuResult } from '@/shared/sajuReading';
 import { bgmTrack } from '@/shared/bgm';
 import { cleanTaste, isDistrict, type District, type Taste } from '@/shared/districts';
 import { moderate } from '@/shared/moderation';
@@ -16,14 +17,14 @@ import {
 } from '@/shared/records';
 import { framedPhotoIds, starterLayout, validateLayout, type RoomLayout } from '@/shared/room';
 import { guestPid, signTownPass, townPid, type TownPass } from '@/shared/townToken';
-import { SajuError, cleanBirthInput, computeSaju, dayPillarOn, type BirthInput, type SajuReading } from '../saju';
+import { SajuError, cleanBirthInput, computeSaju, dayPillarOn, monthYearPillarsOn, type BirthInput, type SajuReading } from '../saju';
 import { localDate } from '@/shared/debate';
 import { dailyFortune, type DailyFortune } from '@/shared/fortune';
 import {
   FORTUNE_FRUIT, FRUITS, GOLDEN_WHALE_ID, fishDef, fortuneFor, parseTreeSpot, rollCatch, treeSpotId,
   type FishDef, type FortuneFruit,
 } from '@/shared/play';
-import { coinConfig, marketConfig, playConfig } from '@/config/game';
+import { coinConfig, marketConfig, playConfig, sajuConfig } from '@/config/game';
 import type { AdminCounts, ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
 
 export type SceneErrorCode =
@@ -173,6 +174,8 @@ export interface FishResult {
   announced?: boolean;
   /** 이번에 받은 코인 (꽝이면 0) */
   earned: number;
+  /** 사주 이용권을 낚았는지 (그때 fish는 null) */
+  ticket?: boolean;
 }
 
 export interface PlayState {
@@ -186,6 +189,8 @@ export interface PlayState {
   fish: Record<string, number>;
   /** 게임 코인 */
   coins: number;
+  /** 사주 이용권 */
+  tickets: number;
 }
 
 /** 집 안 입장 토큰: 그 방을 볼 수 있는 사람에게만 준다 */
@@ -339,6 +344,53 @@ export function sniffImage(bytes: Uint8Array): 'image/jpeg' | 'image/png' | 'ima
   if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
   if (String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP') return 'image/webp';
   return null;
+}
+
+/** 사주상담소 화면 */
+export interface SajuOffice {
+  coins: number;
+  tickets: number;
+  fee: typeof sajuConfig.fee;
+  /** 지금 기간의 풀이를 이미 봤는지 (다시 보면 무료) */
+  seen: Record<SajuKind | 'premium', boolean>;
+  premiumPriceLabel: string;
+}
+
+const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
+/** YYYY-MM-DD에 날짜를 더한다 */
+function addDays(date: string, n: number): string {
+  const [y, m, d] = date.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+const dayLabel = (date: string) => {
+  const [y, m, d] = date.split('-').map(Number);
+  return `${m}월 ${d}일 ${WEEKDAY[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}요일`;
+};
+const shortDay = (date: string) => `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일`;
+
+/** 풀이 기간: 저장 키와 화면 이름 (한국 날짜 기준, 한 주는 월~일) */
+function sajuPeriods(today: string): Record<SajuKind | 'premium', { key: string; label: string; days?: string[] }> {
+  const [y, m, d] = today.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const monday = addDays(today, -((dow + 6) % 7));
+  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
+  const tomorrow = addDays(today, 1);
+  return {
+    today: { key: today, label: dayLabel(today) },
+    tomorrow: { key: tomorrow, label: dayLabel(tomorrow) },
+    week: { key: monday, label: `${shortDay(days[0])} ~ ${shortDay(days[6])}`, days },
+    month: { key: today.slice(0, 7), label: `${y}년 ${m}월` },
+    premium: { key: String(y), label: `${y}년 상세 풀이` },
+  };
+}
+
+function makeReading(userId: string, saju: SajuReading, kind: SajuKind | 'premium', today: string, period: { key: string; label: string; days?: string[] }): SajuResult {
+  const seed = `${userId}:${kind}:${period.key}`;
+  if (kind === 'today' || kind === 'tomorrow') return periodReading(saju, kind, dayPillarOn(period.key), period.label, seed);
+  if (kind === 'week') return weekReading(saju, period.days!.map((d) => ({ label: dayLabel(d), pillar: dayPillarOn(d) })), period.label, seed);
+  if (kind === 'month') return periodReading(saju, 'month', monthYearPillarsOn(`${period.key}-15`).month, period.label, seed);
+  const { year, month } = monthYearPillarsOn(today);
+  return premiumReading(saju, year, month, period.label);
 }
 
 /** 서버 전체 공지를 보내는 길 (웹 서버에서는 실시간 서버로, 테스트에서는 기록만). 보냈으면 true */
@@ -999,10 +1051,19 @@ export class SceneService {
       const used = (await this.store.dailySpots(p.id, day, 'fish:')).length;
       // 화면에는 횟수를 보여 주지 않는다. 자동으로 계속 던지는 것만 막는 넉넉한 상한
       if (used >= playConfig.fishPerDay) throw new SceneError('conflict', '물고기들이 오늘은 쉬고 싶대요. 내일 또 와요!');
-      const caught = rollCatch(Math.random(), Math.random(), Math.random(), Math.random());
+      // 황금 고래(rWhale) → 사주 이용권(rTicket) → 꽝·물고기 순서로 본다
+      const rWhale = Math.random();
+      const rTicket = Math.random();
+      const ticket = rWhale >= playConfig.goldenWhaleChance && rTicket < sajuConfig.ticketChance;
+      const caught = ticket ? null : rollCatch(Math.random(), Math.random(), Math.random(), rWhale);
       // 같은 번호를 동시에 쓰면 다시 센다
-      if (!(await this.store.takeDailySpot(p.id, day, `fish:${used + 1}`, caught?.fish.id ?? null))) continue;
+      if (!(await this.store.takeDailySpot(p.id, day, `fish:${used + 1}`, ticket ? 'saju_ticket' : (caught?.fish.id ?? null)))) continue;
       const left = playConfig.fishPerDay - used - 1;
+      if (ticket) {
+        await this.store.addTickets(p.id, 1);
+        const announced = await this.announce({ kind: 'saju_ticket', name: displayNameOf(p) }).catch(() => false);
+        return { fish: null, size: 0, count: 0, left, earned: 0, ticket: true, announced };
+      }
       if (!caught) return { fish: null, size: 0, count: 0, left, earned: 0 };
       const count = await this.store.addToCollection(p.id, 'fish', caught.fish.id, 1);
       const earned = coinConfig.fish[caught.fish.rarity];
@@ -1021,11 +1082,12 @@ export class SceneService {
   async playState(viewer: Viewer | null): Promise<PlayState> {
     const p = await this.requireOnboarded(viewer);
     const day = localDate(this.now());
-    const [trees, fish, items, coins] = await Promise.all([
+    const [trees, fish, items, coins, tickets] = await Promise.all([
       this.store.dailySpots(p.id, day, 'tree:'),
       this.store.dailySpots(p.id, day, 'fish:'),
       this.store.collection(p.id),
       this.store.coinsOf(p.id),
+      this.store.ticketsOf(p.id),
     ]);
     return {
       day,
@@ -1034,7 +1096,62 @@ export class SceneService {
       fruits: Object.fromEntries(items.filter((i) => i.kind === 'fruit').map((i) => [i.item, i.count])),
       fish: Object.fromEntries(items.filter((i) => i.kind === 'fish' && fishDef(i.item)).map((i) => [i.item, i.count])),
       coins,
+      tickets,
     };
+  }
+
+  // ───────────────────────── 사주상담소 ─────────────────────────
+
+  /** 상담소: 내 코인·이용권, 복채, 지금 기간에 이미 본 풀이 */
+  async sajuOffice(viewer: Viewer | null): Promise<SajuOffice> {
+    const p = await this.requireOnboarded(viewer);
+    const periods = sajuPeriods(localDate(this.now()));
+    const keys = (['premium', ...SAJU_KINDS] as const).map((kind) => ({ kind, period: periods[kind].key }));
+    const [coins, tickets, seen] = await Promise.all([this.store.coinsOf(p.id), this.store.ticketsOf(p.id), this.store.sajuReadingKeys(p.id, keys)]);
+    return {
+      coins,
+      tickets,
+      fee: sajuConfig.fee,
+      seen: Object.fromEntries(keys.map((k) => [k.kind, seen.has(`${k.kind}:${k.period}`)])) as SajuOffice['seen'],
+      premiumPriceLabel: sajuConfig.premiumPriceLabel,
+    };
+  }
+
+  /**
+   * 부엉 도사의 풀이. 기간 풀이(오늘·내일·이번 주·이번 달)는 복채(코인)를 내고, 같은 기간은 다시 봐도 무료.
+   * 상세 풀이는 이용권(useTicket)으로만 (유료 결제는 아직 없다). 한 해에 한 번 보면 그해에는 다시 무료.
+   */
+  async readSaju(viewer: Viewer | null, input: Record<string, unknown>): Promise<{ reading: SajuResult; office: SajuOffice; paid: number; usedTicket: boolean }> {
+    const p = await this.requireOnboarded(viewer);
+    if (!p.saju) throw new SceneError('not_found', '사주가 없어요. MY에서 생일을 넣어 주세요.');
+    const kind = input.kind;
+    if (kind !== 'premium' && !(SAJU_KINDS as readonly unknown[]).includes(kind)) throw new SceneError('bad_request', '풀이 종류가 올바르지 않아요.');
+    const k = kind as SajuKind | 'premium';
+    const today = localDate(this.now());
+    const period = sajuPeriods(today)[k];
+    const done = async (reading: SajuResult, paid: number, usedTicket: boolean) => ({ reading, office: await this.sajuOffice(viewer), paid, usedTicket });
+    const old = await this.store.getSajuReading<SajuResult>(p.id, k, period.key);
+    if (old) return done(old, 0, false);
+
+    const reading = makeReading(p.id, p.saju, k, today, period);
+    if (k === 'premium') {
+      if (input.useTicket !== true) throw new SceneError('conflict', `상세 풀이 결제(${sajuConfig.premiumPriceLabel})는 준비 중이에요. 사주 이용권으로 볼 수 있어요.`);
+      if (!(await this.store.spendTicket(p.id))) throw new SceneError('conflict', '사주 이용권이 없어요. 낚시터에서 아주 드물게 낚을 수 있어요.');
+      if (!(await this.store.saveSajuReading(p.id, k, period.key, reading, this.now()))) {
+        await this.store.addTickets(p.id, 1);
+        return done((await this.store.getSajuReading<SajuResult>(p.id, k, period.key))!, 0, false);
+      }
+      return done(reading, 0, true);
+    }
+    const fee = sajuConfig.fee[k];
+    if ((await this.store.spendCoins(p.id, fee)) === null) {
+      throw new SceneError('conflict', `복채가 모자라요. ${fee}코인이 필요해요. 낚시와 열매 따기로 모아 보세요.`);
+    }
+    if (!(await this.store.saveSajuReading(p.id, k, period.key, reading, this.now()))) {
+      await this.store.addCoins(p.id, fee);
+      return done((await this.store.getSajuReading<SajuResult>(p.id, k, period.key))!, 0, false);
+    }
+    return done(reading, fee, false);
   }
 
   // ───────────────────────── 상가 ─────────────────────────

@@ -75,8 +75,8 @@ export function FishingPanel({
     try {
       const [r] = await Promise.all([onCast(), new Promise((res) => setTimeout(res, wait))]);
       if (my !== round.current) return;
-      // 꽝: 입질 없이 그대로 감아올린다
-      if (!r.fish) {
+      // 꽝: 입질 없이 그대로 감아올린다 (사주 이용권은 입질이 온다)
+      if (!r.fish && !r.ticket) {
         setResult(r);
         setStage('caught');
         onCaught(r);
@@ -116,7 +116,20 @@ export function FishingPanel({
         </>
       )}
       {stage === 'bite' && <p className="fishing__text fishing__text--bite">앗! 물었다!</p>}
-      {stage === 'caught' && result && !result.fish && (
+      {stage === 'caught' && result?.ticket && (
+        <div className="fishing__result fishing__result--mythic">
+          <span className="fishing__fish" aria-hidden>
+            <ItemIcon kind="ticket" id="saju" size={56} />
+          </span>
+          <div className="fishing__info">
+            <p className="fishing__name">사주 이용권!</p>
+            <p className="fishing__meta fishing__mythic">
+              {result.announced ? '마을 모두에게 소식이 퍼졌어요! ' : ''}광장 사주상담소에서 상세 풀이를 볼 수 있어요.
+            </p>
+          </div>
+        </div>
+      )}
+      {stage === 'caught' && result && !result.fish && !result.ticket && (
         <div className="fishing__result">
           <span className="fishing__miss" aria-hidden>
             ✕

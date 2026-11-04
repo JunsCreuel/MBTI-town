@@ -121,6 +121,18 @@ export const coinConfig = {
   fortune: 10,
 } as const;
 
+/** 사주상담소 (부엉 도사, 광장): 복채와 이용권 (PROJECT_GUIDE.md 3장) */
+export const sajuConfig = {
+  /** 기간 풀이 복채 (코인). 같은 기간은 다시 봐도 무료 */
+  fee: { today: 10, tomorrow: 10, week: 30, month: 50 },
+  /** 사주 이용권: 낚시에서 던질 때마다 0.001% (잡으면 서버 전체 공지) */
+  ticketChance: 0.00001,
+  /** 상세 풀이 유료 가격 (아직 결제 없음, 화면에 "준비 중"으로 보인다) [결정 필요] */
+  premiumPriceLabel: '3,900원',
+  /** 도사 앞 이 거리(칸) 안이면 "사주 보기" 버튼 */
+  reach: 2.6,
+} as const;
+
 /** 상가: 중앙광장 비콘(언덕 지역 쪽)으로 가는 섬의 점포 20칸 (PROJECT_GUIDE.md 3장) */
 export const marketConfig = {
   shops: 20,

@@ -107,3 +107,14 @@ export function markNpcSeen() {
     // 저장이 안 되면 다음에 또 인사할 뿐
   }
 }
+
+/** 사주상담소 천막이 있는 맵 (본섬 광장) */
+export const SAJU_TENT_KEY = 'prop.plaza.saju';
+export const SAJU_NAME = '부엉 도사';
+
+/** 부엉 도사가 서는 자리: 천막과 상담 탁자 사이, 광장 쪽을 본다 */
+export function sajuNpcSpot(map: TownMap): NpcSpot | null {
+  const tent = map.props.find((p) => p.key === SAJU_TENT_KEY);
+  if (!tent) return null;
+  return { x: tent.x + Math.sin(tent.yaw) * 0.8, z: tent.z + Math.cos(tent.yaw) * 0.8, yaw: tent.yaw };
+}

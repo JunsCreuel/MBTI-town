@@ -243,6 +243,21 @@ function bottle(f: FishDef) {
 <path d="M22 24c1-3 3-5 5-6" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.7"/></g>`;
 }
 
+/** 사주 이용권: 금빛 표에 남색 띠, 달과 별, 떼어 내는 점선 */
+export function ticketIcons(): { id: string; svg: string }[] {
+  const gold = '#F2C14E';
+  const o = shade(gold, -0.4);
+  const svg = `${SHADOW}<g transform="rotate(-12 32 32)">
+<path d="M8 18h48a3 3 0 0 1 3 3v6a5 5 0 0 0 0 10v6a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-6a5 5 0 0 0 0-10v-6a3 3 0 0 1 3-3Z" fill="${gold}" stroke="${o}" stroke-width="2.5" stroke-linejoin="round"/>
+<rect x="9" y="22" width="34" height="20" rx="2" fill="#3B3A6B"/>
+<path d="M22 26a6 6 0 1 0 5 10 5 5 0 1 1-5-10Z" fill="#FFE27A"/>
+<path d="M35 27l1.2 2.6 2.6 1.2-2.6 1.2L35 34.6l-1.2-2.6-2.6-1.2 2.6-1.2Z" fill="#FFE27A"/>
+<path d="M48 21v22" stroke="${o}" stroke-width="2" stroke-dasharray="2.5 2.5"/>
+<circle cx="53" cy="32" r="2.6" fill="${o}"/>
+<path d="M12 20h20" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round" opacity="0.6"/></g>`;
+  return [{ id: 'saju', svg: wrap(svg) }];
+}
+
 export function fishIcons(): { id: string; svg: string }[] {
   const DRAW: Record<string, (f: FishDef) => string> = { eel, loach: eel, boot, bottle, golden_whale: whale };
   return FISH.map((f) => ({ id: f.id, svg: wrap((DRAW[f.id] ?? fish)(f)) }));

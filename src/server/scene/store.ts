@@ -615,6 +615,47 @@ export class SceneStore {
     return rows.map((r) => ({ ...r, count: Number(r.count) }));
   }
 
+  // ───────────────────────── 사주상담소 ─────────────────────────
+
+  async ticketsOf(userId: string): Promise<number> {
+    const [r] = await this.sql.query<{ n: number }>(`select saju_tickets as n from public.profiles where id = $1`, [userId]);
+    return Number(r?.n ?? 0);
+  }
+
+  async addTickets(userId: string, n: number): Promise<number> {
+    const [r] = await this.sql.query<{ n: number }>(`update public.profiles set saju_tickets = saju_tickets + $2 where id = $1 returning saju_tickets as n`, [userId, n]);
+    return Number(r?.n ?? 0);
+  }
+
+  /** 이용권 한 장을 쓴다. 없으면 false */
+  async spendTicket(userId: string): Promise<boolean> {
+    const rows = await this.sql.query(`update public.profiles set saju_tickets = saju_tickets - 1 where id = $1 and saju_tickets > 0 returning id`, [userId]);
+    return rows.length > 0;
+  }
+
+  async getSajuReading<T>(userId: string, kind: string, period: string): Promise<T | null> {
+    const [r] = await this.sql.query<{ body: T }>(`select body from public.saju_readings where user_id = $1 and kind = $2 and period = $3`, [userId, kind, period]);
+    return r?.body ?? null;
+  }
+
+  /** 풀이를 남긴다. 이미 있으면(동시에 두 번) false */
+  async saveSajuReading(userId: string, kind: string, period: string, body: unknown, at: Date): Promise<boolean> {
+    const rows = await this.sql.query(
+      `insert into public.saju_readings (user_id, kind, period, body, created_at) values ($1, $2, $3, $4, $5) on conflict do nothing returning kind`,
+      [userId, kind, period, JSON.stringify(body), at],
+    );
+    return rows.length > 0;
+  }
+
+  /** 이 기간들 중 이미 본 풀이 (kind:period) */
+  async sajuReadingKeys(userId: string, keys: { kind: string; period: string }[]): Promise<Set<string>> {
+    const rows = await this.sql.query<{ kind: string; period: string }>(
+      `select kind, period from public.saju_readings where user_id = $1 and (kind || ':' || period) = any($2::text[])`,
+      [userId, keys.map((k) => `${k.kind}:${k.period}`)],
+    );
+    return new Set(rows.map((r) => `${r.kind}:${r.period}`));
+  }
+
   // ───────────────────────── 코인·상가 ─────────────────────────
 
   async coinsOf(userId: string): Promise<number> {

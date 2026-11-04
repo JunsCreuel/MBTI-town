@@ -841,5 +841,14 @@
   },
   "map.market": {
     "file": "maps/market.json"
+  },
+  "char.npc.saju": {
+    "file": "characters/char_npc_saju_ph.glb"
+  },
+  "prop.plaza.saju": {
+    "file": "props/prop_plaza_saju_ph.glb"
+  },
+  "item.ticket.saju": {
+    "file": "items/item_ticket_saju_ph.svg"
   }
 }

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { assetUrl } from '@/assets/manifest';
-import { marketConfig, playConfig, townConfig } from '@/config/game';
+import { marketConfig, playConfig, sajuConfig, townConfig } from '@/config/game';
 import { call } from '@/lib/api';
 import { FORTUNE_FRUIT, FRUITS, type FortuneFruit } from '@/shared/play';
 import { withMaxLightness } from '@/design/mbti';
@@ -30,9 +30,10 @@ import { ClubMusic } from './ClubMusic';
 import { NpcDialog } from './NpcDialog';
 import { BarSheet, DjSheet, DrunkFx } from './ClubBar';
 import { MarketSheet, stallFront, stallsOf } from './Market';
+import { SajuSheet } from './SajuOffice';
 import { BARTENDER_NAME, DJ_NAME } from './ClubNpcs';
 import { clubBar } from './club';
-import { NPC_NAME, NPC_TALK_REACH, clubNpcSpots, guideNpcSpot, markNpcSeen, npcSeen } from './npc';
+import { NPC_NAME, NPC_TALK_REACH, SAJU_NAME, clubNpcSpots, guideNpcSpot, markNpcSeen, npcSeen, sajuNpcSpot } from './npc';
 import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
 import { VillageMusicButton, useVillageMusic } from './VillageMusic';
 import {
@@ -297,6 +298,10 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const [nearClub, setNearClub] = useState<'dj' | 'bar' | null>(null);
   const [clubSheet, setClubSheet] = useState<'dj' | 'bar' | null>(null);
   const stalls = useMemo(() => (loaded && spot === 'market' ? stallsOf(loaded.map) : []), [loaded, spot]);
+  // 광장 사주상담소의 부엉 도사
+  const sajuSpot = useMemo(() => (loaded ? sajuNpcSpot(loaded.map) : null), [loaded]);
+  const [nearSaju, setNearSaju] = useState(false);
+  const [sajuOpen, setSajuOpen] = useState(false);
   const [nearStall, setNearStall] = useState<number | null>(null);
   const villageRef = useRef<HTMLDivElement>(null);
   const [npcOpen, setNpcOpen] = useState<{ first: boolean } | null>(null);
@@ -420,6 +425,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         }
       }
       setNearStall(stall);
+      setNearSaju(!!sajuSpot && Math.hypot(sajuSpot.x - input.self.x, sajuSpot.z - input.self.z) < sajuConfig.reach);
       // 낚시터 물가
       setCanFish(spot === 'fishing' && nearWater(loaded.map, input.self.x, input.self.z));
       // 클럽 무대에 서 있으면 저절로 춤춘다 (2초마다, 걷는 중에는 걷기가 먼저)
@@ -434,7 +440,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       }
     }, 300);
     return () => clearInterval(t);
-  }, [loaded, input, here, trees, beacons, spot, session, npcSpot, clubSpots, stalls]);
+  }, [loaded, input, here, trees, beacons, spot, session, npcSpot, clubSpots, stalls, sajuSpot]);
 
   const openMap = useCallback(
     (open: boolean) => {
@@ -733,6 +739,13 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
               </button>
             )}
 
+            {nearSaju && !sajuOpen && !picked && !nearBeacon && (
+              <button className="door-btn" onClick={() => (guest ? setToast('집이 있는 주민만 사주를 볼 수 있어요') : setSajuOpen(true))}>
+                <Icon name="sparkle" size={20} />
+                {SAJU_NAME}에게 사주 보기
+              </button>
+            )}
+
             {nearStall !== null && stallOpen === null && !nearBeacon && (
               <button className="door-btn" onClick={() => onStall(nearStall)}>
                 <Icon name="basket" size={20} />
@@ -867,7 +880,8 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
             if (input.fishing) Object.assign(input.fishing, { caughtAt: now(), fishId: r.fish?.id });
             // 잡은 물고기를 머리 위로 들어 보인 뒤에 이모티콘 (꽝이면 바로 시무룩)
             const f = r.fish;
-            if (!f) session.sendEmote('sad');
+            if (r.ticket) setTimeout(() => session.sendEmote('sparkle'), 900);
+            else if (!f) session.sendEmote('sad');
             else setTimeout(() => session.sendEmote(f.rarity === 'legend' ? 'sparkle' : f.rarity === 'junk' ? 'question' : 'joy'), 2600);
           }}
           onClose={() => {
@@ -878,6 +892,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         />
       )}
       {npcOpen && <NpcDialog guest={isGuest} first={npcOpen.first} onClose={closeNpc} />}
+      {sajuOpen && <SajuSheet onClose={() => setSajuOpen(false)} />}
       {stallOpen !== null && <MarketSheet slot={stallOpen} view={market} onChanged={setMarket} onClose={() => setStallOpen(null)} />}
       {clubSheet === 'dj' && <DjSheet onRequest={(i) => session.requestSong(i)} onClose={() => setClubSheet(null)} />}
       {clubSheet === 'bar' && (

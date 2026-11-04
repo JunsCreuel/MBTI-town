@@ -330,6 +330,26 @@ create table if not exists public.market_shops (
 
 alter table public.market_shops enable row level security;
 
+-- ───────── 20261104010000_saju.sql ─────────
+
+-- 사주상담소 (부엉 도사): 복채(코인)로 보는 기간 풀이와, 이용권으로 보는 상세 풀이.
+-- 브라우저는 직접 접근하지 않는다. 서버가 복채·이용권을 확인한 뒤 쓴다 (RLS 켜고 정책 없음).
+
+-- 사주 이용권: 낚시에서 아주 드물게 나온다. 상세 풀이를 한 번 볼 수 있다
+alter table public.profiles add column if not exists saju_tickets integer not null default 0 check (saju_tickets >= 0);
+
+-- 본 풀이: 같은 기간(오늘·이번 주…)은 다시 봐도 복채를 또 내지 않는다
+create table if not exists public.saju_readings (
+  user_id uuid not null references public.profiles (id) on delete cascade,
+  kind text not null check (kind in ('today', 'tomorrow', 'week', 'month', 'premium')),
+  period text not null check (char_length(period) <= 20),
+  body jsonb not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, kind, period)
+);
+
+alter table public.saju_readings enable row level security;
+
 -- ───────── 실행 기록 ─────────
 
 create table if not exists public.schema_migrations (name text primary key, applied_at timestamptz not null default now());
@@ -344,5 +364,6 @@ insert into public.schema_migrations (name) values
   ('20261103020000_district_debate.sql'),
   ('20261103030000_play.sql'),
   ('20261103040000_admin.sql'),
-  ('20261104000000_market.sql')
+  ('20261104000000_market.sql'),
+  ('20261104010000_saju.sql')
 on conflict (name) do nothing;

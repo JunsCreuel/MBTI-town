@@ -7,6 +7,8 @@ import { socialConfig } from '../config/game';
 export type Announcement =
   /** 누군가 황금 고래를 낚았다 */
   | { kind: 'golden_whale'; name: string }
+  /** 누군가 사주 이용권을 낚았다 */
+  | { kind: 'saju_ticket'; name: string }
   /** 운영자 공지 */
   | { kind: 'notice'; text: string };
 
@@ -22,10 +24,11 @@ export interface AnnounceBroadcast {
 export const NOTICE_MAX = 100;
 
 /** 서명할 때 쓰는 내용 (종류 + 이름·글) */
-export const announcementBody = (a: Announcement) => `${a.kind}:${a.kind === 'golden_whale' ? a.name : a.text}`;
+export const announcementBody = (a: Announcement) => `${a.kind}:${a.kind === 'notice' ? a.text : a.name}`;
 
 export function announcementText(a: Announcement): string {
   if (a.kind === 'golden_whale') return `(공지) ${a.name}님이 황금 고래를 낚았습니다!`;
+  if (a.kind === 'saju_ticket') return `(공지) ${a.name}님이 사주 이용권을 낚았습니다!`;
   return `(공지) ${a.text}`;
 }
 
@@ -34,9 +37,9 @@ export function parseAnnouncement(v: unknown): Announcement | null {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
   const clean = (s: unknown, max: number) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().slice(0, max) : '');
-  if (o.kind === 'golden_whale') {
+  if (o.kind === 'golden_whale' || o.kind === 'saju_ticket') {
     const name = clean(o.name, socialConfig.displayNameMax);
-    return name ? { kind: 'golden_whale', name } : null;
+    return name ? { kind: o.kind, name } : null;
   }
   if (o.kind === 'notice') {
     const text = clean(o.text, NOTICE_MAX);

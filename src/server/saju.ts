@@ -117,6 +117,14 @@ export function dayPillarOn(date: string): Pillar {
   return pillar(eightChar(clockAt(instant, SEOUL_LMT_MINUTES)).getDay());
 }
 
+/** 한국 날짜(YYYY-MM-DD)가 속한 달의 월주(월건)와 해의 연주 (절기 기준, 그날 정오) */
+export function monthYearPillarsOn(date: string): { month: Pillar; year: Pillar } {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) throw new SajuError(`날짜를 읽지 못했습니다: ${date}`);
+  const ec = eightChar(clockAt(seoulClockToUtc(Number(m[1]), Number(m[2]), Number(m[3]), 12, 0), TERMS_TZ_MINUTES));
+  return { month: pillar(ec.getMonth()), year: pillar(ec.getYear()) };
+}
+
 export function computeSaju(input: BirthInput, today = new Date()): SajuReading {
   const solar = toSolarDate(input, today);
   let timeKnown = false;

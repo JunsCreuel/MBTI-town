@@ -10,7 +10,7 @@ import { DISTRICTS } from '@/shared/districts';
 import { FISH, FORTUNE_FRUIT, FRUITS, type FishDef, type FruitDef } from '@/shared/play';
 import { Sheet } from './Sheet';
 
-export type ItemKind = 'fruit' | 'fish';
+export type ItemKind = 'fruit' | 'fish' | 'ticket';
 
 export function ItemIcon({ kind, id, size = 40, unknown = false }: { kind: ItemKind; id: string; size?: number; unknown?: boolean }) {
   return (
@@ -60,7 +60,11 @@ export function InventorySheet({ state, onClose }: { state: PlayState | null; on
 
           <p className="inventory__coins">
             코인 <b>{state.coins.toLocaleString('ko-KR')}</b>
-            <span className="muted"> · 낚시·열매로 모아 상가 점포를 살 수 있어요</span>
+            {state.tickets > 0 && (
+              <>
+                {' '}· <ItemIcon kind="ticket" id="saju" size={20} /> 사주 이용권 <b>{state.tickets}</b>장
+              </>
+            )}
           </p>
 
           {picked && <ItemDetail pick={picked} count={(picked.kind === 'fruit' ? state.fruits : state.fish)[picked.item.id] ?? 0} />}

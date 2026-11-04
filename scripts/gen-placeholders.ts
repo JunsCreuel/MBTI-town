@@ -15,9 +15,9 @@ import { Bitmap, hex, type RGBA } from './lib/bitmap';
 import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
 import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
 import { petParts } from './lib/pets';
-import { fishIcons, fruitIcons } from './lib/item-icons';
-import { bartenderBearSpec, djRaccoonSpec, guideCatSpec } from './lib/npc';
-import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, marketStallParts, speakerParts } from './lib/play-props';
+import { fishIcons, fruitIcons, ticketIcons } from './lib/item-icons';
+import { bartenderBearSpec, djRaccoonSpec, guideCatSpec, sajuOwlSpec } from './lib/npc';
+import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, marketStallParts, sajuTentParts, speakerParts } from './lib/play-props';
 import { FRUITS } from '../src/shared/play';
 import { PET_ANIMALS } from '../src/shared/pet';
 import { TOWN_TILES, buildHoodMap, buildSpotMap, buildTownMap } from './lib/town-map';
@@ -73,6 +73,7 @@ async function genAvatar() {
   for (const [key, name, spec] of [
     ['char.npc.dj', 'char_npc_dj', djRaccoonSpec()],
     ['char.npc.bartender', 'char_npc_bartender', bartenderBearSpec()],
+    ['char.npc.saju', 'char_npc_saju', sajuOwlSpec()],
   ] as const) {
     const f = `characters/${name}_ph.glb`;
     save(f, await buildSkinned(name, spec));
@@ -169,6 +170,7 @@ async function genTownProps() {
     ['prop.plaza.beacon_club', 'prop_plaza_beacon_club', beaconParts('#C77DFF', 'club')],
     ['prop.plaza.beacon_market', 'prop_plaza_beacon_market', beaconParts('#F2A23A', 'shop')],
     ['prop.market.stall', 'prop_market_stall', marketStallParts()],
+    ['prop.plaza.saju', 'prop_plaza_saju', sajuTentParts()],
     ['prop.club.booth', 'prop_club_booth', djBoothParts()],
     ['prop.club.speaker', 'prop_club_speaker', speakerParts()],
     // 실내 클럽: 벽·출입문·바·소파
@@ -431,7 +433,7 @@ function genIcons() {
 // ───────────────────────── 가방 아이템 아이콘 (열매·물고기) ─────────────────────────
 
 function genItems() {
-  for (const [kind, list] of [['fruit', fruitIcons()], ['fish', fishIcons()]] as const) {
+  for (const [kind, list] of [['fruit', fruitIcons()], ['fish', fishIcons()], ['ticket', ticketIcons()]] as const) {
     for (const { id, svg: body } of list) {
       const file = `items/item_${kind}_${id}_ph.svg`;
       save(file, body);

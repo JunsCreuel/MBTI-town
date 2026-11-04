@@ -434,6 +434,39 @@ export function buildTownMap(tilesetFile: string) {
     taken.push({ x: bc.x, y: bc.y, r: 1.2 });
   }
 
+  // 4-2. 사주상담소 천막 (부엉 도사): 호수 지역 쪽 광장 가장자리 풀밭, 광장을 본다 (천막 2×2칸, 앞 탁자는 장식)
+  {
+    // 광장 둘레(반지름 7.5~13칸)를 모두 훑어 비어 있는 2×2칸 중 원하는 자리에 가장 가까운 곳을 고른다 (나무는 이 뒤에 심어 천막을 비켜 간다)
+    const want = { r: 9.6, a: districtAngle(DISTRICTS.indexOf('water')) - 0.42 };
+    let sj: { x: number; y: number; tiles: [number, number][] } | null = null;
+    let best = Infinity;
+    for (let ty = Math.floor(C - 15); ty <= C + 15; ty++) {
+      for (let tx = Math.floor(C - 15); tx <= C + 15; tx++) {
+        // 2×2칸의 가운데 (칸 경계)
+        const x = tx;
+        const y = ty;
+        const r = Math.hypot(x - C, y - C);
+        if (r < 7.5 || r > 13) continue;
+        const tiles = square(tx - 1, ty - 1, 2, 2);
+        // 광장 돌바닥 가장자리도 된다 (길과 물만 피한다)
+        if (tiles.some(([qx, qy]) => isBlocked(qx + 0.5, qy + 0.5) || [gid('path'), gid('water')].includes(get(ground, qx, qy)))) continue;
+        if (inSpawn(x, y) || taken.some((q) => Math.hypot(q.x - x, q.y - y) < q.r + 0.5)) continue;
+        const da = Math.abs(Math.atan2(Math.sin(Math.atan2(y - C, x - C) - want.a), Math.cos(Math.atan2(y - C, x - C) - want.a)));
+        const score = da * 3 + Math.abs(r - want.r) * 1.5;
+        if (score < best) {
+          best = score;
+          sj = { x, y, tiles };
+        }
+      }
+    }
+    if (!sj) throw new Error('사주상담소 자리를 찾지 못했습니다');
+    // 앞의 상담 탁자 칸도 막는다 (천막은 광장 가운데를 본다)
+    const len = Math.hypot(C - sj.x, C - sj.y);
+    const table: [number, number] = [Math.floor(sj.x + ((C - sj.x) / len) * 1.5), Math.floor(sj.y + ((C - sj.y) / len) * 1.5)];
+    prop('prop.plaza.saju', sj.x, sj.y, [...sj.tiles, table], facing(sj.x, sj.y, C, C));
+    taken.push({ x: sj.x, y: sj.y, r: 2.2 });
+  }
+
   // 나무·덤불·큰 돌: 지역마다 그 지역 식물을 정해진 수만큼 흩어 심는다 (길·집터·명소와 떨어뜨린다)
   DISTRICTS.forEach((district, i) => {
     const f = FLORA[district];
