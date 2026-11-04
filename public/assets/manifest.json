@@ -841,5 +841,11 @@
   },
   "map.market": {
     "file": "maps/market.json"
+  },
+  "ui.icon.dex": {
+    "file": "ui/ui_icon_dex_ph.svg"
+  },
+  "ui.icon.character": {
+    "file": "ui/ui_icon_character_ph.svg"
   }
 }

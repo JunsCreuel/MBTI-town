@@ -1223,8 +1223,8 @@ a:focus-visible {
   z-index: 40;
   transform: translateX(-50%);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  width: min(420px, calc(100% - 24px));
+  grid-template-columns: repeat(7, 1fr);
+  width: min(560px, calc(100% - 16px));
   padding: var(--space-1);
   border-radius: 22px;
   background: rgb(255 255 255 / 0.92);
@@ -1236,10 +1236,12 @@ a:focus-visible {
   display: grid;
   justify-items: center;
   gap: 2px;
+  min-width: 0;
   padding: var(--space-2) 0 6px;
   border-radius: 18px;
   color: var(--color-textSub);
-  font-size: 11px;
+  font-size: 10.5px;
+  white-space: nowrap;
   font-weight: 700;
   text-decoration: none;
 }
@@ -4306,4 +4308,51 @@ a:focus-visible {
 }
 .club-queue__by {
   font-size: 12px;
+}
+
+/* 도감 채운 정도 */
+.dex-progress {
+  position: relative;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  overflow: hidden;
+}
+.dex-progress span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--color-accentSoft);
+}
+.dex-progress b {
+  position: relative;
+  display: block;
+  line-height: 22px;
+  text-align: center;
+  color: var(--color-accentInk);
+  font-size: 12px;
+}
+/* 내 캐릭터: 꾸미기 상점 (준비 중) */
+.cosmetics {
+  display: grid;
+  gap: var(--space-2);
+}
+.cosmetics__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cosmetics__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-textSub);
+  font-size: 13px;
+  font-weight: 600;
 }
