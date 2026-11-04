@@ -106,11 +106,21 @@ Free 플랜은 15분 동안 접속이 없으면 잠들고, 다음 사람이 마�
 | `TOWN_TOKEN_SECRET` | Render 서비스 Environment 탭의 같은 이름 값 (똑같이 복사) | 필수 |
 | `NEXT_PUBLIC_AUTH_PROVIDERS` | 비워 둡니다. 5단계에서 소셜 로그인을 켠 뒤 `kakao,google` 처럼 적습니다 | 선택 |
 | `CRON_SECRET` | 아무 긴 무작위 문자열 (7단계) | 선택 |
+| `YOUTUBE_API_KEY` | 클럽 유튜브 신청곡용 YouTube Data API v3 키 (아래 4-1) | 선택 |
 
 4. 기본 브랜치를 `main` 으로 바꾸지 않았다면: Project **Settings → Git → Production Branch** 를 `main` 으로 바꾸고 **Deployments → Redeploy**.
 5. 배포가 끝나면 주소가 나옵니다. 예: `https://scene.vercel.app`
 
 > `NEXT_PUBLIC_` 으로 시작하는 값은 빌드할 때 화면 코드에 들어갑니다. 바꾼 뒤에는 꼭 **Redeploy** 해야 반영됩니다.
+
+### 4-1. 클럽 유튜브 신청곡 키 (선택)
+
+키가 없으면 DJ 시트의 유튜브 신청은 "준비 중"이라고만 뜹니다 (목록 곡 신청은 그대로 됩니다).
+
+1. [Google Cloud Console](https://console.cloud.google.com/) 에서 프로젝트를 만들고 **APIs & Services → Library → YouTube Data API v3 → Enable**.
+2. **APIs & Services → Credentials → Create credentials → API key**. 만든 키의 **API restrictions** 를 *YouTube Data API v3* 하나로 제한합니다 (키는 웹 서버에서만 쓰고 화면에는 나가지 않으므로 웹사이트 제한은 걸지 않습니다).
+3. Vercel **Settings → Environment Variables** 에 `YOUTUBE_API_KEY` 로 넣고 **Redeploy**. 키는 채팅이나 코드에 붙여 넣지 말고 대시보드에만 넣습니다.
+4. 무료 할당량은 하루 10,000 단위이고, 신청 한 번에 1 단위를 씁니다.
 
 `vercel.json` 이 서버 함수를 서울 지역(`icn1`)에서 돌리도록 정해 둡니다. Supabase 서울과 가까워야 방과 기록이 빨리 열립니다.
 

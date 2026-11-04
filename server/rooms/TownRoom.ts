@@ -7,7 +7,7 @@ import { MOVE_BUDGET_MAX, isMoveAllowed, normalizeAngle, refillMoveBudget } from
 import { isStartPoint, placePoint } from '../../src/shared/spawn';
 import { randomSpawnPoint, type TownMap } from '../../src/shared/townMap';
 import { listenAnnouncements } from '../announce';
-import { verifyTownPass, type TownPass } from '../../src/shared/townToken';
+import { verifyTownPass, verifyYoutube, type TownPass } from '../../src/shared/townToken';
 import {
   ACTIONS, EMOTES, MSG,
   type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type JoinOptions, type MoveMessage,
@@ -15,7 +15,7 @@ import {
   isTownPlace, parseRoomPlace, parseSpot, type Spot,
 } from '../../src/shared/protocol';
 import { clubTrackSeconds, getHoodMap, getSpotMap, getTownMap } from '../assets';
-import { CLUB_TRACKS, advanceLine, lineFromClock, type ClubLine } from '../../src/shared/clubMusic';
+import { CLUB_TRACKS, YOUTUBE_MAX_SECONDS, advanceLine, lineFromClock, type ClubLine, type YoutubeSong } from '../../src/shared/clubMusic';
 import { Player, TownState } from './TownState';
 
 export function townRoomCapacity(): number {
@@ -106,9 +106,22 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     // 클럽: DJ에게 신청곡. 지금 곡은 끝까지 틀고, 신청곡은 대기열에 차례로 쌓여 채널 모두가 같은 순서로 듣는다
     this.onMessage(MSG.musicRequest, (client, message: unknown) => {
       if (this.spot !== 'club') return;
-      const index = (message as { index?: unknown })?.index;
-      if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= CLUB_TRACKS.length) return;
       const reply = (r: MusicResult) => client.send(MSG.musicResult, r);
+      // 목록 곡 번호, 또는 웹 서버가 확인하고 서명한 유튜브 신청표
+      const msg = (message ?? {}) as { index?: unknown; youtube?: { song?: Partial<YoutubeSong>; exp?: unknown; sig?: unknown } };
+      let index = -1;
+      let yt: YoutubeSong | undefined;
+      if (msg.youtube) {
+        const sg = msg.youtube.song ?? {};
+        const song = { id: String(sg.id ?? ''), title: String(sg.title ?? '').slice(0, 80), seconds: Number(sg.seconds) };
+        if (!/^[A-Za-z0-9_-]{11}$/.test(song.id) || !(song.seconds > 0) || song.seconds > YOUTUBE_MAX_SECONDS) return reply({ ok: false, reason: 'closed' });
+        if (!verifyYoutube(song, msg.youtube.exp, msg.youtube.sig)) return reply({ ok: false, reason: 'closed' });
+        yt = song;
+      } else {
+        const i = msg.index;
+        if (typeof i !== 'number' || !Number.isInteger(i) || i < 0 || i >= CLUB_TRACKS.length) return;
+        index = i;
+      }
       const now = Date.now();
       if (now - (this.lastRequestAt.get(client.sessionId) ?? 0) < townConfig.musicRequestCooldownMs) return reply({ ok: false, reason: 'cooldown' });
       const seconds = clubTrackSeconds();
@@ -117,7 +130,7 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
       if (line.queue.length >= townConfig.musicQueueMax) return reply({ ok: false, reason: 'full' });
       if (line.queue.filter((q) => q.who === client.sessionId).length >= townConfig.musicQueuePerPerson) return reply({ ok: false, reason: 'mine' });
       this.lastRequestAt.set(client.sessionId, now);
-      line.queue.push({ index, by: this.passes.get(client.sessionId)?.name ?? '', who: client.sessionId });
+      line.queue.push({ index, by: this.passes.get(client.sessionId)?.name ?? '', who: client.sessionId, ...(yt ? { yt } : {}) });
       this.music = line;
       this.broadcast(MSG.music, { ...line, serverNow: now } satisfies MusicState);
       reply({ ok: true, position: line.queue.length });

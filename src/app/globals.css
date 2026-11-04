@@ -4479,3 +4479,58 @@ a:focus-visible {
   font-size: 13px;
   font-weight: 600;
 }
+
+/* 클럽 유튜브 신청곡: 화면에 보이는 유튜브 플레이어 (유튜브 정책: 200×200 이상, 가리지 않는다) */
+.club-yt {
+  position: relative;
+  width: min(356px, calc(100vw - 2 * var(--space-3)));
+  height: 200px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-text);
+  box-shadow: 0 4px 16px var(--color-shadow);
+  /* 완전히 불투명한 플레이어가 3D 캔버스 위에 있으면 크롬이 캔버스의 엉뚱한 자리(위아래가 뒤집힌 곳)를 비워 그리는 일이 있다.
+     눈에 띄지 않을 만큼만 투명하게 해 그 최적화를 끈다 */
+  opacity: 0.999;
+}
+.club-yt--hidden {
+  display: none;
+}
+.club-yt__player,
+.club-yt__player iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+.club-yt__error {
+  position: absolute;
+  inset: auto 0 0;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 12px;
+}
+/* DJ 시트: 유튜브 링크 신청 */
+.club-yt-form {
+  display: flex;
+  gap: var(--space-2);
+}
+.club-yt-form input {
+  flex: 1;
+  min-width: 0;
+}
+.club-yt-rule {
+  margin: 0;
+  font-size: 12px;
+}
+.club-queue__yt {
+  margin-right: var(--space-1);
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  background: var(--color-youtube);
+  color: var(--color-accentText);
+  font-size: 11px;
+  font-weight: 700;
+}

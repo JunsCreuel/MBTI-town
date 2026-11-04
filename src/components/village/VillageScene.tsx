@@ -24,6 +24,7 @@ import { Terrain } from './Terrain';
 import { BeaconSigns } from './BeaconSigns';
 import { GuideNpc } from './GuideNpc';
 import { ClubNpcs } from './ClubNpcs';
+import { ClubScreen } from './ClubScreen';
 import { MarketStalls } from './Market';
 import { SajuNpc } from './SajuNpc';
 
@@ -861,6 +862,7 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <AdaptiveResolution />
         <FruitDrops />
         <ClubFx />
+        <ClubScreen />
         <BeaconSigns />
         <GuideNpc />
         <ClubNpcs />
