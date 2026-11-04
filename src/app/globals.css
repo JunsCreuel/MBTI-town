@@ -4745,6 +4745,8 @@ a:focus-visible {
   .tarot-fan__card {
     transition: none;
   }
+}
+
 /* 운영: 주민 코인·사주 이용권 */
 .admin-user__wallet {
   font-size: 13px;
