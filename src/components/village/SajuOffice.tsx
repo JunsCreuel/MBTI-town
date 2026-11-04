@@ -1,8 +1,9 @@
 'use client';
 
 // 사주상담소 (부엉 도사): 복채(코인)를 내고 오늘·내일·이번 주·이번 달 풀이를 본다. 같은 기간은 다시 봐도 무료.
+// 타로 칸에서는 오늘의 카드 한 장, 과거·현재·미래 세 장을 본다 (TarotPanel).
 // 상세 풀이는 사주 이용권으로 본다 (유료 결제는 준비 중). 풀이는 서버가 내 사주로 만든다 (src/shared/sajuReading.ts).
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { call, errorMessage } from '@/lib/api';
 import type { SajuOffice } from '@/server/scene/service';
 import { SAJU_KINDS, SAJU_KIND_NAME, type SajuKind, type SajuResult } from '@/shared/sajuReading';
@@ -10,6 +11,7 @@ import { Sheet } from '../app/Sheet';
 import { ItemIcon } from '../app/Inventory';
 import { SAJU_NAME } from './npc';
 import { sajuNpcState } from './SajuNpc';
+import { TarotPanel } from './TarotPanel';
 
 type ReadResponse = { reading: SajuResult; office: SajuOffice; paid: number; usedTicket: boolean };
 
@@ -18,6 +20,9 @@ export function SajuSheet({ onClose }: { onClose: () => void }) {
   const [reading, setReading] = useState<SajuResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [tab, setTab] = useState<'saju' | 'tarot'>('saju');
+  const [tarotTitle, setTarotTitle] = useState<string | null>(null);
+  const onTarotTitle = useCallback((t: string | null) => setTarotTitle(t), []);
 
   useEffect(() => {
     sajuNpcState.talking = true;
@@ -46,20 +51,40 @@ export function SajuSheet({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <Sheet title={reading ? SAJU_KIND_NAME[reading.kind] : `${SAJU_NAME}의 사주상담소`} onClose={onClose}>
+    <Sheet title={tab === 'tarot' ? (tarotTitle ?? `${SAJU_NAME}의 타로`) : reading ? SAJU_KIND_NAME[reading.kind] : `${SAJU_NAME}의 사주상담소`} onClose={onClose}>
       <div className="saju">
-        {reading ? (
+        {!reading && !tarotTitle && (
+          <div className="inventory__tabs" role="tablist">
+            {(['saju', 'tarot'] as const).map((t) => (
+              <button
+                key={t}
+                role="tab"
+                aria-selected={tab === t}
+                className={`chip${tab === t ? ' chip--on' : ''}`}
+                onClick={() => {
+                  setTab(t);
+                  setNote(null);
+                }}
+              >
+                {t === 'saju' ? '사주' : '타로'}
+              </button>
+            ))}
+          </div>
+        )}
+        {office && !reading && !tarotTitle && (
+          <p className="saju__wallet">
+            코인 <b>{office.coins.toLocaleString('ko-KR')}</b> · 사주 이용권 <b>{office.tickets}</b>장
+          </p>
+        )}
+        {tab === 'tarot' ? (
+          <TarotPanel office={office} onOffice={setOffice} onTitle={onTarotTitle} onNote={setNote} />
+        ) : reading ? (
           <ReadingView reading={reading} onBack={() => setReading(null)} />
         ) : (
           <>
             <p className="bar-line">
               <b>{SAJU_NAME}</b> 어서 오시게. 복채를 내면 자네 사주로 앞날을 풀어 주지.
             </p>
-            {office && (
-              <p className="saju__wallet">
-                코인 <b>{office.coins.toLocaleString('ko-KR')}</b> · 사주 이용권 <b>{office.tickets}</b>장
-              </p>
-            )}
             <div className="saju__menu">
               {SAJU_KINDS.map((k) => (
                 <button key={k} className="saju__pick" disabled={busy || !office} onClick={() => void read(k)}>

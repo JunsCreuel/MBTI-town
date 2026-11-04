@@ -856,5 +856,74 @@
   },
   "ui.icon.character": {
     "file": "ui/ui_icon_character_ph.svg"
+  },
+  "item.tarot.fool": {
+    "file": "items/item_tarot_fool_ph.svg"
+  },
+  "item.tarot.magician": {
+    "file": "items/item_tarot_magician_ph.svg"
+  },
+  "item.tarot.high_priestess": {
+    "file": "items/item_tarot_high_priestess_ph.svg"
+  },
+  "item.tarot.empress": {
+    "file": "items/item_tarot_empress_ph.svg"
+  },
+  "item.tarot.emperor": {
+    "file": "items/item_tarot_emperor_ph.svg"
+  },
+  "item.tarot.hierophant": {
+    "file": "items/item_tarot_hierophant_ph.svg"
+  },
+  "item.tarot.lovers": {
+    "file": "items/item_tarot_lovers_ph.svg"
+  },
+  "item.tarot.chariot": {
+    "file": "items/item_tarot_chariot_ph.svg"
+  },
+  "item.tarot.strength": {
+    "file": "items/item_tarot_strength_ph.svg"
+  },
+  "item.tarot.hermit": {
+    "file": "items/item_tarot_hermit_ph.svg"
+  },
+  "item.tarot.wheel": {
+    "file": "items/item_tarot_wheel_ph.svg"
+  },
+  "item.tarot.justice": {
+    "file": "items/item_tarot_justice_ph.svg"
+  },
+  "item.tarot.hanged_man": {
+    "file": "items/item_tarot_hanged_man_ph.svg"
+  },
+  "item.tarot.death": {
+    "file": "items/item_tarot_death_ph.svg"
+  },
+  "item.tarot.temperance": {
+    "file": "items/item_tarot_temperance_ph.svg"
+  },
+  "item.tarot.devil": {
+    "file": "items/item_tarot_devil_ph.svg"
+  },
+  "item.tarot.tower": {
+    "file": "items/item_tarot_tower_ph.svg"
+  },
+  "item.tarot.star": {
+    "file": "items/item_tarot_star_ph.svg"
+  },
+  "item.tarot.moon": {
+    "file": "items/item_tarot_moon_ph.svg"
+  },
+  "item.tarot.sun": {
+    "file": "items/item_tarot_sun_ph.svg"
+  },
+  "item.tarot.judgement": {
+    "file": "items/item_tarot_judgement_ph.svg"
+  },
+  "item.tarot.world": {
+    "file": "items/item_tarot_world_ph.svg"
+  },
+  "item.tarot.back": {
+    "file": "items/item_tarot_back_ph.svg"
   }
 }

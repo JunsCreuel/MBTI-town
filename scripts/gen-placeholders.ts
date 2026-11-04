@@ -16,6 +16,7 @@ import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
 import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
 import { petParts } from './lib/pets';
 import { fishIcons, fruitIcons, ticketIcons } from './lib/item-icons';
+import { tarotCards } from './lib/tarot-cards';
 import { bartenderBearSpec, djRaccoonSpec, guideCatSpec, sajuOwlSpec } from './lib/npc';
 import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, marketStallParts, sajuTentParts, speakerParts } from './lib/play-props';
 import { FRUITS } from '../src/shared/play';
@@ -436,7 +437,7 @@ function genIcons() {
 // ───────────────────────── 가방 아이템 아이콘 (열매·물고기) ─────────────────────────
 
 function genItems() {
-  for (const [kind, list] of [['fruit', fruitIcons()], ['fish', fishIcons()], ['ticket', ticketIcons()]] as const) {
+  for (const [kind, list] of [['fruit', fruitIcons()], ['fish', fishIcons()], ['ticket', ticketIcons()], ['tarot', tarotCards()]] as const) {
     for (const { id, svg: body } of list) {
       const file = `items/item_${kind}_${id}_ph.svg`;
       save(file, body);

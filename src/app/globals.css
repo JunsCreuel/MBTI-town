@@ -3796,14 +3796,15 @@ a:focus-visible {
   cursor: pointer;
 }
 .npc-dialog__choices {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
 }
 .npc-dialog__choice {
-  min-height: 38px;
-  padding: var(--space-2) var(--space-3);
+  min-height: 36px;
+  padding: var(--space-1) var(--space-3);
   border: 2px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: 999px;
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
@@ -4533,4 +4534,215 @@ a:focus-visible {
   color: var(--color-accentText);
   font-size: 11px;
   font-weight: 700;
+}
+
+/* 사주상담소 타로: 점 고르기, 뒤집힌 카드 늘어놓기, 카드 뒤집기 */
+.tarot {
+  display: grid;
+  gap: var(--space-3);
+}
+.tarot__spread {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 64px;
+  padding: var(--space-2) var(--space-3);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.tarot__spread:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.tarot__spread-cards {
+  display: inline-flex;
+  flex: none;
+}
+.tarot__spread-cards img + img {
+  margin-left: -14px;
+}
+.tarot__spread-name {
+  flex: 1;
+}
+.tarot__three {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bgAlt);
+}
+.tarot__three-title {
+  margin: 0;
+  font-weight: 800;
+}
+.tarot__topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.tarot__topics .chip {
+  position: relative;
+}
+/* 오늘 이미 본 주제 */
+.tarot__seen {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: var(--space-1);
+  border-radius: 50%;
+  background: var(--color-gold);
+  vertical-align: 2px;
+}
+.tarot__count {
+  margin: 0;
+  font-size: 14px;
+}
+.tarot__count b {
+  color: var(--color-accentInk);
+}
+.tarot-fan {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: var(--space-2) 6px;
+  margin: 0;
+  padding: var(--space-2) 0;
+  list-style: none;
+  justify-items: center;
+}
+.tarot-fan li {
+  animation: tarot-deal 0.45s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+  animation-delay: calc(var(--i) * 22ms);
+}
+.tarot-fan__card {
+  position: relative;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+.tarot-fan__card:not(:disabled):hover {
+  transform: translateY(-4px);
+}
+.tarot-fan__card:disabled {
+  cursor: default;
+}
+.tarot-fan__card--on {
+  transform: translateY(-10px);
+  filter: drop-shadow(0 0 6px var(--color-goldGlow));
+}
+.tarot-fan__no {
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+  transform: translateX(-50%);
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-accentText);
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.tarot-card__img {
+  display: block;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px var(--color-shadow);
+}
+.tarot-card__img--rev {
+  transform: rotate(180deg);
+}
+@keyframes tarot-deal {
+  from { opacity: 0; transform: translateY(-14px) rotate(-6deg); }
+  to { opacity: 1; transform: none; }
+}
+.tarot-result__cards {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+.tarot-result__card {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  min-width: 0;
+}
+.tarot-result__role {
+  color: var(--color-accentInk);
+  font-size: 12px;
+  font-weight: 800;
+}
+.tarot-flip {
+  display: grid;
+  perspective: 700px;
+}
+.tarot-flip > div {
+  grid-area: 1 / 1;
+  backface-visibility: hidden;
+  transition: transform 0.6s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+.tarot-flip__face {
+  transform: rotateY(180deg);
+}
+.tarot-flip--open .tarot-flip__back {
+  transform: rotateY(-180deg);
+}
+.tarot-flip--open .tarot-flip__face {
+  transform: rotateY(0deg);
+}
+.tarot-result__name {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  text-align: center;
+}
+.tarot-result__numeral {
+  color: var(--color-goldInk);
+  font-size: 12px;
+}
+.tarot-result__rev {
+  margin-left: var(--space-1);
+  padding: 1px var(--space-2);
+  border-radius: 999px;
+  background: var(--color-goldSoft);
+  color: var(--color-goldInk);
+  font-size: 11px;
+  vertical-align: 1px;
+}
+.tarot-result__keywords {
+  color: var(--color-accentInk);
+  font-size: 13px;
+  font-weight: 700;
+}
+.tarot-result__keywords--center {
+  text-align: center;
+}
+.tarot-result__advice {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: linear-gradient(100deg, var(--color-goldSoft), var(--color-goldBright));
+}
+.tarot-result__advice h4 {
+  margin: 0 0 2px;
+  color: var(--color-goldInk);
+  font-size: 13px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tarot-fan li {
+    animation: none;
+  }
+  .tarot-flip > div,
+  .tarot-fan__card {
+    transition: none;
+  }
 }

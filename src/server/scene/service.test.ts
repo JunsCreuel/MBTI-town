@@ -666,6 +666,35 @@ describe('사주상담소', () => {
     expect((await service.sajuOffice(v)).coins).toBe(100 - Object.values(sajuConfig.fee).reduce((a, b) => a + b, 0));
   });
 
+  it('타로: 복채를 내고 카드를 고르면 뽑아 주고, 같은 날 같은 점은 다시 봐도 무료로 같은 카드', async () => {
+    const v = await user();
+    await onboard(v, '타로손님');
+    await expectError(service.readTarot(null, { spread: 'one' }), 'login_required');
+    await expectError(service.readTarot(v, { spread: 'five' }), 'bad_request');
+    await expectError(service.readTarot(v, { spread: 'three', topic: 'luck' }), 'bad_request');
+    expect(await service.sajuOffice(v)).toMatchObject({ tarotFee: sajuConfig.tarotFee, tarotSeen: { one: false, three: { general: false, love: false } } });
+    await expectError(service.readTarot(v, { spread: 'one', picks: [3] }), 'conflict');
+    await setCoins(v, 100);
+    const one = await service.readTarot(v, { spread: 'one', picks: [5] });
+    expect(one).toMatchObject({ paid: sajuConfig.tarotFee.one, office: { coins: 100 - sajuConfig.tarotFee.one, tarotSeen: { one: true } } });
+    expect(one.reading.cards).toHaveLength(1);
+    expect(one.reading.cards[0].role).toBe('today');
+    expect(one.reading.sections.map((x) => x.title)).toEqual(['연애', '일·공부', '재물']);
+    const oneAgain = await service.readTarot(v, { spread: 'one', picks: [9] });
+    expect(oneAgain.paid).toBe(0);
+    expect(oneAgain.reading).toEqual(one.reading);
+    // 세 장: 주제마다 따로 (고른 자리가 이상하면 앞에서부터)
+    const love = await service.readTarot(v, { spread: 'three', topic: 'love', picks: [1, 1, 99] });
+    expect(love.paid).toBe(sajuConfig.tarotFee.three);
+    expect(love.reading.cards.map((c) => c.role)).toEqual(['past', 'present', 'future']);
+    expect(new Set(love.reading.cards.map((c) => c.id)).size).toBe(3);
+    expect(love.office.tarotSeen.three).toMatchObject({ love: true, work: false });
+    expect((await service.readTarot(v, { spread: 'three', topic: 'love', picks: [0, 1, 2] })).reading).toEqual(love.reading);
+    const work = await service.readTarot(v, { spread: 'three', topic: 'work', picks: [4, 8, 12] });
+    expect(work.paid).toBe(sajuConfig.tarotFee.three);
+    expect((await service.sajuOffice(v)).coins).toBe(100 - sajuConfig.tarotFee.one - 2 * sajuConfig.tarotFee.three);
+  });
+
   it('상세 풀이는 이용권으로만 (결제는 준비 중), 한 장 쓰면 그해에는 다시 무료', async () => {
     const v = await user();
     await onboard(v, '상세손님');

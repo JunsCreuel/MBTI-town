@@ -28,6 +28,14 @@ function walkable(start: { x: number; z: number }, path: { x: number; z: number 
 }
 
 describe('마을 맵', () => {
+  it('사주상담소 천막 앞(카메라 쪽)과 양옆에는 나무·덤불·돌이 없다 (천막을 가리지 않게)', () => {
+    const tent = map.props.find((p) => p.key === 'prop.plaza.saju')!;
+    expect(tent).toBeDefined();
+    const plants = map.props.filter((p) => /^prop\.nature\./.test(p.key));
+    const near = plants.filter((p) => p.x > tent.x - 3.6 && p.x < tent.x + 3.6 && p.z > tent.z - 2.4 && p.z < tent.z + 6);
+    expect(near.map((p) => p.key)).toEqual([]);
+  });
+
   it('레이어를 읽는다', () => {
     expect(map.width).toBe(88);
     expect(map.height).toBe(88);

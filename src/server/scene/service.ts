@@ -8,6 +8,7 @@ import { NOTICE_MAX, parseAnnouncement, type Announcement } from '@/shared/annou
 import { AVATAR_COLORS, cleanAvatar, type Avatar } from '@/shared/avatar';
 import { isShopColor, isShopSlot, refundFor, shopLabel, type MarketView, type ShopColor } from '@/shared/market';
 import { SAJU_KINDS, periodReading, premiumReading, weekReading, type SajuKind, type SajuResult } from '@/shared/sajuReading';
+import { TAROT_TOPICS, drawTarot, tarotReading, validPicks, type TarotResult, type TarotSpread, type TarotTopic } from '@/shared/tarot';
 import { bgmTrack } from '@/shared/bgm';
 import { cleanTaste, isDistrict, type District, type Taste } from '@/shared/districts';
 import { moderate } from '@/shared/moderation';
@@ -354,7 +355,14 @@ export interface SajuOffice {
   /** 지금 기간의 풀이를 이미 봤는지 (다시 보면 무료) */
   seen: Record<SajuKind | 'premium', boolean>;
   premiumPriceLabel: string;
+  /** 타로 복채와 오늘 이미 본 점 (한 장, 세 장은 주제마다) */
+  tarotFee: typeof sajuConfig.tarotFee;
+  tarotSeen: { one: boolean; three: Record<TarotTopic, boolean> };
 }
+
+/** 타로 저장 키: 종류(kind)와 기간(period: 한 장은 날짜, 세 장은 날짜:주제) */
+const tarotKey = (spread: TarotSpread, topic: TarotTopic, today: string) =>
+  spread === 'one' ? { kind: 'tarot_one', period: today } : { kind: 'tarot_three', period: `${today}:${topic}` };
 
 const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
 /** YYYY-MM-DD에 날짜를 더한다 */
@@ -1107,13 +1115,21 @@ export class SceneService {
     const p = await this.requireOnboarded(viewer);
     const periods = sajuPeriods(localDate(this.now()));
     const keys = (['premium', ...SAJU_KINDS] as const).map((kind) => ({ kind, period: periods[kind].key }));
-    const [coins, tickets, seen] = await Promise.all([this.store.coinsOf(p.id), this.store.ticketsOf(p.id), this.store.sajuReadingKeys(p.id, keys)]);
+    const today = localDate(this.now());
+    const tarotKeys = [tarotKey('one', 'general', today), ...TAROT_TOPICS.map((t) => tarotKey('three', t, today))];
+    const [coins, tickets, seen] = await Promise.all([this.store.coinsOf(p.id), this.store.ticketsOf(p.id), this.store.sajuReadingKeys(p.id, [...keys, ...tarotKeys])]);
+    const has = (k: { kind: string; period: string }) => seen.has(`${k.kind}:${k.period}`);
     return {
       coins,
       tickets,
       fee: sajuConfig.fee,
-      seen: Object.fromEntries(keys.map((k) => [k.kind, seen.has(`${k.kind}:${k.period}`)])) as SajuOffice['seen'],
+      seen: Object.fromEntries(keys.map((k) => [k.kind, has(k)])) as SajuOffice['seen'],
       premiumPriceLabel: sajuConfig.premiumPriceLabel,
+      tarotFee: sajuConfig.tarotFee,
+      tarotSeen: {
+        one: has(tarotKey('one', 'general', today)),
+        three: Object.fromEntries(TAROT_TOPICS.map((t) => [t, has(tarotKey('three', t, today))])) as Record<TarotTopic, boolean>,
+      },
     };
   }
 
@@ -1152,6 +1168,36 @@ export class SceneService {
       return done((await this.store.getSajuReading<SajuResult>(p.id, k, period.key))!, 0, false);
     }
     return done(reading, fee, false);
+  }
+
+  /**
+   * 타로: 복채를 내고 카드를 뽑는다. 같은 날 같은 점(한 장, 또는 세 장의 같은 주제)은 다시 봐도 무료이고 같은 카드가 나온다.
+   * input: { spread: 'one' | 'three', topic (세 장일 때), picks: 늘어놓은 카드 중 고른 자리 }
+   */
+  async readTarot(viewer: Viewer | null, input: Record<string, unknown>): Promise<{ reading: TarotResult; office: SajuOffice; paid: number }> {
+    const p = await this.requireOnboarded(viewer);
+    const spread = input.spread;
+    if (spread !== 'one' && spread !== 'three') throw new SceneError('bad_request', '타로 종류가 올바르지 않아요.');
+    const topic: TarotTopic = spread === 'one' ? 'general' : (input.topic as TarotTopic);
+    if (!(TAROT_TOPICS as readonly unknown[]).includes(topic)) throw new SceneError('bad_request', '궁금한 주제를 골라 주세요.');
+    const today = localDate(this.now());
+    const key = tarotKey(spread, topic, today);
+    const done = async (reading: TarotResult, paid: number) => ({ reading, office: await this.sajuOffice(viewer), paid });
+    const old = await this.store.getSajuReading<TarotResult>(p.id, key.kind, key.period);
+    if (old) return done(old, 0);
+
+    const picks = validPicks(spread, input.picks) ? input.picks : spread === 'one' ? [0] : [0, 1, 2];
+    const reading = tarotReading(spread, topic, drawTarot(spread, picks, sajuConfig.tarotReversedChance), dayLabel(today));
+    const fee = sajuConfig.tarotFee[spread];
+    if ((await this.store.spendCoins(p.id, fee)) === null) {
+      throw new SceneError('conflict', `복채가 모자라요. ${fee}코인이 필요해요. 낚시와 열매 따기로 모아 보세요.`);
+    }
+    if (!(await this.store.saveSajuReading(p.id, key.kind, key.period, reading, this.now()))) {
+      // 동시에 두 번 눌렀으면 먼저 저장된 카드를 보여 주고 복채는 돌려준다
+      await this.store.addCoins(p.id, fee);
+      return done((await this.store.getSajuReading<TarotResult>(p.id, key.kind, key.period))!, 0);
+    }
+    return done(reading, fee);
   }
 
   // ───────────────────────── 상가 ─────────────────────────

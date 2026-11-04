@@ -135,6 +135,18 @@ function canvas(size: number) {
     });
     for (const [fx, fy] of footprint) block(fx, fy);
   };
+  /** 놓은 소품 중 test에 맞는 것을 뺀다 (한 칸짜리 소품만: 그 칸을 다시 지나갈 수 있게 한다). 뺀 개수 */
+  const unprop = (test: (key: string, x: number, y: number) => boolean) => {
+    let n = 0;
+    for (let i = objects.length - 1; i >= 0; i--) {
+      const o = objects[i] as { type: string; name: string; x: number; y: number };
+      if (o.type !== 'prop' || !test(o.name, o.x / T, o.y / T)) continue;
+      objects.splice(i, 1);
+      set(collision, Math.floor(o.x / T), Math.floor(o.y / T), 0);
+      n++;
+    }
+    return n;
+  };
   /** (x, y)에서 (tx, ty)를 바라보는 Tiled 회전 각도 (모델 정면 = +Z = 남쪽) */
   const facing = (x: number, y: number, tx: number, ty: number) => Math.round((-Math.atan2(tx - x, ty - y) * 180) / Math.PI);
   /** 회전한 직사각형이 덮는 칸 */
@@ -236,13 +248,13 @@ function canvas(size: number) {
     };
   };
   return {
-    ground, districtGrid, set, get, block, isBlocked, polar, taken, prop, facing, rectTiles, square, at, snap,
+    ground, districtGrid, set, get, block, isBlocked, polar, taken, prop, unprop, facing, rectTiles, square, at, snap,
     lot, gate, onPath, spawnRect, toTiled,
   };
 }
 
 export function buildTownMap(tilesetFile: string) {
-  const { ground, districtGrid, set, get, block, isBlocked, polar, taken, prop, facing, rectTiles, square, at, snap, lot, gate, onPath, spawnRect, toTiled } =
+  const { ground, districtGrid, set, get, block, isBlocked, polar, taken, prop, unprop, facing, rectTiles, square, at, snap, lot, gate, onPath, spawnRect, toTiled } =
     canvas(SIZE);
   const rand = rng(20261102);
 
@@ -434,6 +446,9 @@ export function buildTownMap(tilesetFile: string) {
     taken.push({ x: bc.x, y: bc.y, r: 1.2 });
   }
 
+  /** 식물을 심지 않는 네모 (명소를 가리지 않게) */
+  const keepClear: { x0: number; x1: number; y0: number; y1: number }[] = [];
+
   // 4-2. 사주상담소 천막 (부엉 도사): 호수 지역 쪽 광장 가장자리 풀밭, 광장을 본다 (천막 2×2칸, 앞 탁자는 장식)
   {
     // 광장 둘레(반지름 7.5~13칸)를 모두 훑어 비어 있는 2×2칸 중 원하는 자리에 가장 가까운 곳을 고른다 (나무는 이 뒤에 심어 천막을 비켜 간다)
@@ -464,7 +479,13 @@ export function buildTownMap(tilesetFile: string) {
     const len = Math.hypot(C - sj.x, C - sj.y);
     const table: [number, number] = [Math.floor(sj.x + ((C - sj.x) / len) * 1.5), Math.floor(sj.y + ((C - sj.y) / len) * 1.5)];
     prop('prop.plaza.saju', sj.x, sj.y, [...sj.tiles, table], facing(sj.x, sj.y, C, C));
-    taken.push({ x: sj.x, y: sj.y, r: 2.2 });
+    taken.push({ x: sj.x, y: sj.y, r: 2.8 });
+    // 카메라는 남쪽에서 북쪽을 본다: 천막 앞(남쪽)과 양옆에 큰 나무가 서면 천막을 가린다. 그 넓이는 비워 둔다
+    const zone = { x0: sj.x - 3.6, x1: sj.x + 3.6, y0: sj.y - 2.4, y1: sj.y + 6 };
+    keepClear.push(zone);
+    // 먼저 심은 광장 둘레 나무도 이 넓이에 있으면 뺀다
+    const plazaTreeKeys = new Set(PLAZA_TREES.map(([k]) => k));
+    unprop((key, x, y) => plazaTreeKeys.has(key) && x > zone.x0 && x < zone.x1 && y > zone.y0 && y < zone.y1);
   }
 
   // 나무·덤불·큰 돌: 지역마다 그 지역 식물을 정해진 수만큼 흩어 심는다 (길·집터·명소와 떨어뜨린다)
@@ -482,6 +503,7 @@ export function buildTownMap(tilesetFile: string) {
         // 나무는 길가에도 심는다 (가로수). 길 위와 스폰 자리는 비운다.
         if (isBlocked(x, y) || (kind === 'tree' ? onPathTile(x, y) : onPath(x, y)) || inSpawn(x, y)) continue;
         if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + SPACING[kind])) continue;
+        if (keepClear.some((z) => x > z.x0 && x < z.x1 && y > z.y0 && y < z.y1)) continue;
         prop(pickWeighted(list, rand()), x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360), district);
         taken.push({ x, y, r: SPACING[kind] });
         planted++;

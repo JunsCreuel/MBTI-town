@@ -131,6 +131,10 @@ export const sajuConfig = {
   premiumPriceLabel: '3,900원',
   /** 도사 앞 이 거리(칸) 안이면 "사주 보기" 버튼 */
   reach: 2.6,
+  /** 타로 복채 (코인): 오늘의 카드 한 장, 과거·현재·미래 세 장(주제마다). 같은 날 같은 점은 다시 봐도 무료 */
+  tarotFee: { one: 10, three: 30 },
+  /** 카드가 거꾸로 나올 확률 (재미로 보는 점이라 반보다 조금 낮게) */
+  tarotReversedChance: 0.35,
 } as const;
 
 /** 상가: 중앙광장 비콘(언덕 지역 쪽)으로 가는 섬의 점포 20칸 (PROJECT_GUIDE.md 3장) */

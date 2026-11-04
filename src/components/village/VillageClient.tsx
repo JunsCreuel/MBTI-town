@@ -740,9 +740,9 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
             )}
 
             {nearSaju && !sajuOpen && !picked && !nearBeacon && (
-              <button className="door-btn" onClick={() => (guest ? setToast('집이 있는 주민만 사주를 볼 수 있어요') : setSajuOpen(true))}>
+              <button className="door-btn" onClick={() => (guest ? setToast('집이 있는 주민만 사주와 타로를 볼 수 있어요') : setSajuOpen(true))}>
                 <Icon name="sparkle" size={20} />
-                {SAJU_NAME}에게 사주 보기
+                {SAJU_NAME}에게 사주·타로 보기
               </button>
             )}
 
