@@ -11,6 +11,7 @@ import { profileTag, type AccessoryId, type AvatarColor } from '@/shared/avatar'
 import { CHARACTER_CLIPS, CHARACTER_HEIGHT, HEAD_SOCKET, TINT_MATERIAL, type ClipName } from '@/shared/character';
 import { lerpAngle, moveWithCollision, yawFromVector } from '@/shared/movement';
 import { FishingRig } from './FishingRig';
+import { drunkLevel } from './drunk';
 import type { FishingState } from './context';
 import { findPath, type Point } from '@/shared/pathfinding';
 import { castTarget, groundHeightAt } from '@/shared/townMap';
@@ -129,6 +130,9 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
       playingStart.current = start;
     }
     rod.visible = clip === 'fish';
+    // 취했으면 (내 화면에서만) 몸이 휘청인다
+    const lean = self ? drunkLevel() : 0;
+    model.rotation.z = lean > 0 ? Math.sin(now() * 1.8) * 0.09 * lean : 0;
     mixer.update(Math.min(dt, 0.1));
 
     const em = emote.current!;
@@ -228,10 +232,15 @@ export function LocalPlayer() {
     }
 
     const before = { x: a.x, z: a.z };
+    // 취했으면 걷는 방향이 좌우로 흔들린다 (클럽 바에서 세 잔부터)
+    const sway = drunkLevel();
+    const drift = sway > 0 ? (Math.sin(now() * 1.4) * 0.5 + Math.sin(now() * 3.3) * 0.18) * sway : 0;
     if (kx || kz) {
       path.current = null;
       const len = Math.hypot(kx, kz);
-      const p = moveWithCollision(map, a.x, a.z, (kx / len) * step, (kz / len) * step);
+      const ux = (kx / len) * Math.cos(drift) - (kz / len) * Math.sin(drift);
+      const uz = (kx / len) * Math.sin(drift) + (kz / len) * Math.cos(drift);
+      const p = moveWithCollision(map, a.x, a.z, ux * step, uz * step);
       a.x = p.x;
       a.z = p.z;
       facing.current = yawFromVector(kx, kz, facing.current);
@@ -246,8 +255,11 @@ export function LocalPlayer() {
         a.z = next.z;
         path.current.shift();
       } else {
-        a.x += (dx / dist) * step;
-        a.z += (dz / dist) * step;
+        const ux = (dx / dist) * Math.cos(drift * 0.6) - (dz / dist) * Math.sin(drift * 0.6);
+        const uz = (dx / dist) * Math.sin(drift * 0.6) + (dz / dist) * Math.cos(drift * 0.6);
+        const p = moveWithCollision(map, a.x, a.z, ux * step, uz * step);
+        a.x = p.x;
+        a.z = p.z;
       }
       facing.current = yawFromVector(dx, dz, facing.current);
     }

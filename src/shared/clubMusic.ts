@@ -54,3 +54,16 @@ export function clubScheduleAt(epochMs: number, seconds: readonly number[]): { i
   const first = seconds.findIndex((x) => x > 0);
   return { index: first, offset: 0, left: seconds[first] };
 }
+
+/**
+ * 신청곡부터 틀 때: startIndex번 곡을 elapsedMs 전에 시작해서, 끝나면 다음 곡으로 이어 간 경우의 지금 곡과 위치.
+ * (클럽 채널에서 누가 DJ에게 곡을 신청하면 그 채널 모두가 이 순서로 듣는다)
+ */
+export function clubScheduleFrom(elapsedMs: number, seconds: readonly number[], startIndex: number): { index: number; offset: number; left: number } | null {
+  const n = seconds.length;
+  if (!n || startIndex < 0 || startIndex >= n) return null;
+  const order = Array.from({ length: n }, (_, k) => seconds[(startIndex + k) % n]);
+  const s = clubScheduleAt(Math.max(0, elapsedMs), order);
+  return s && { ...s, index: (startIndex + s.index) % n };
+}
+

@@ -7,9 +7,11 @@ import { join, relative } from 'node:path';
 const ROOT = join(import.meta.dirname, '..', 'public', 'assets');
 const SCREEN_BUDGET_BYTES = 3 * 1024 * 1024;
 // 화면마다 처음 불러오는 키 접두사 (BGM은 누를 때 받으므로 뺀다). 화면마다 3MB를 넘지 않는다.
-const SCREENS: { name: string; prefixes: string[] }[] = [
-  { name: '마을 첫 화면', prefixes: ['char.', 'map.', 'prop.', 'ui.'] },
-  { name: '나의 방 첫 화면', prefixes: ['char.', 'furn.', 'room.', 'ui.'] },
+// except = 그 화면에서는 받지 않는 키 (놀이터·클럽에서만 받는 것)
+const SPOT_ONLY = ['prop.club.', 'char.npc.dj', 'char.npc.bartender', 'map.club', 'map.fishing'];
+const SCREENS: { name: string; prefixes: string[]; except?: string[] }[] = [
+  { name: '마을 첫 화면', prefixes: ['char.', 'map.', 'prop.', 'ui.'], except: SPOT_ONLY },
+  { name: '나의 방 첫 화면', prefixes: ['char.', 'furn.', 'room.', 'ui.'], except: ['char.npc.'] },
 ];
 // 규칙 검사에서 빼는 파일 (폰트 묶음은 외부 배포본의 파일명을 그대로 쓴다)
 const EXEMPT_DIRS = ['fonts/'];
@@ -54,7 +56,7 @@ for (const screen of SCREENS) {
   // 여러 키가 같은 파일을 쓰면 한 번만 센다
   const screenFiles = new Set(
     Object.entries(manifest)
-      .filter(([key, entry]) => screen.prefixes.some((p) => key.startsWith(p)) && existsSync(join(ROOT, entry.file)))
+      .filter(([key, entry]) => screen.prefixes.some((p) => key.startsWith(p)) && !screen.except?.some((p) => key.startsWith(p)) && existsSync(join(ROOT, entry.file)))
       .map(([, entry]) => entry.file),
   );
   let bytes = 0;

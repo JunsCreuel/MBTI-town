@@ -10,10 +10,11 @@ import { verifyTownPass, type TownPass } from '../../src/shared/townToken';
 import {
   ACTIONS, EMOTES, MSG,
   type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type JoinOptions, type MoveMessage,
-  type Hood, type SnapMessage, type TownPlace,
+  type Hood, type MusicState, type SnapMessage, type TownPlace,
   isTownPlace, parseRoomPlace, parseSpot, type Spot,
 } from '../../src/shared/protocol';
 import { getHoodMap, getSpotMap, getTownMap } from '../assets';
+import { CLUB_TRACKS } from '../../src/shared/clubMusic';
 import { Player, TownState } from './TownState';
 
 export function townRoomCapacity(): number {
@@ -55,6 +56,9 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
   private readonly lastGestureAt = new Map<string, number>();
   private readonly lastWarpAt = new Map<string, number>();
   private readonly passes = new Map<string, TownPass>();
+  /** 클럽: 지금 신청곡 (없으면 시계로 정한 순서) */
+  private music: Omit<MusicState, 'serverNow'> | null = null;
+  private lastMusicAt = 0;
 
   /** 토큰 확인은 들어오기 전에 한다 (틀리면 접속을 받지 않는다) */
   onAuth(_client: Client, options?: JoinOptions): TownPass {
@@ -92,6 +96,21 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     });
 
     this.onMessage(MSG.warp, (client, message: unknown) => this.handleWarp(client, message));
+
+    // 클럽: DJ에게 신청곡. 채널 모두가 그 곡부터 같이 듣는다 (너무 자주 바뀌지 않게 채널마다 잠깐 쉰다)
+    this.onMessage(MSG.musicRequest, (client, message: unknown) => {
+      if (this.spot !== 'club') return;
+      const index = (message as { index?: unknown })?.index;
+      if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= CLUB_TRACKS.length) return;
+      const now = Date.now();
+      if (now - this.lastMusicAt < townConfig.musicRequestCooldownMs) {
+        if (this.music) client.send(MSG.music, { ...this.music, serverNow: now } satisfies MusicState);
+        return;
+      }
+      this.lastMusicAt = now;
+      this.music = { index, startedAt: now, by: this.passes.get(client.sessionId)?.name ?? '' };
+      this.broadcast(MSG.music, { ...this.music, serverNow: now } satisfies MusicState);
+    });
   }
 
   onJoin(client: Client, options?: JoinOptions) {
@@ -123,6 +142,8 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     player.moving = false;
     this.state.players.set(client.sessionId, player);
     this.moveBudget.set(client.sessionId, { value: MOVE_BUDGET_MAX, at: Date.now() });
+    // 클럽에 들어오면 지금 신청곡을 알려 준다
+    if (this.music) client.send(MSG.music, { ...this.music, serverNow: Date.now() } satisfies MusicState);
   }
 
   onLeave(client: Client) {

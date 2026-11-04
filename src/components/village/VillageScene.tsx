@@ -15,6 +15,7 @@ import { Decor } from './Decor';
 import { windUniforms } from './wind';
 import { currentHour, day, dayLookAt, indoorLook } from './daylight';
 import { clubPulse, isIndoor, mod } from './club';
+import { drunkLevel, swayAllowed } from './drunk';
 import { Ambient } from './Ambient';
 import { normalDistance, saveCamera } from './camera';
 import { pointerState } from './pointer';
@@ -22,6 +23,7 @@ import { now } from './session';
 import { Terrain } from './Terrain';
 import { BeaconSigns } from './BeaconSigns';
 import { GuideNpc } from './GuideNpc';
+import { ClubNpcs } from './ClubNpcs';
 
 const S = tokens.scene;
 /** 저가폰을 고려해 휴대폰에서는 그림자 해상도를 낮춘다 */
@@ -330,7 +332,15 @@ function CameraRig() {
       camera.position.copy(v.walkPos);
       v.look.copy(v.walkLook);
     }
+    // 취했으면(클럽 바에서 세 잔부터) 화면이 천천히 출렁이고 기울어진다
+    const tipsy = swayAllowed() ? drunkLevel() * (1 - e) : 0;
+    const tt = now();
+    if (tipsy > 0) {
+      camera.position.x += Math.sin(tt * 0.55) * 0.45 * tipsy;
+      camera.position.y += Math.sin(tt * 0.9) * 0.18 * tipsy;
+    }
     camera.lookAt(v.look);
+    if (tipsy > 0) camera.rotateZ((Math.sin(tt * 0.8) * 0.045 + Math.sin(tt * 2.1) * 0.014) * tipsy);
   });
   return null;
 }
@@ -835,6 +845,7 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <ClubFx />
         <BeaconSigns />
         <GuideNpc />
+        <ClubNpcs />
         <FirstFrame
           onFrame={() => {
             if (!firstFrame.current) {

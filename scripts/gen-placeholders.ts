@@ -16,7 +16,7 @@ import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
 import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
 import { petParts } from './lib/pets';
 import { fishIcons, fruitIcons } from './lib/item-icons';
-import { guideCatSpec } from './lib/npc';
+import { bartenderBearSpec, djRaccoonSpec, guideCatSpec } from './lib/npc';
 import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, speakerParts } from './lib/play-props';
 import { FRUITS } from '../src/shared/play';
 import { PET_ANIMALS } from '../src/shared/pet';
@@ -69,6 +69,16 @@ async function genAvatar() {
   save(npc, await buildSkinned('char_npc_monnyang', guideCatSpec()));
   register('char.npc.monnyang', { file: npc });
   record(npc);
+  // 클럽 NPC: DJ 너구리, 바텐더 곰 (클럽 맵에서만 받는다)
+  for (const [key, name, spec] of [
+    ['char.npc.dj', 'char_npc_dj', djRaccoonSpec()],
+    ['char.npc.bartender', 'char_npc_bartender', bartenderBearSpec()],
+  ] as const) {
+    const f = `characters/${name}_ph.glb`;
+    save(f, await buildSkinned(name, spec));
+    register(key, { file: f });
+    record(f);
+  }
   const acc = { glasses: 'NT', flower: 'NF', cap: 'SJ', headphones: 'SP' } as const;
   for (const [name, group] of Object.entries(acc)) {
     const f = `characters/char_acc_${name}_ph.glb`;
@@ -351,6 +361,7 @@ const ICONS: Record<string, string> = {
   // 놀거리: 바구니(모은 열매·물고기), 낚싯대
   basket: `<path d="M3.5 10h17l-1.8 8.2a2 2 0 0 1-2 1.6H7.3a2 2 0 0 1-2-1.6Z" ${S}/><path d="M7.5 10 11 4.5M16.5 10 13 4.5M9 13.5v3M12 13.5v3M15 13.5v3" ${S}/>`,
   fishing: `<path d="M5 20 18.5 4.5M18.5 4.5v9.5" ${S}/><path d="M18.5 14a2 2 0 1 1-2 2" ${S}/>`,
+  drink: `<path d="M4.5 4.5h15L12 12.5Z" ${S}/><path d="M12 12.5V19M8 19.5h8M15.5 4.5l2-2.5" ${S}/>`,
   // 몸짓 (안녕·꾸벅·춤·폴짝·갸웃)
   wave: `<path d="M8.5 13.5V7a1.4 1.4 0 0 1 2.8 0v4.5M11.3 11V5a1.4 1.4 0 0 1 2.8 0v6M14.1 11V6.5a1.4 1.4 0 0 1 2.8 0v7c0 4-2.6 6.5-6.2 6.5-2.8 0-4.4-1.6-5.2-3.8L4.6 12a1.3 1.3 0 0 1 2.3-1.1l1.6 2.6" ${S}/><path d="M19 3.8c1 .8 1.6 1.9 1.7 3.2M3.6 6.4c.3-1.2.9-2.1 1.9-2.8" ${S}/>`,
   bow: `<circle cx="16" cy="6.5" r="2.3" ${S}/><path d="M14.2 9 9 11.2l.6 4.6M9.6 15.8 8 21M9.6 15.8l3.6 5.2M9 11.2 6.2 14.6" ${S}/>`,

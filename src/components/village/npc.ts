@@ -3,6 +3,27 @@ import type { TownMap } from '@/shared/townMap';
 
 export const NPC_NAME = '몬냥이';
 
+/** 클럽 NPC(DJ·바텐더)가 있는 맵: DJ 부스와 바가 있는 클럽 */
+export const hasClubNpcs = (map: TownMap) => map.props.some((p) => p.key === 'prop.club.booth') && map.props.some((p) => p.key === 'prop.club.bar');
+
+/**
+ * 클럽 NPC 자리: DJ는 부스 뒤, 바텐더는 바 카운터 안쪽(선반과 카운터 사이). 둘 다 소품이 보는 쪽(손님 쪽)을 본다.
+ * 소품 정면 = (sin yaw, cos yaw)
+ */
+export function clubNpcSpots(map: TownMap): { dj: NpcSpot; bartender: NpcSpot } | null {
+  const booth = map.props.find((p) => p.key === 'prop.club.booth');
+  const bar = map.props.find((p) => p.key === 'prop.club.bar');
+  if (!booth || !bar) return null;
+  const behind = (p: { x: number; z: number; yaw: number }, d: number): NpcSpot => ({ x: p.x - Math.sin(p.yaw) * d, z: p.z - Math.cos(p.yaw) * d, yaw: p.yaw });
+  return { dj: behind(booth, 0.8), bartender: behind(bar, 0.35) };
+}
+
+export interface NpcSpot {
+  x: number;
+  z: number;
+  yaw: number;
+}
+
 /** 안내 NPC가 있는 맵 (본섬: 운세 나무가 있는 중앙광장) */
 export const hasGuideNpc = (map: TownMap) => map.props.some((p) => p.key === 'prop.plaza.fortune_tree');
 

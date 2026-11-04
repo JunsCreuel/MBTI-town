@@ -25,7 +25,7 @@ type Clip = 'idle' | 'wave' | 'jump';
 export function GuideNpc() {
   const { map, assets, input } = useTown();
   const spot = useMemo(() => guideNpcSpot(map), [map]);
-  const gltf = assets.npc;
+  const gltf = assets.npcs.guide;
   const rig = useMemo(() => {
     if (!gltf) return null;
     const model = SkeletonUtils.clone(gltf.scene);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLUB_TRACKS, clubScheduleAt } from './clubMusic';
+import { CLUB_TRACKS, clubScheduleAt, clubScheduleFrom } from './clubMusic';
 
 describe('클럽 음악 순서', () => {
   const lens = [60, 90, 30];
@@ -34,3 +34,19 @@ describe('클럽 음악 순서', () => {
     }
   });
 });
+
+describe('DJ 신청곡', () => {
+  const lens = [60, 90, 30];
+
+  it('신청한 곡을 처음부터 틀고, 끝나면 다음 곡으로 이어 간다', () => {
+    expect(clubScheduleFrom(0, lens, 1)).toEqual({ index: 1, offset: 0, left: 90 });
+    expect(clubScheduleFrom(95_000, lens, 1)).toEqual({ index: 2, offset: 5, left: 25 });
+    expect(clubScheduleFrom(125_000, lens, 1)).toEqual({ index: 0, offset: 5, left: 55 });
+  });
+
+  it('잘못된 곡 번호는 null', () => {
+    expect(clubScheduleFrom(0, lens, 5)).toBeNull();
+    expect(clubScheduleFrom(0, lens, -1)).toBeNull();
+  });
+});
+

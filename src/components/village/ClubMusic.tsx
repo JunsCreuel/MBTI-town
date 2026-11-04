@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { assetAltUrl, assetUrl } from '@/assets/manifest';
 import { CLUB_TRACKS } from '@/shared/clubMusic';
 import { Icon } from '../app/Icon';
-import { clubAudio, clubSchedule } from './club';
+import { clubAudio, clubDj, clubSchedule, onClubDj, setClubDj } from './club';
 
 const PREF_KEY = 'scene:club-music';
 const VOLUME = 0.7;
@@ -120,7 +120,20 @@ export function ClubMusic({ distance }: { distance: () => number }) {
       }
       clubAudio.el = null;
       clubAudio.index = -1;
+      setClubDj(null);
     };
+  }, [play]);
+
+  // DJ 신청곡이 오면 그 곡으로 바꾼다 (끈 사람은 곡 이름만 바뀐다). 클럽을 나가면 신청곡은 잊는다
+  const [requestedBy, setRequestedBy] = useState('');
+  useEffect(() => {
+    const off = onClubDj(() => {
+      setRequestedBy(clubDj.by);
+      const s = clubSchedule();
+      if (s) setIndex(s.index);
+      if (want.current && audio.current && !audio.current.paused) play();
+    });
+    return off;
   }, [play]);
 
   // 다른 탭으로 가면 멈추고, 돌아오면 지금 자리에서 다시 튼다. 다른 플레이어가 틀면 멈춘다
@@ -181,7 +194,7 @@ export function ClubMusic({ distance }: { distance: () => number }) {
       </span>
       <span className="club-music__info">
         <span className="club-music__title">{track.title}</span>
-        <span className="pill__sub club-music__artist">{track.artist} · CC0</span>
+        <span className="pill__sub club-music__artist">{requestedBy ? `${requestedBy}의 신청곡` : `${track.artist} · CC0`}</span>
       </span>
       <button className="club-music__btn" onClick={toggle} aria-label={on ? '클럽 음악 끄기' : '클럽 음악 켜기'}>
         <Icon name={on || status === 'loading' ? 'pause' : 'play'} size={16} />

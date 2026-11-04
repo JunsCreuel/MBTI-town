@@ -26,7 +26,10 @@ import { wakeRealtime } from '@/lib/realtime';
 import { TownSession, now } from './session';
 import { ClubMusic } from './ClubMusic';
 import { NpcDialog } from './NpcDialog';
-import { NPC_NAME, NPC_TALK_REACH, guideNpcSpot, markNpcSeen, npcSeen } from './npc';
+import { BarSheet, DjSheet, DrunkFx } from './ClubBar';
+import { BARTENDER_NAME, DJ_NAME } from './ClubNpcs';
+import { clubBar } from './club';
+import { NPC_NAME, NPC_TALK_REACH, clubNpcSpots, guideNpcSpot, markNpcSeen, npcSeen } from './npc';
 import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
 import {
   CLUB_FLOOR_RADIUS, FishingPanel, FortuneFruitSheet, beaconsOf, treesOf,
@@ -257,6 +260,11 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   // 안내 NPC 몬냥이 (광장): 가까우면 말 걸기, 처음 온 사람에게는 먼저 인사한다
   const npcSpot = useMemo(() => (loaded ? guideNpcSpot(loaded.map) : null), [loaded]);
   const [nearNpc, setNearNpc] = useState(false);
+  // 클럽: DJ 너굴(신청곡), 바텐더 곰돌(한 잔)
+  const clubSpots = useMemo(() => (loaded ? clubNpcSpots(loaded.map) : null), [loaded]);
+  const [nearClub, setNearClub] = useState<'dj' | 'bar' | null>(null);
+  const [clubSheet, setClubSheet] = useState<'dj' | 'bar' | null>(null);
+  const villageRef = useRef<HTMLDivElement>(null);
   const [npcOpen, setNpcOpen] = useState<{ first: boolean } | null>(null);
   const openNpc = useCallback(
     (first: boolean) => {
@@ -361,6 +369,11 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       const b = beacons.find((q) => Math.hypot(q.x - input.self.x, q.z - input.self.z) < playConfig.reach + 0.4);
       setNearBeacon(b?.kind ?? null);
       setNearNpc(!!npcSpot && Math.hypot(npcSpot.x - input.self.x, npcSpot.z - input.self.z) < NPC_TALK_REACH);
+      if (clubSpots) {
+        const dDj = Math.hypot(clubSpots.dj.x - input.self.x, clubSpots.dj.z - input.self.z);
+        const dBar = Math.hypot(clubSpots.bartender.x - input.self.x, clubSpots.bartender.z - input.self.z);
+        setNearClub(dDj < 3.2 ? 'dj' : dBar < 3 ? 'bar' : null);
+      } else setNearClub(null);
       // 낚시터 물가
       setCanFish(spot === 'fishing' && nearWater(loaded.map, input.self.x, input.self.z));
       // 클럽 무대에 서 있으면 저절로 춤춘다 (2초마다, 걷는 중에는 걷기가 먼저)
@@ -375,7 +388,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       }
     }, 300);
     return () => clearInterval(t);
-  }, [loaded, input, here, trees, beacons, spot, session, npcSpot]);
+  }, [loaded, input, here, trees, beacons, spot, session, npcSpot, clubSpots]);
 
   const openMap = useCallback(
     (open: boolean) => {
@@ -463,7 +476,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const showDoor = !!doorHref && !picked && !gateFor && view === 'walk';
 
   return (
-    <div className="village">
+    <div className="village" ref={villageRef}>
       {value && <VillageScene value={value} onFirstFrame={() => setRendered(true)} />}
 
       {value && rendered && (
@@ -665,6 +678,13 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
               </button>
             )}
 
+            {nearClub && !clubSheet && !picked && (
+              <button className="door-btn" onClick={() => setClubSheet(nearClub)}>
+                <Icon name={nearClub === 'dj' ? 'music' : 'drink'} size={20} />
+                {nearClub === 'dj' ? `${DJ_NAME}에게 신청곡` : `${BARTENDER_NAME}에게 한 잔`}
+              </button>
+            )}
+
             {nearNpc && !npcOpen && !picked && !gateFor && !showDoor && (
               <button className="door-btn" onClick={() => openNpc(false)}>
                 <Icon name="question" size={20} />
@@ -808,6 +828,18 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         />
       )}
       {npcOpen && <NpcDialog guest={isGuest} first={npcOpen.first} onClose={closeNpc} />}
+      {clubSheet === 'dj' && <DjSheet onRequest={(i) => session.requestSong(i)} onClose={() => setClubSheet(null)} />}
+      {clubSheet === 'bar' && (
+        <BarSheet
+          onDrink={(d) => {
+            clubBar.servedAt = now();
+            // 잔을 들어 건배 (물은 그냥)
+            if (d.units > 0) session.sendAction('cheer');
+          }}
+          onClose={() => setClubSheet(null)}
+        />
+      )}
+      <DrunkFx host={villageRef} />
       {toast && (
         <div className="toast" role="status">
           {typeof toast === 'string' ? (

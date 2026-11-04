@@ -114,4 +114,19 @@ export const MSG = {
   emote: 'emote',
   warp: 'warp',
   snap: 'snap',
+  /** 클럽: 지금 DJ가 트는 곡 (서버 → 모두) */
+  music: 'music',
+  /** 클럽: DJ에게 신청곡 (화면 → 서버) */
+  musicRequest: 'music_request',
 } as const;
+
+/**
+ * 클럽 채널의 신청곡. index번 곡을 startedAt(서버 시각, ms)부터 틀고, 끝나면 다음 곡으로 이어 간다.
+ * serverNow = 보낸 순간의 서버 시각 (화면이 자기 시계와의 차이를 맞춘다). by = 신청한 사람 이름.
+ */
+export interface MusicState {
+  index: number;
+  startedAt: number;
+  serverNow: number;
+  by: string;
+}

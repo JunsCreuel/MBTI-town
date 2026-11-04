@@ -703,5 +703,14 @@
   },
   "char.npc.monnyang": {
     "file": "characters/char_npc_monnyang_ph.glb"
+  },
+  "char.npc.dj": {
+    "file": "characters/char_npc_dj_ph.glb"
+  },
+  "char.npc.bartender": {
+    "file": "characters/char_npc_bartender_ph.glb"
+  },
+  "ui.icon.drink": {
+    "file": "ui/ui_icon_drink_ph.svg"
   }
 }

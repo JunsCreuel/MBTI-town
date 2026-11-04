@@ -9,9 +9,10 @@ import type { District } from '@/shared/districts';
 import {
   MSG,
   type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type JoinOptions,
-  type MoveMessage, type RoomPlace, type SnapMessage, type TownPlace, type WarpMessage,
+  type MoveMessage, type MusicState, type RoomPlace, type SnapMessage, type TownPlace, type WarpMessage,
 } from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
+import { setClubDj } from './club';
 
 /** 서버 상태 중 클라이언트가 읽는 부분 */
 export interface PlayerView {
@@ -165,6 +166,7 @@ export class TownSession {
       room.onMessage(MSG.action, (m: ActionBroadcast) => this.applyAction(m.id, m.kind));
       room.onMessage(MSG.emote, (m: EmoteBroadcast) => this.applyEmote(m.id, m.kind));
       room.onMessage(MSG.snap, (m: SnapMessage) => this.snapListeners.forEach((fn) => fn(m)));
+      room.onMessage(MSG.music, (m: MusicState) => setClubDj(m));
       room.onLeave((code: number) => {
         if (attempt !== this.attempt) return;
         this.room = null;
@@ -251,6 +253,13 @@ export class TownSession {
   endAction() {
     const g = this.gestures.get(SELF_GESTURE);
     if (g) g.actionUntil = 0;
+  }
+
+  /** 클럽: DJ에게 신청곡 (서버가 채널 모두에게 알린다). 붙어 있지 않으면 false */
+  requestSong(index: number): boolean {
+    if (!this.room) return false;
+    this.room.send(MSG.musicRequest, { index });
+    return true;
   }
 
   sendEmote(kind: EmoteKind) {
