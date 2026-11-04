@@ -29,10 +29,10 @@ export const townConfig = {
   actionDurationMs: 2000,
   /** 클럽 바: 이만큼 마셔도 멀쩡하다 (잔). 그 위로 한 잔마다 조금씩 더 취한다 */
   drinksBeforeTipsy: 2,
-  /** 한 잔이 깨는 데 걸리는 시간 (ms). 시간이 지나면 저절로 깬다 */
-  soberMsPerDrink: 180000,
+  /** 한 잔이 깨는 데 걸리는 시간 (ms). 시간이 지나면 저절로 깬다 (가장 많이 취해도 2분이면 다 깬다) */
+  soberMsPerDrink: 30000,
   /** 더 마셔도 이 이상 취하지 않는다 (잔) */
-  maxDrinks: 8,
+  maxDrinks: 6,
   /** 클럽: 신청곡을 받고 다음 신청까지 쉬는 시간 (ms, 채널마다). 너무 자주 곡이 바뀌지 않게 */
   musicRequestCooldownMs: 15000,
   /** 낚시 동작 길이 (ms): 던지고 기다렸다가 낚아 올릴 때까지 낚싯대를 들고 있다 (걸으면 끝난다) */

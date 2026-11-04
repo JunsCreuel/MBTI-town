@@ -47,14 +47,56 @@ export async function createPgliteSql(dataDir?: string): Promise<Sql> {
   return sql;
 }
 
+/** 쿼리 하나를 이 시간(ms) 안에 못 받으면 연결이 죽은 것으로 보고 새로 붙는다 */
+const QUERY_TIMEOUT_MS = 6000;
+
+class QueryTimeout extends Error {}
+
 export async function createPostgresSql(url: string): Promise<Sql> {
   const { default: postgres } = await import('postgres');
-  // Supabase 트랜잭션 풀러는 이름 있는 prepared statement를 지원하지 않는다
-  const pg = postgres(url, { prepare: false, max: Number(process.env.DATABASE_POOL_MAX) || 5 });
+  // Supabase 트랜잭션 풀러는 이름 있는 prepared statement를 지원하지 않는다.
+  // 서버리스 함수는 쉬는 동안 얼어 있어서, 그사이 풀러가 끊은 연결을 다시 쓰면 응답 없이 멈춘다.
+  // 그래서 쉬던 연결은 빨리 닫고(idle_timeout), 오래된 연결은 바꾸고(max_lifetime), 붙는 데도 시간 제한을 둔다.
+  const open = () =>
+    postgres(url, {
+      prepare: false,
+      max: Number(process.env.DATABASE_POOL_MAX) || 5,
+      idle_timeout: 10,
+      max_lifetime: 60 * 5,
+      connect_timeout: 8,
+    });
+  let pg = open();
+  /** 멈춘 연결을 버리고 새 연결 묶음으로 바꾼다 (기다리지 않는다) */
+  const reset = () => {
+    const old = pg;
+    pg = open();
+    void old.end({ timeout: 0 }).catch(() => {});
+  };
+  const run = async <T>(text: string, params: unknown[]): Promise<T[]> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return (await Promise.race([
+        pg.unsafe(text, params as never[]),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new QueryTimeout('DB 응답이 없습니다')), QUERY_TIMEOUT_MS);
+        }),
+      ])) as unknown as T[];
+    } finally {
+      clearTimeout(timer);
+    }
+  };
   return {
     kind: 'postgres',
     async query<T>(text: string, params: unknown[] = []) {
-      return (await pg.unsafe(text, params as never[])) as unknown as T[];
+      try {
+        return await run<T>(text, params);
+      } catch (e) {
+        if (!(e instanceof QueryTimeout)) throw e;
+        reset();
+        // 읽기만 한 번 더 해 본다 (쓰기는 서버에 닿았을 수도 있어 두 번 하지 않는다. 화면이 다시 시도한다)
+        if (/^\s*(select|with)\b/i.test(text)) return run<T>(text, params);
+        throw e;
+      }
     },
     async exec(text) {
       await pg.unsafe(text);
