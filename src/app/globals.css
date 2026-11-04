@@ -3562,6 +3562,42 @@ a:focus-visible {
 .club-hint {
   opacity: 1;
 }
+/* 마을 음악 켜기·끄기 (음표 버튼). 나오는 중이면 강조색과 작은 물결, 꺼 두면 빗금 */
+.village-music {
+  position: relative;
+}
+.village-music--on {
+  color: var(--color-accent);
+}
+.village-music--on::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid var(--color-accent);
+  opacity: 0;
+  animation: music-ring 2.4s ease-out infinite;
+  pointer-events: none;
+}
+.village-music--off::after {
+  content: '';
+  position: absolute;
+  width: 26px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: rotate(-45deg);
+  box-shadow: 0 0 0 2px var(--color-surface);
+}
+@keyframes music-ring {
+  0% { opacity: 0.55; transform: scale(0.92); }
+  100% { opacity: 0; transform: scale(1.18); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .village-music--on::before {
+    animation: none;
+  }
+}
 /* 클럽 음악: 지금 나오는 곡과 켜기·끄기 */
 .club-music {
   gap: var(--space-2);

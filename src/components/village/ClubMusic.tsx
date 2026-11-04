@@ -5,6 +5,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { assetAltUrl, assetUrl } from '@/assets/manifest';
 import { CLUB_TRACKS } from '@/shared/clubMusic';
+import { creditLine } from '@/shared/music';
 import { Icon } from '../app/Icon';
 import { clubAudio, clubDj, clubSchedule, onClubDj, setClubDj } from './club';
 
@@ -194,7 +195,7 @@ export function ClubMusic({ distance }: { distance: () => number }) {
       </span>
       <span className="club-music__info">
         <span className="club-music__title">{track.title}</span>
-        <span className="pill__sub club-music__artist">{requestedBy ? `${requestedBy}의 신청곡` : `${track.artist} · CC0`}</span>
+        <span className="pill__sub club-music__artist">{requestedBy ? `${requestedBy}의 신청곡` : creditLine(track)}</span>
       </span>
       <button className="club-music__btn" onClick={toggle} aria-label={on ? '클럽 음악 끄기' : '클럽 음악 켜기'}>
         <Icon name={on || status === 'loading' ? 'pause' : 'play'} size={16} />

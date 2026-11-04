@@ -17,7 +17,7 @@
     "assets:ph": "tsx scripts/gen-placeholders.ts",
     "assets:check": "tsx scripts/check-assets.ts",
     "assets:kenney": "tsx scripts/import-kenney.ts",
-    "assets:club-music": "tsx scripts/import-club-music.ts",
+    "assets:music": "tsx scripts/import-music.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p server/tsconfig.json",
     "test": "vitest run",
     "test:postgres": "tsx scripts/test-postgres.ts",

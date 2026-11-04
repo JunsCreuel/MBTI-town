@@ -31,6 +31,7 @@ import { BARTENDER_NAME, DJ_NAME } from './ClubNpcs';
 import { clubBar } from './club';
 import { NPC_NAME, NPC_TALK_REACH, clubNpcSpots, guideNpcSpot, markNpcSeen, npcSeen } from './npc';
 import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
+import { VillageMusicButton, useVillageMusic } from './VillageMusic';
 import {
   CLUB_FLOOR_RADIUS, FishingPanel, FortuneFruitSheet, beaconsOf, treesOf,
   type FishResult, type PickResult, type PlayState, type TreeInfo,
@@ -87,6 +88,8 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const here = useMemo(() => (spot ? null : (parseRoomPlace(place) ?? null)), [place, spot]);
   const hoodNo = here?.hood ?? 1;
   const session = useMemo(() => new TownSession(place, at), [place, at]);
+  // 마을 음악: 클럽 안에서는 클럽 음악만
+  const villageMusic = useVillageMusic(spot !== 'club');
   const snap = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const [loaded, setLoaded] = useState<{ map: TownMap; assets: TownAssets } | null>(null);
   const [progress, setProgress] = useState(0);
@@ -549,6 +552,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
             </div>
             <div className="hud__right hud__right--stack">
               <div className="hud__icons">
+                {spot !== 'club' && <VillageMusicButton music={villageMusic} />}
                 {hasHome && (
                   <button className="icon-btn" onClick={goHome} aria-label="내 집 앞으로 가기">
                     <Icon name="home" />

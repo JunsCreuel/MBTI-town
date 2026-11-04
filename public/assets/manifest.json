@@ -712,5 +712,32 @@
   },
   "ui.icon.drink": {
     "file": "ui/ui_icon_drink_ph.svg"
+  },
+  "bgm.club.pan_bakkwo": {
+    "file": "audio/club_pan_bakkwo.ogg",
+    "alt": "audio/club_pan_bakkwo.mp3",
+    "title": "판을 바꿔",
+    "mood": "한계를 넘는 K-댄스",
+    "seconds": 195.6,
+    "bpm": 137.07,
+    "beat": 0.395
+  },
+  "bgm.club.kick_and_bass": {
+    "file": "audio/club_kick_and_bass.ogg",
+    "alt": "audio/club_kick_and_bass.mp3",
+    "title": "Kick and Bass Only",
+    "mood": "킥과 베이스만 남긴 테크노",
+    "seconds": 207.8,
+    "bpm": 133.89,
+    "beat": 0.258
+  },
+  "bgm.village.waltz": {
+    "file": "audio/village_waltz.ogg",
+    "alt": "audio/village_waltz.mp3",
+    "title": "Village Waltz",
+    "mood": "느긋한 마을 왈츠",
+    "seconds": 66,
+    "bpm": 120.77,
+    "beat": 0.273
   }
 }

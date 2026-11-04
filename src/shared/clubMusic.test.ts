@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CLUB_TRACKS, clubScheduleAt, clubScheduleFrom } from './clubMusic';
+import { PROVIDED_BY_OWNER } from './music';
 
 describe('클럽 음악 순서', () => {
   const lens = [60, 90, 30];
@@ -26,11 +27,16 @@ describe('클럽 음악 순서', () => {
     expect(clubScheduleAt(10_000, [0, 0])).toBeNull();
   });
 
+  it('곡 id가 겹치지 않는다 (DJ 신청곡은 번호로 주고받는다)', () => {
+    expect(new Set(CLUB_TRACKS.map((t) => t.id)).size).toBe(CLUB_TRACKS.length);
+  });
+
   it('곡마다 manifest 키와 출처가 있다', () => {
     for (const t of CLUB_TRACKS) {
       expect(t.key).toBe(`bgm.club.${t.id}`);
-      expect(t.source).toMatch(/^https:\/\/opengameart\.org\/content\//);
-      expect(t.license).toBe('CC0 1.0');
+      expect(t.file).toBe(`club_${t.id}`);
+      if (t.license === 'CC0 1.0') expect(t.source).toMatch(/^https:\/\/opengameart\.org\/content\//);
+      else expect(t.source).toBe(PROVIDED_BY_OWNER);
     }
   });
 });

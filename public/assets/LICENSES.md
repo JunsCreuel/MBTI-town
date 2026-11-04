@@ -227,3 +227,9 @@ AI로 생성한 이미지·모델은 출처 칸에 사용한 도구를 적는다
 | characters/char_npc_dj_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-04 |
 | characters/char_npc_bartender_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-04 |
 | ui/ui_icon_drink_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-04 |
+| audio/club_pan_bakkwo.ogg | "판을 바꿔" by zansang (운영자 제공, Suno로 제작), 음량 맞춤·변환 | 제공자 보유 | 2026-11-04 |
+| audio/club_pan_bakkwo.mp3 | "판을 바꿔" by zansang (운영자 제공, Suno로 제작), 음량 맞춤·변환 | 제공자 보유 | 2026-11-04 |
+| audio/club_kick_and_bass.ogg | "Kick and Bass Only" by zansang (운영자 제공, Suno로 제작), 음량 맞춤·변환 | 제공자 보유 | 2026-11-04 |
+| audio/club_kick_and_bass.mp3 | "Kick and Bass Only" by zansang (운영자 제공, Suno로 제작), 음량 맞춤·변환 | 제공자 보유 | 2026-11-04 |
+| audio/village_waltz.ogg | "Village Waltz" by zansang (운영자 제공, Suno로 제작), 음량 맞춤·변환 | 제공자 보유 | 2026-11-04 |
+| audio/village_waltz.mp3 | "Village Waltz" by zansang (운영자 제공, Suno로 제작), 음량 맞춤·변환 | 제공자 보유 | 2026-11-04 |

@@ -256,16 +256,23 @@ CLAUDE.md에는 "이 프로젝트는 PROJECT_GUIDE.md를 따른다" 한 줄만 �
 - 자동 재생하지 않는다. 방문자가 플레이어나 턴테이블을 눌러 재생·멈춤한다 (브라우저 정책과 기획서 16장).
 - 상업 음원은 권리 허락이 전제라 1차에서는 쓰지 않는다. 권리를 확보한 오리지널 BGM과 환경음만 쓴다. 지금은 코드로 만든 임시 곡(`bgm.*`, `_ph`)이다.
 - 곡 목록(키·제목·분위기·추천 지역)은 `src/shared/bgm.ts`에 있다. 실제 곡은 OGG + MP3로 넣고 manifest의 같은 키(`file` = OGG, `alt` = MP3, `seconds`)만 맞추면 된다.
+- **마을 음악 (예외)**: 마을(광장·동네·낚시터)을 걷는 동안 `bgm.village.waltz`("Village Waltz")가 작게 반복해서 나온다. 곡이 끝나면 처음부터 다시 이어진다.
+  - 기본은 켜짐. 위쪽 아이콘 줄의 음표 버튼으로 끄고 켠다. 끈 것은 기억해서 다음에 와도 꺼 둔다 (`scene:village-music`).
+  - 브라우저가 자동 재생을 막으면 화면을 처음 누르는(키를 누르는) 순간 시작한다. 다른 탭을 보면 멈추고, 클럽에 들어가거나 방 음악을 틀면 멈춘다.
+  - 광장 → 동네처럼 마을 안에서 화면이 바뀌어도 끊기지 않고 이어서 나온다 (`src/components/village/VillageMusic.tsx`).
 - **클럽 음악 (예외)**: 클럽은 들어가면 바로 음악이 나온다 (클럽에 가는 것 자체가 음악을 듣겠다는 선택이라서). 브라우저가 막으면 "음악 켜기" 버튼이 뜨고, 끄면 기억해서 다음에도 꺼 둔다. 다른 화면으로 가거나 다른 탭을 보면 멈춘다.
-  - 곡: OpenGameArt의 **CC0(퍼블릭 도메인)** EDM 4곡. 출처 표기 의무는 없지만 화면에 곡명·만든 사람을 보여 주고 LICENSES.md에 출처를 적는다.
-    | 키 | 곡 | 만든 사람 | BPM |
-    |---|---|---|---|
-    | `bgm.club.party_sector` | Party Sector | Joth | 120 |
-    | `bgm.club.funky_house` | Funky House | Of Far Different Nature | 128 |
-    | `bgm.club.hella_bumps` | Hella Bumps | The Cynic Project | 123 |
-    | `bgm.club.lucid_trigger` | Lucid Trigger | Liq_mmry | 150 |
-  - 클럽에 있는 사람은 모두 같은 순간에 같은 곡의 같은 자리를 듣는다 (시계를 플레이리스트 길이로 나눠 정한다, `src/shared/clubMusic.ts`). 무대에서 멀어지면 조금 작게 들린다.
-  - 곡을 바꾸거나 더할 때: `src/shared/clubMusic.ts`에 곡을 적고, 원본을 `<id>.<확장자>`로 한 폴더에 받아 `npm run assets:club-music -- <폴더>`. 음량을 맞춰 OGG + MP3로 바꾸고, 박자(bpm·beat)를 재서 manifest와 LICENSES.md에 넣는다. "no copyright" 이름만 붙은 곡(예: NCS)은 앱 안 사용 허락이 따로 필요해서 쓰지 않는다. CC0이거나 앱·게임 사용을 허락한 곡만 쓴다.
+  - 곡: OpenGameArt의 **CC0(퍼블릭 도메인)** EDM 4곡과 운영자가 Suno로 만들어 제공한 2곡. CC0 곡은 출처 표기 의무가 없지만 화면에 곡명·만든 사람을 보여 주고 LICENSES.md에 출처를 적는다.
+    | 키 | 곡 | 만든 사람 | BPM | 라이선스 |
+    |---|---|---|---|---|
+    | `bgm.club.party_sector` | Party Sector | Joth | 120 | CC0 |
+    | `bgm.club.funky_house` | Funky House | Of Far Different Nature | 128 | CC0 |
+    | `bgm.club.hella_bumps` | Hella Bumps | The Cynic Project | 123 | CC0 |
+    | `bgm.club.lucid_trigger` | Lucid Trigger | Liq_mmry | 150 | CC0 |
+    | `bgm.club.pan_bakkwo` | 판을 바꿔 | zansang | 137 | 제공자 보유 |
+    | `bgm.club.kick_and_bass` | Kick and Bass Only | zansang | 134 | 제공자 보유 |
+  - 클럽에 있는 사람은 모두 같은 순간에 같은 곡의 같은 자리를 듣는다 (시계를 플레이리스트 길이로 나눠 정한다, `src/shared/clubMusic.ts`). 무대에서 멀어지면 조금 작게 들린다. DJ에게 신청한 곡은 처음부터 나오고, 끝나면 플레이리스트 다음 곡으로 이어진다. 곡은 목록 뒤에만 더한다 (신청곡을 번호로 주고받는다).
+  - 곡을 바꾸거나 더할 때: `src/shared/clubMusic.ts`(마을 음악은 `src/shared/music.ts`)에 곡을 적고, 원본을 `<id>.<확장자>`로 한 폴더에 받아 `npm run assets:music -- <폴더>`. 폴더에 있는 곡만 음량을 맞춰 OGG + MP3로 바꾸고(2MB를 넘으면 음질을 한 단계씩 낮춘다), 박자(bpm·beat)를 재서 manifest와 LICENSES.md에 넣는다. "no copyright" 이름만 붙은 곡(예: NCS)은 앱 안 사용 허락이 따로 필요해서 쓰지 않는다. CC0이거나 앱·게임 사용을 허락한 곡만 쓴다.
+  - **[결정 필요] 운영자 제공 곡(Suno)의 권리**: Suno는 유료 플랜(Pro·Premier)에 가입해 있는 동안 만든 곡만 상업적으로 쓸 수 있고, 무료 플랜에서 만든 곡은 비상업적 용도만 된다 (나중에 가입해도 소급되지 않는다고 알려져 있다). 수익화(로드맵 14~18) 전에 세 곡(Village Waltz, 판을 바꿔, Kick and Bass Only)이 유료 플랜에서 만든 곡인지 확인하고, 아니면 유료 플랜에서 다시 만들거나 CC0 곡으로 바꾼다.
 
 ## 8. 기록 (ARCHIVE)
 
@@ -397,7 +404,7 @@ src/config/game.ts         # 운영 중 바꿀 값
 | 방 소품 | GLB | 삼각형 2,000개 이하, 재질 2개 이하 | 원점 = 바닥(벽 소품은 벽면) 가운데, 정면 = +Z. 차지하는 칸 수는 `src/shared/room.ts` 소품 목록의 `size` |
 | 마을 소품 | GLB | 삼각형 3,000개 이하 | 원점 = 바닥 가운데, 정면 = +Z. 지역 색을 입힐 부분은 재질 `outfit`, 밤에 켜지는 부분은 `glass`(창)·`glow`(등), 늘 제 색으로 빛나는 클럽 네온은 `neonPink`·`neonCyan`·`neonGreen`, 바람에 흔들릴 잎·풀은 `foliage`. 집은 바닥 2.4×2.2, 문이 정면 |
 | 자연물 | GLB (Kenney Nature Kit, CC0) | 나무 높이 약 2~3.5, 꽃·풀 0.3~0.5 | `prop.nature.*`. 원본 묶음은 저장소에 넣지 않고 `npm run assets:kenney -- <GLTF 폴더>`로 다시 만든다 |
-| 클럽 음악 | OGG + MP3 (CC0) | 곡마다 2MB 이하, 음량 맞춤 | `bgm.club.*`. manifest에 `title`, `mood`, `seconds`, 박자 `bpm`·`beat`. 원본은 저장소에 넣지 않고 `npm run assets:club-music -- <폴더>`로 다시 만든다 |
+| 클럽·마을 음악 | OGG + MP3 (CC0 또는 제공자 보유) | 곡마다 2MB 이하, 음량 맞춤 | `bgm.club.*`, `bgm.village.*`. manifest에 `title`, `mood`, `seconds`, 박자 `bpm`·`beat`. 원본은 저장소에 넣지 않고 `npm run assets:music -- <폴더>`로 다시 만든다 |
 | 마을 맵 | Tiled JSON | 타일 32px = 1칸 | 레이어: `ground`(타일 속성 `terrain`, `height`), `deco`(소품 점, 속성 `district`), `collision`, `spawn`(`spawn`, `spawn.<지역>`, `gate.<지역>` = 동네 길 앞), `lots`(집터 점 `<지역>.<번호>`, 회전 = 집 방향), `districts`(칸별 지역 1~5) |
 | 동네 틀 맵 | Tiled JSON | 본섬과 같은 타일셋 | 같은 레이어. 집터 이름은 `hood.<번호>`, `districts`는 땅 전체가 1 (지역은 코드가 입힌다), `spawn` = 입구(아치 앞) |
 | 창밖 풍경 | PNG | 512×512 | 지역마다 1장 |
