@@ -1,6 +1,7 @@
 // 마을 클라이언트와 실시간 서버가 함께 쓰는 메시지 규약.
 // 자유 채팅은 없다. 소통은 동작과 이모티콘으로만 한다.
 import { townConfig } from '../config/game';
+import type { ClubLine } from './clubMusic';
 import { isDistrict, type District } from './districts';
 
 /** 몸짓 (캐릭터 동작). 이름은 캐릭터 애니메이션 클립과 같다 (shared/character.ts) */
@@ -118,17 +119,20 @@ export const MSG = {
   music: 'music',
   /** 클럽: DJ에게 신청곡 (화면 → 서버) */
   musicRequest: 'music_request',
+  /** 클럽: 신청곡을 받았는지 (서버 → 신청한 사람, MusicResult) */
+  musicResult: 'music_result',
   /** 서버 전체 공지 (서버 → 모두, AnnounceBroadcast) */
   announce: 'announce',
 } as const;
 
 /**
- * 클럽 채널의 신청곡. index번 곡을 startedAt(서버 시각, ms)부터 틀고, 끝나면 다음 곡으로 이어 간다.
- * serverNow = 보낸 순간의 서버 시각 (화면이 자기 시계와의 차이를 맞춘다). by = 신청한 사람 이름.
+ * 클럽 채널의 곡 흐름 (src/shared/clubMusic.ts의 ClubLine): 지금 곡을 startedAt(서버 시각, ms)부터 틀고,
+ * 끝나면 신청곡 대기열(queue)을 차례대로, 그 뒤로는 목록 순서로 이어 간다.
+ * serverNow = 보낸 순간의 서버 시각 (화면이 자기 시계와의 차이를 맞춘다). by = 지금 곡을 신청한 사람 이름.
  */
-export interface MusicState {
-  index: number;
-  startedAt: number;
+export interface MusicState extends ClubLine {
   serverNow: number;
-  by: string;
 }
+
+/** 신청곡을 받았는지 (신청한 사람에게만). position = 대기열에서 몇 번째인지 (1부터) */
+export type MusicResult = { ok: true; position: number } | { ok: false; reason: 'full' | 'mine' | 'cooldown' | 'closed' };

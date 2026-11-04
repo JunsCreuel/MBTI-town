@@ -10,10 +10,10 @@ import type { District } from '@/shared/districts';
 import {
   MSG,
   type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type JoinOptions,
-  type MoveMessage, type MusicState, type RoomPlace, type SnapMessage, type TownPlace, type WarpMessage,
+  type MoveMessage, type MusicResult, type MusicState, type RoomPlace, type SnapMessage, type TownPlace, type WarpMessage,
 } from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
-import { setClubDj } from './club';
+import { emitClubResult, setClubDj } from './club';
 import { showAnnouncement } from '../app/AnnounceBanner';
 
 /** 서버 상태 중 클라이언트가 읽는 부분 */
@@ -169,6 +169,7 @@ export class TownSession {
       room.onMessage(MSG.emote, (m: EmoteBroadcast) => this.applyEmote(m.id, m.kind));
       room.onMessage(MSG.snap, (m: SnapMessage) => this.snapListeners.forEach((fn) => fn(m)));
       room.onMessage(MSG.music, (m: MusicState) => setClubDj(m));
+      room.onMessage(MSG.musicResult, (r: MusicResult) => emitClubResult(r));
       room.onMessage(MSG.announce, (m: AnnounceBroadcast) => showAnnouncement(m));
       room.onLeave((code: number) => {
         if (attempt !== this.attempt) return;

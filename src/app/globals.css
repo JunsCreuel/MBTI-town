@@ -4250,3 +4250,60 @@ a:focus-visible {
   outline: 3px solid var(--chip-color, var(--color-accent));
   outline-offset: 1px;
 }
+
+/* 클럽 DJ 시트: 지금 나오는 곡, 신청곡 목록 */
+.club-now {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-accentSoft);
+}
+.club-now__label {
+  color: var(--color-accentInk);
+  font-size: 12px;
+  font-weight: 700;
+}
+.club-sub {
+  margin: var(--space-2) 0 0;
+  font-size: 14px;
+}
+.club-sub b {
+  color: var(--color-accentInk);
+}
+.club-queue {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.club-queue li {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+.club-queue__no {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-accentText);
+  font-size: 12px;
+  font-weight: 800;
+}
+.club-queue__title {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.club-queue__by {
+  font-size: 12px;
+}

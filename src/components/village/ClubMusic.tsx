@@ -7,7 +7,7 @@ import { assetAltUrl, assetUrl } from '@/assets/manifest';
 import { CLUB_TRACKS } from '@/shared/clubMusic';
 import { creditLine } from '@/shared/music';
 import { Icon } from '../app/Icon';
-import { clubAudio, clubDj, clubSchedule, onClubDj, setClubDj } from './club';
+import { clubAudio, clubQueue, clubSchedule, onClubDj, setClubDj } from './club';
 
 const PREF_KEY = 'scene:club-music';
 const VOLUME = 0.7;
@@ -43,6 +43,9 @@ export function ClubMusic({ distance }: { distance: () => number }) {
   const want = useRef(true);
   const [status, setStatus] = useState<'off' | 'loading' | 'playing' | 'blocked'>('off');
   const [index, setIndex] = useState(() => clubSchedule()?.index ?? 0);
+  /** 지금 곡을 신청한 사람, 기다리는 신청곡 수 */
+  const [requestedBy, setRequestedBy] = useState('');
+  const [waiting, setWaiting] = useState(0);
 
   const element = useCallback(() => {
     if (audio.current) return audio.current;
@@ -58,6 +61,8 @@ export function ClubMusic({ distance }: { distance: () => number }) {
     const s = clubSchedule();
     if (!s) return;
     const a = element();
+    setRequestedBy(s.by);
+    setWaiting(clubQueue().length);
     if (clubAudio.index !== s.index || !a.src) {
       a.src = sourceFor(CLUB_TRACKS[s.index].key);
       clubAudio.index = s.index;
@@ -125,13 +130,15 @@ export function ClubMusic({ distance }: { distance: () => number }) {
     };
   }, [play]);
 
-  // DJ 신청곡이 오면 그 곡으로 바꾼다 (끈 사람은 곡 이름만 바뀐다). 클럽을 나가면 신청곡은 잊는다
-  const [requestedBy, setRequestedBy] = useState('');
+  // 신청곡 흐름이 바뀌면 (대기열에 곡이 들어오면) 곡 정보를 다시 읽는다. 지금 곡은 끝까지 튼다. 클럽을 나가면 흐름은 잊는다
   useEffect(() => {
     const off = onClubDj(() => {
-      setRequestedBy(clubDj.by);
       const s = clubSchedule();
-      if (s) setIndex(s.index);
+      if (s) {
+        setIndex(s.index);
+        setRequestedBy(s.by);
+      }
+      setWaiting(clubQueue().length);
       if (want.current && audio.current && !audio.current.paused) play();
     });
     return off;
@@ -165,6 +172,7 @@ export function ClubMusic({ distance }: { distance: () => number }) {
       if (++tick % 16 || a.paused) return;
       const s = clubSchedule();
       if (!s) return;
+      setWaiting(clubQueue().length);
       if (s.index === clubAudio.index) {
         if (Math.abs(a.currentTime - s.offset) > RESYNC_SEC) a.currentTime = s.offset;
       } else if (s.offset > RESYNC_SEC) play();
@@ -195,7 +203,10 @@ export function ClubMusic({ distance }: { distance: () => number }) {
       </span>
       <span className="club-music__info">
         <span className="club-music__title">{track.title}</span>
-        <span className="pill__sub club-music__artist">{requestedBy ? `${requestedBy}의 신청곡` : creditLine(track)}</span>
+        <span className="pill__sub club-music__artist">
+          {requestedBy ? `${requestedBy}의 신청곡` : creditLine(track)}
+          {waiting > 0 && ` · 신청곡 ${waiting}곡 대기`}
+        </span>
       </span>
       <button className="club-music__btn" onClick={toggle} aria-label={on ? '클럽 음악 끄기' : '클럽 음악 켜기'}>
         <Icon name={on || status === 'loading' ? 'pause' : 'play'} size={16} />

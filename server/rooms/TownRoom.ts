@@ -11,11 +11,11 @@ import { verifyTownPass, type TownPass } from '../../src/shared/townToken';
 import {
   ACTIONS, EMOTES, MSG,
   type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type JoinOptions, type MoveMessage,
-  type Hood, type MusicState, type SnapMessage, type TownPlace,
+  type Hood, type MusicResult, type MusicState, type SnapMessage, type TownPlace,
   isTownPlace, parseRoomPlace, parseSpot, type Spot,
 } from '../../src/shared/protocol';
-import { getHoodMap, getSpotMap, getTownMap } from '../assets';
-import { CLUB_TRACKS } from '../../src/shared/clubMusic';
+import { clubTrackSeconds, getHoodMap, getSpotMap, getTownMap } from '../assets';
+import { CLUB_TRACKS, advanceLine, lineFromClock, type ClubLine } from '../../src/shared/clubMusic';
 import { Player, TownState } from './TownState';
 
 export function townRoomCapacity(): number {
@@ -60,8 +60,10 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
   private readonly lastWarpAt = new Map<string, number>();
   private readonly passes = new Map<string, TownPass>();
   /** 클럽: 지금 신청곡 (없으면 시계로 정한 순서) */
-  private music: Omit<MusicState, 'serverNow'> | null = null;
-  private lastMusicAt = 0;
+  /** 클럽: 곡 흐름 (지금 곡 → 신청곡 대기열 → 목록 순서). 신청곡이 한 번도 없으면 null (화면은 시계 순서) */
+  private music: ClubLine | null = null;
+  /** 클럽: 사람마다 마지막으로 신청한 시각 */
+  private lastRequestAt = new Map<string, number>();
 
   /** 토큰 확인은 들어오기 전에 한다 (틀리면 접속을 받지 않는다) */
   onAuth(_client: Client, options?: JoinOptions): TownPass {
@@ -101,19 +103,24 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
 
     this.onMessage(MSG.warp, (client, message: unknown) => this.handleWarp(client, message));
 
-    // 클럽: DJ에게 신청곡. 채널 모두가 그 곡부터 같이 듣는다 (너무 자주 바뀌지 않게 채널마다 잠깐 쉰다)
+    // 클럽: DJ에게 신청곡. 지금 곡은 끝까지 틀고, 신청곡은 대기열에 차례로 쌓여 채널 모두가 같은 순서로 듣는다
     this.onMessage(MSG.musicRequest, (client, message: unknown) => {
       if (this.spot !== 'club') return;
       const index = (message as { index?: unknown })?.index;
       if (typeof index !== 'number' || !Number.isInteger(index) || index < 0 || index >= CLUB_TRACKS.length) return;
+      const reply = (r: MusicResult) => client.send(MSG.musicResult, r);
       const now = Date.now();
-      if (now - this.lastMusicAt < townConfig.musicRequestCooldownMs) {
-        if (this.music) client.send(MSG.music, { ...this.music, serverNow: now } satisfies MusicState);
-        return;
-      }
-      this.lastMusicAt = now;
-      this.music = { index, startedAt: now, by: this.passes.get(client.sessionId)?.name ?? '' };
-      this.broadcast(MSG.music, { ...this.music, serverNow: now } satisfies MusicState);
+      if (now - (this.lastRequestAt.get(client.sessionId) ?? 0) < townConfig.musicRequestCooldownMs) return reply({ ok: false, reason: 'cooldown' });
+      const seconds = clubTrackSeconds();
+      const line = this.music ? advanceLine(this.music, now, seconds) : lineFromClock(now, seconds);
+      if (!line) return reply({ ok: false, reason: 'closed' });
+      if (line.queue.length >= townConfig.musicQueueMax) return reply({ ok: false, reason: 'full' });
+      if (line.queue.filter((q) => q.who === client.sessionId).length >= townConfig.musicQueuePerPerson) return reply({ ok: false, reason: 'mine' });
+      this.lastRequestAt.set(client.sessionId, now);
+      line.queue.push({ index, by: this.passes.get(client.sessionId)?.name ?? '', who: client.sessionId });
+      this.music = line;
+      this.broadcast(MSG.music, { ...line, serverNow: now } satisfies MusicState);
+      reply({ ok: true, position: line.queue.length });
     });
   }
 
@@ -147,7 +154,11 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     this.state.players.set(client.sessionId, player);
     this.moveBudget.set(client.sessionId, { value: MOVE_BUDGET_MAX, at: Date.now() });
     // 클럽에 들어오면 지금 신청곡을 알려 준다
-    if (this.music) client.send(MSG.music, { ...this.music, serverNow: Date.now() } satisfies MusicState);
+    if (this.music) {
+      const now = Date.now();
+      this.music = advanceLine(this.music, now, clubTrackSeconds());
+      client.send(MSG.music, { ...this.music, serverNow: now } satisfies MusicState);
+    }
   }
 
   onDispose() {
@@ -158,6 +169,7 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     this.state.players.delete(client.sessionId);
     this.moveBudget.delete(client.sessionId);
     this.lastGestureAt.delete(client.sessionId);
+    this.lastRequestAt.delete(client.sessionId);
     this.lastWarpAt.delete(client.sessionId);
     this.passes.delete(client.sessionId);
   }

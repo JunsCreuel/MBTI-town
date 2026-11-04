@@ -1,7 +1,7 @@
 // 실내 클럽: 맵 판별, 지금 흐르는 곡과 박자. 음악 플레이어(ClubMusic)가 오디오를 알려 주고, 무대 조명(ClubFx)이 박자를 읽는다.
 import { asset } from '@/assets/manifest';
-import { CLUB_TRACKS, clubScheduleAt, clubScheduleFrom } from '@/shared/clubMusic';
-import type { MusicState } from '@/shared/protocol';
+import { CLUB_TRACKS, advanceLine, clubLineAt, clubScheduleAt, type ClubLine, type ClubQueueItem } from '@/shared/clubMusic';
+import type { MusicResult, MusicState } from '@/shared/protocol';
 import type { TownMap } from '@/shared/townMap';
 
 /** 벽으로 둘러싼 실내 맵인지 (하늘·바다·구름 대신 어둠을 그린다) */
@@ -10,15 +10,16 @@ export const isIndoor = (map: TownMap) => map.props.some((p) => p.key === 'prop.
 const lengths = () => CLUB_TRACKS.map((t) => asset(t.key).seconds ?? 0);
 
 /**
- * DJ 신청곡 (클럽 채널마다 서버가 정한다). 없으면 index -1.
- * offset = 서버 시계 - 내 시계 (신청곡 시작 시각을 내 시계로 옮길 때 쓴다)
+ * 클럽 채널의 곡 흐름 (서버가 정한다: 지금 곡 → 신청곡 대기열 → 목록 순서). 신청곡이 한 번도 없었으면 null (시계 순서).
+ * offset = 서버 시계 - 내 시계 (서버 시각을 내 시계로 옮길 때 쓴다). version = 흐름이 바뀔 때마다 1씩
  */
-export const clubDj = { index: -1, startedAt: 0, offset: 0, by: '' };
+export const clubDj: { line: ClubLine | null; offset: number; version: number } = { line: null, offset: 0, version: 0 };
 const djListeners = new Set<() => void>();
 
 export function setClubDj(m: MusicState | null) {
-  if (m) Object.assign(clubDj, { index: m.index, startedAt: m.startedAt, offset: m.serverNow - Date.now(), by: m.by });
-  else Object.assign(clubDj, { index: -1, startedAt: 0, offset: 0, by: '' });
+  clubDj.line = m ? { index: m.index, startedAt: m.startedAt, by: m.by, queue: m.queue ?? [] } : null;
+  clubDj.offset = m ? m.serverNow - Date.now() : 0;
+  clubDj.version++;
   djListeners.forEach((fn) => fn());
 }
 
@@ -27,10 +28,26 @@ export function onClubDj(fn: () => void): () => void {
   return () => void djListeners.delete(fn);
 }
 
-/** 지금 곡과 위치: 신청곡이 있으면 그 곡부터 이어 가고, 없으면 시계로 정한 순서 (클럽에 있는 사람 모두 같다) */
-export function clubSchedule(nowMs = Date.now()) {
-  if (clubDj.index >= 0) return clubScheduleFrom(nowMs + clubDj.offset - clubDj.startedAt, lengths(), clubDj.index);
-  return clubScheduleAt(nowMs, lengths());
+/** 지금 곡·위치·신청한 사람: 흐름이 있으면 그 계산, 없으면 시계로 정한 순서 (클럽에 있는 사람 모두 같다) */
+export function clubSchedule(nowMs = Date.now()): { index: number; offset: number; left: number; by: string } | null {
+  if (clubDj.line) return clubLineAt(clubDj.line, nowMs + clubDj.offset, lengths());
+  const s = clubScheduleAt(nowMs, lengths());
+  return s && { ...s, by: '' };
+}
+
+/** 아직 나오지 않은 신청곡 (차례대로) */
+export function clubQueue(nowMs = Date.now()): ClubQueueItem[] {
+  return clubDj.line ? advanceLine(clubDj.line, nowMs + clubDj.offset, lengths()).queue : [];
+}
+
+/** 내가 보낸 신청이 어떻게 됐는지 (서버가 신청한 사람에게만 알려 준다) */
+const resultListeners = new Set<(r: MusicResult) => void>();
+export function emitClubResult(r: MusicResult) {
+  resultListeners.forEach((fn) => fn(r));
+}
+export function onClubResult(fn: (r: MusicResult) => void): () => void {
+  resultListeners.add(fn);
+  return () => void resultListeners.delete(fn);
 }
 
 /** 지금 소리가 나는 오디오와 그 곡 번호 (음악을 끄면 비운다) */

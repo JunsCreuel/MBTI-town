@@ -1,7 +1,7 @@
 // 실제 서버를 띄우고 SDK 클라이언트로 접속해 마을 실시간 규칙을 확인한다.
 import { Client, type Room } from '@colyseus/sdk';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MSG, type EmoteBroadcast, type JoinOptions, type MusicState, type SnapMessage } from '../src/shared/protocol';
+import { MSG, type EmoteBroadcast, type JoinOptions, type MusicResult, type MusicState, type SnapMessage } from '../src/shared/protocol';
 import { loadTownMapForTest } from '../src/shared/testMap';
 import { gateSpawnName, lotDoor, spawnName, type TownMap } from '../src/shared/townMap';
 import { announcementBody, type AnnounceBroadcast } from '../src/shared/announce';
@@ -229,31 +229,43 @@ describe('새 동네 (2동·3동…)', () => {
     }
   });
 
-  it('클럽에서 DJ에게 신청한 곡은 채널 모두에게 가고, 잠깐 동안은 다음 신청을 받지 않는다', async () => {
+  it('클럽 신청곡은 지금 곡 뒤 대기열에 차례로 쌓이고, 채널 모두가 같은 목록을 받는다', async () => {
     const a = await join(pass({ name: '신청자' }), 'home', 'club');
     const b = await join(pass({ name: '듣는이' }), 'home', 'club');
     expect(b.roomId).toBe(a.roomId);
     const got: MusicState[] = [];
-    const mine: MusicState[] = [];
+    const results: MusicResult[] = [];
     b.onMessage(MSG.music, (m: MusicState) => got.push(m));
-    a.onMessage(MSG.music, (m: MusicState) => mine.push(m));
+    a.onMessage(MSG.musicResult, (r: MusicResult) => results.push(r));
+    b.onMessage(MSG.musicResult, (r: MusicResult) => results.push(r));
     a.send(MSG.musicRequest, { index: 2 });
-    await until(() => got.length === 1 && mine.length === 1);
-    expect(got[0]).toMatchObject({ index: 2, by: '신청자' });
-    expect(Math.abs(got[0].serverNow - got[0].startedAt)).toBeLessThan(1000);
-    // 바로 또 신청하면 바뀌지 않고, 신청한 사람에게 지금 곡만 다시 알려 준다
+    await until(() => got.length === 1 && results.length === 1);
+    // 지금 곡(시계 순서)은 그대로, 신청곡은 대기열 첫 번째
+    expect(got[0].by).toBe('');
+    expect(got[0].queue).toEqual([{ index: 2, by: '신청자', who: a.sessionId }]);
+    expect(got[0].startedAt).toBeLessThanOrEqual(got[0].serverNow);
+    expect(results[0]).toEqual({ ok: true, position: 1 });
+    // 다른 사람이 신청하면 두 번째
     b.send(MSG.musicRequest, { index: 0 });
+    await until(() => got.length === 2 && results.length === 2);
+    expect(got[1].queue.map((q) => [q.index, q.by])).toEqual([[2, '신청자'], [0, '듣는이']]);
+    expect(results[1]).toEqual({ ok: true, position: 2 });
+    // 바로 또 신청하면 잠깐 쉬라고 한다 (목록은 그대로), 없는 곡은 받지 않는다
+    a.send(MSG.musicRequest, { index: 1 });
     a.send(MSG.musicRequest, { index: 99 });
-    await until(() => got.length === 2);
-    expect(got[1]).toMatchObject({ index: 2, by: '신청자' });
-    // 나중에 들어온 사람도 지금 신청곡을 받는다 (정원 2라 둘이 나간 뒤)
+    await until(() => results.length === 3);
+    expect(results[2]).toEqual({ ok: false, reason: 'cooldown' });
+    expect(got.length).toBe(2);
+    // 나중에 들어온 사람도 지금 흐름과 대기열을 받는다 (정원 2라 둘이 나간 뒤)
     await b.leave();
     const late: MusicState[] = [];
     const c = await new Client(`http://localhost:${PORT}`).joinOrCreate('town', { token: signTownPass(pass({ name: '늦게온이' })), place: 'club' });
     rooms.push(c);
     c.onMessage(MSG.music, (m: MusicState) => late.push(m));
-    if (c.roomId === a.roomId) await until(() => late.length === 1);
-    if (c.roomId === a.roomId) expect(late[0].index).toBe(2);
+    if (c.roomId === a.roomId) {
+      await until(() => late.length === 1);
+      expect(late[0].queue.map((q) => q.index)).toEqual([2, 0]);
+    }
     await c.leave();
     await a.leave();
   });

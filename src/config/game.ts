@@ -33,8 +33,12 @@ export const townConfig = {
   soberMsPerDrink: 30000,
   /** 더 마셔도 이 이상 취하지 않는다 (잔) */
   maxDrinks: 6,
-  /** 클럽: 신청곡을 받고 다음 신청까지 쉬는 시간 (ms, 채널마다). 너무 자주 곡이 바뀌지 않게 */
-  musicRequestCooldownMs: 15000,
+  /** 클럽: 한 사람이 신청하고 다음 신청까지 쉬는 시간 (ms) */
+  musicRequestCooldownMs: 5000,
+  /** 클럽: 신청곡 대기열에 기다릴 수 있는 곡 수 (채널마다) */
+  musicQueueMax: 10,
+  /** 클럽: 한 사람이 대기열에 올려 둘 수 있는 곡 수 */
+  musicQueuePerPerson: 2,
   /** 낚시 동작 길이 (ms): 던지고 기다렸다가 낚아 올릴 때까지 낚싯대를 들고 있다 (걸으면 끝난다) */
   fishActionMs: 9000,
   /** 동작·이모티콘 재사용 대기 (ms) */

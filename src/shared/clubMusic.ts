@@ -47,15 +47,70 @@ export function clubScheduleAt(epochMs: number, seconds: readonly number[]): { i
   return { index: first, offset: 0, left: seconds[first] };
 }
 
-/**
- * 신청곡부터 틀 때: startIndex번 곡을 elapsedMs 전에 시작해서, 끝나면 다음 곡으로 이어 간 경우의 지금 곡과 위치.
- * (클럽 채널에서 누가 DJ에게 곡을 신청하면 그 채널 모두가 이 순서로 듣는다)
- */
-export function clubScheduleFrom(elapsedMs: number, seconds: readonly number[], startIndex: number): { index: number; offset: number; left: number } | null {
-  const n = seconds.length;
-  if (!n || startIndex < 0 || startIndex >= n) return null;
-  const order = Array.from({ length: n }, (_, k) => seconds[(startIndex + k) % n]);
-  const s = clubScheduleAt(Math.max(0, elapsedMs), order);
-  return s && { ...s, index: (startIndex + s.index) % n };
+// ───────────────────────── 신청곡 대기열 ─────────────────────────
+
+/** 신청곡 하나. who = 신청한 사람의 접속 번호 (한 사람이 몇 곡 기다리는지 센다) */
+export interface ClubQueueItem {
+  index: number;
+  by: string;
+  who: string;
 }
 
+/**
+ * 클럽 채널의 곡 흐름: 지금 곡(index, startedAt, by) → 신청곡 대기열(차례대로) → 그 뒤로는 목록 순서로 이어 간다.
+ * 지금 나오는 곡은 끝까지 틀고, 신청곡은 그 뒤에 나온다. 서버와 화면이 같은 계산을 해서 같은 곡의 같은 자리를 듣는다.
+ */
+export interface ClubLine {
+  index: number;
+  /** 지금 곡을 시작한 시각 (서버 시계, ms) */
+  startedAt: number;
+  /** 지금 곡을 신청한 사람 ('' = 목록 순서) */
+  by: string;
+  queue: ClubQueueItem[];
+}
+
+const lenOf = (seconds: readonly number[], i: number) => (seconds[i] > 0 ? seconds[i] : 0);
+
+/**
+ * nowMs에 맞게 흐름을 앞으로 당긴다: 끝난 곡은 버리고 다음 신청곡(없으면 목록의 다음 곡)을 지금 곡으로 올린다.
+ * 돌려준 흐름의 startedAt은 지금 곡의 시작 시각이다.
+ */
+export function advanceLine(line: ClubLine, nowMs: number, seconds: readonly number[]): ClubLine {
+  const n = seconds.length;
+  if (!n || seconds.every((s) => !(s > 0))) return line;
+  let { index, startedAt, by } = line;
+  const queue = [...line.queue];
+  // 신청곡이 남아 있는 동안은 하나씩, 다 틀면 목록 순서로 (오래 비어 있으면 한 바퀴씩 건너뛴다)
+  const total = seconds.reduce((s, x) => s + (x > 0 ? x : 0), 0) * 1000;
+  for (let guard = 0; guard < 10_000; guard++) {
+    const len = lenOf(seconds, index) * 1000;
+    if (len > 0 && nowMs < startedAt + len) break;
+    startedAt += len;
+    const next = queue.shift();
+    if (next) {
+      index = next.index;
+      by = next.by;
+    } else {
+      if (nowMs - startedAt > total) startedAt += Math.floor((nowMs - startedAt) / total) * total;
+      index = (index + 1) % n;
+      by = '';
+    }
+  }
+  return { index, startedAt, by, queue };
+}
+
+/** 흐름에서 지금 곡·위치(초)·남은 시간(초)·신청한 사람 */
+export function clubLineAt(line: ClubLine, nowMs: number, seconds: readonly number[]): { index: number; offset: number; left: number; by: string } | null {
+  if (!seconds.length || line.index < 0 || line.index >= seconds.length) return null;
+  const a = advanceLine(line, nowMs, seconds);
+  const len = lenOf(seconds, a.index);
+  if (!len) return null;
+  const offset = Math.max(0, (nowMs - a.startedAt) / 1000);
+  return { index: a.index, offset, left: Math.max(0, len - offset), by: a.by };
+}
+
+/** 신청곡이 없을 때(시계 순서) 지금 곡으로 흐름을 하나 만든다 */
+export function lineFromClock(nowMs: number, seconds: readonly number[]): ClubLine | null {
+  const s = clubScheduleAt(nowMs, seconds);
+  return s ? { index: s.index, startedAt: nowMs - s.offset * 1000, by: '', queue: [] } : null;
+}

@@ -2,6 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { District } from '../src/shared/districts';
+import { CLUB_TRACKS } from '../src/shared/clubMusic';
 import type { Spot } from '../src/shared/protocol';
 import { parseTownMap, withDistrict, type TownMap } from '../src/shared/townMap';
 
@@ -29,6 +30,16 @@ export function getSpotMap(spot: Spot): TownMap {
     spotMaps.set(spot, m);
   }
   return m;
+}
+
+let clubSeconds: number[] | undefined;
+/** 클럽 곡 길이 (초, CLUB_TRACKS 순서). manifest의 seconds */
+export function clubTrackSeconds(): number[] {
+  if (!clubSeconds) {
+    const manifest = JSON.parse(readFileSync(join(ASSET_ROOT, 'manifest.json'), 'utf8')) as Record<string, { seconds?: number }>;
+    clubSeconds = CLUB_TRACKS.map((t) => manifest[t.key]?.seconds ?? 0);
+  }
+  return clubSeconds;
 }
 
 let hoodTemplate: TownMap | undefined;

@@ -2,36 +2,75 @@
 
 // 클럽 화면: DJ 너굴에게 신청곡, 바텐더 곰돌에게 한 잔, 취했을 때 화면 효과(흐려짐·분홍빛·딸꾹질).
 import { useEffect, useRef, useState } from 'react';
+import { townConfig } from '@/config/game';
 import { CLUB_TRACKS } from '@/shared/clubMusic';
+import type { MusicResult } from '@/shared/protocol';
 import { Sheet } from '../app/Sheet';
-import { clubSchedule } from './club';
+import { clubQueue, clubSchedule, onClubDj, onClubResult } from './club';
 import { BARTENDER_NAME, DJ_NAME } from './ClubNpcs';
 import { DRINKS, bartenderLine, drink, drinksNow, drunkLevel, type Drink } from './drunk';
 
-/** DJ에게 신청곡: 지금 나오는 곡 표시, 누르면 채널 모두에게 그 곡이 나온다 */
+const REFUSED: Record<Extract<MusicResult, { ok: false }>['reason'], string> = {
+  full: '신청곡 목록이 꽉 찼어요. 몇 곡 끝난 뒤에 신청해 주세요.',
+  mine: `한 사람은 ${townConfig.musicQueuePerPerson}곡까지 기다릴 수 있어요.`,
+  cooldown: '조금만 있다가 다시 신청해 주세요.',
+  closed: '지금은 신청할 수 없어요.',
+};
+
+/** DJ에게 신청곡: 지금 나오는 곡, 신청곡 목록(차례대로), 신청하기. 지금 곡은 끝까지 틀고 신청곡이 차례로 나온다 */
 export function DjSheet({ onRequest, onClose }: { onRequest: (index: number) => boolean; onClose: () => void }) {
-  const [playing, setPlaying] = useState(() => clubSchedule()?.index ?? -1);
+  const read = () => ({ now: clubSchedule(), queue: clubQueue() });
+  const [line, setLine] = useState(read);
   const [note, setNote] = useState('');
   useEffect(() => {
-    const t = setInterval(() => setPlaying(clubSchedule()?.index ?? -1), 1000);
-    return () => clearInterval(t);
+    const t = setInterval(() => setLine(read()), 1000);
+    const off = onClubDj(() => setLine(read()));
+    const offResult = onClubResult((r) =>
+      setNote(r.ok ? `${DJ_NAME}: 신청곡 목록 ${r.position}번째에 넣었어요. 앞 곡이 끝나면 차례로 틀어 줄게요!` : REFUSED[r.reason]),
+    );
+    return () => {
+      clearInterval(t);
+      off();
+      offResult();
+    };
   }, []);
   function pick(i: number) {
-    if (!onRequest(i)) return setNote('실시간 서버에 연결된 뒤에 신청할 수 있어요.');
-    setNote(`${DJ_NAME}: 「${CLUB_TRACKS[i].title}」 바로 틀어 줄게요!`);
+    if (!onRequest(i)) setNote('실시간 서버에 연결된 뒤에 신청할 수 있어요.');
   }
+  const playing = line.now?.index ?? -1;
   return (
     <Sheet title={`${DJ_NAME}에게 신청곡`} onClose={onClose}>
       <div className="club-sheet">
-        <p className="muted">고른 곡이 이 클럽 채널에 있는 사람 모두에게 나와요. 신청은 채널마다 15초에 한 번이에요.</p>
+        <p className="muted">지금 곡이 끝나면 신청곡이 차례로 나와요. 이 채널 모두가 같이 들어요.</p>
+        {line.now && (
+          <div className="club-now">
+            <span className="club-now__label">지금 나오는 곡</span>
+            <b>{CLUB_TRACKS[line.now.index].title}</b>
+            {line.now.by && <span className="muted">{line.now.by}의 신청곡</span>}
+          </div>
+        )}
+        <h3 className="club-sub">
+          신청곡 목록 <b>{line.queue.length}</b>
+        </h3>
+        {line.queue.length ? (
+          <ol className="club-queue">
+            {line.queue.map((q, k) => (
+              <li key={`${k}:${q.who}:${q.index}`}>
+                <span className="club-queue__no">{k + 1}</span>
+                <span className="club-queue__title">{CLUB_TRACKS[q.index].title}</span>
+                <span className="muted club-queue__by">{q.by}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="muted">아직 신청곡이 없어요.</p>
+        )}
+        <h3 className="club-sub">신청하기</h3>
         <ul className="club-tracks">
           {CLUB_TRACKS.map((t, i) => (
             <li key={t.id}>
               <button className={`club-track${i === playing ? ' club-track--on' : ''}`} onClick={() => pick(i)}>
-                <span className="club-track__title">
-                  {t.title}
-                  {i === playing && <span className="club-track__now">지금 나오는 곡</span>}
-                </span>
+                <span className="club-track__title">{t.title}</span>
               </button>
             </li>
           ))}
