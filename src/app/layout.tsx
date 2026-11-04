@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import type { CSSProperties, ReactNode } from 'react';
 import { assetUrl } from '@/assets/manifest';
 import { AnnounceBanner } from '@/components/app/AnnounceBanner';
+import { NoContextMenu } from '@/components/app/NoContextMenu';
 import { RealtimeWarmup } from '@/components/app/RealtimeWarmup';
 import { tokens, tokensToCssVars } from '@/design/tokens';
 import './globals.css';
@@ -28,6 +29,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {children}
         <AnnounceBanner />
         <RealtimeWarmup />
+        <NoContextMenu />
       </body>
     </html>
   );

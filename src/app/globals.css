@@ -4763,3 +4763,9 @@ a:focus-visible {
   min-height: 36px;
   flex: none;
 }
+
+/* 휴대폰에서 그림·3D 화면을 길게 눌러도 "이미지 저장" 말풍선이 뜨지 않게 (오른쪽 클릭 메뉴는 NoContextMenu가 막는다) */
+img,
+canvas {
+  -webkit-touch-callout: none;
+}
