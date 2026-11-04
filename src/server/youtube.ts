@@ -28,7 +28,10 @@ interface VideoItem {
   status?: { embeddable?: boolean; privacyStatus?: string };
 }
 
-/** 확인할 것: 공개(또는 일부 공개)·다른 곳에서 재생 허용·연령 제한 없음·라이브 아님·음악 카테고리·우리나라에서 재생 가능·8분 이하 */
+/** 받는 카테고리: 음악(10)과 엔터테인먼트(24, 뮤직비디오가 여기로 올라오는 일이 많다) */
+export const YOUTUBE_CATEGORIES = ['10', '24'];
+
+/** 확인할 것: 공개(또는 일부 공개)·다른 곳에서 재생 허용·연령 제한 없음·라이브 아님·음악·엔터테인먼트 카테고리·우리나라에서 재생 가능·8분 이하 */
 export function checkVideo(id: string, item: VideoItem | undefined): YoutubeSong {
   if (!item) throw new SceneError('not_found', '영상을 찾지 못했어요. 링크를 다시 확인해 주세요.');
   const sn = item.snippet ?? {};
@@ -38,7 +41,7 @@ export function checkVideo(id: string, item: VideoItem | undefined): YoutubeSong
   if (st.embeddable === false) throw new SceneError('bad_request', '이 영상은 다른 곳에서 틀 수 없게 막혀 있어요.');
   if (cd.contentRating?.ytRating === 'ytAgeRestricted') throw new SceneError('bad_request', '연령 제한 영상은 틀 수 없어요.');
   if (sn.liveBroadcastContent && sn.liveBroadcastContent !== 'none') throw new SceneError('bad_request', '라이브 방송은 틀 수 없어요.');
-  if (sn.categoryId !== '10') throw new SceneError('bad_request', '음악 영상만 신청할 수 있어요.');
+  if (!YOUTUBE_CATEGORIES.includes(sn.categoryId ?? '')) throw new SceneError('bad_request', '음악·엔터테인먼트 영상만 신청할 수 있어요.');
   const rr = cd.regionRestriction;
   if (rr?.blocked?.includes('KR') || (rr?.allowed && !rr.allowed.includes('KR'))) throw new SceneError('bad_request', '우리나라에서 볼 수 없는 영상이에요.');
   const seconds = isoDurationSeconds(cd.duration ?? '');

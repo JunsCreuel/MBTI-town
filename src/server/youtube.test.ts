@@ -25,9 +25,11 @@ describe('유튜브 신청곡 확인', () => {
   it('틀 수 있는 음악 영상이면 이름을 다듬어 돌려준다', () => {
     expect(checkVideo('dQw4w9WgXcQ', ok)).toEqual({ id: 'dQw4w9WgXcQ', title: '좋은 노래', seconds: 210 });
     expect(checkVideo('dQw4w9WgXcQ', { ...ok, status: { embeddable: true, privacyStatus: 'unlisted' } }).seconds).toBe(210);
+    // 엔터테인먼트 카테고리로 올라온 뮤직비디오도 받는다
+    expect(checkVideo('dQw4w9WgXcQ', { ...ok, snippet: { ...ok.snippet, categoryId: '24' } }).seconds).toBe(210);
   });
 
-  it('비공개·퍼가기 막힘·연령 제한·라이브·음악 아님·국내 차단·8분 넘음은 받지 않는다', () => {
+  it('비공개·퍼가기 막힘·연령 제한·라이브·음악·엔터테인먼트 아님·국내 차단·8분 넘음은 받지 않는다', () => {
     const bad = [
       undefined,
       { ...ok, status: { embeddable: true, privacyStatus: 'private' } },
