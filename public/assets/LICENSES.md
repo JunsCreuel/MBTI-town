@@ -270,3 +270,5 @@ AI로 생성한 이미지·모델은 출처 칸에 사용한 도구를 적는다
 | characters/char_npc_saju_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-04 |
 | props/prop_plaza_saju_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-04 |
 | items/item_ticket_saju_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-04 |
+| ui/ui_icon_dex_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-04 |
+| ui/ui_icon_character_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-04 |
