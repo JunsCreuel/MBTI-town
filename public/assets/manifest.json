@@ -739,5 +739,98 @@
     "seconds": 66,
     "bpm": 120.77,
     "beat": 0.273
+  },
+  "item.fish.loach": {
+    "file": "items/item_fish_loach_ph.svg"
+  },
+  "item.fish.smelt": {
+    "file": "items/item_fish_smelt_ph.svg"
+  },
+  "item.fish.bitterling": {
+    "file": "items/item_fish_bitterling_ph.svg"
+  },
+  "item.fish.gudgeon": {
+    "file": "items/item_fish_gudgeon_ph.svg"
+  },
+  "item.fish.dark_chub": {
+    "file": "items/item_fish_dark_chub_ph.svg"
+  },
+  "item.fish.chinese_minnow": {
+    "file": "items/item_fish_chinese_minnow_ph.svg"
+  },
+  "item.fish.aucha_perch": {
+    "file": "items/item_fish_aucha_perch_ph.svg"
+  },
+  "item.fish.bluegill": {
+    "file": "items/item_fish_bluegill_ph.svg"
+  },
+  "item.fish.bass": {
+    "file": "items/item_fish_bass_ph.svg"
+  },
+  "item.fish.bagrid": {
+    "file": "items/item_fish_bagrid_ph.svg"
+  },
+  "item.fish.snakehead": {
+    "file": "items/item_fish_snakehead_ph.svg"
+  },
+  "item.fish.guppy": {
+    "file": "items/item_fish_guppy_ph.svg"
+  },
+  "item.fish.splendid_dace": {
+    "file": "items/item_fish_splendid_dace_ph.svg"
+  },
+  "item.fish.redfin_culter": {
+    "file": "items/item_fish_redfin_culter_ph.svg"
+  },
+  "item.fish.lenok": {
+    "file": "items/item_fish_lenok_ph.svg"
+  },
+  "item.fish.masu": {
+    "file": "items/item_fish_masu_ph.svg"
+  },
+  "item.fish.salmon": {
+    "file": "items/item_fish_salmon_ph.svg"
+  },
+  "item.fish.golden_mandarin": {
+    "file": "items/item_fish_golden_mandarin_ph.svg"
+  },
+  "item.fish.paradise_fish": {
+    "file": "items/item_fish_paradise_fish_ph.svg"
+  },
+  "item.fish.rose_bitterling": {
+    "file": "items/item_fish_rose_bitterling_ph.svg"
+  },
+  "item.fish.koi": {
+    "file": "items/item_fish_koi_ph.svg"
+  },
+  "item.fish.betta": {
+    "file": "items/item_fish_betta_ph.svg"
+  },
+  "item.fish.piranha": {
+    "file": "items/item_fish_piranha_ph.svg"
+  },
+  "item.fish.arowana": {
+    "file": "items/item_fish_arowana_ph.svg"
+  },
+  "item.fish.sturgeon": {
+    "file": "items/item_fish_sturgeon_ph.svg"
+  },
+  "item.fish.moon_killifish": {
+    "file": "items/item_fish_moon_killifish_ph.svg"
+  },
+  "item.fish.sakura_trout": {
+    "file": "items/item_fish_sakura_trout_ph.svg"
+  },
+  "item.fish.rainbow_goldfish": {
+    "file": "items/item_fish_rainbow_goldfish_ph.svg"
+  },
+  "item.fish.crystal_catfish": {
+    "file": "items/item_fish_crystal_catfish_ph.svg"
+  },
+  "item.fish.fire_carp": {
+    "file": "items/item_fish_fire_carp_ph.svg"
+  },
+  "item.fish.golden_whale": {
+    "file": "items/item_fish_golden_whale_ph.svg"
   }
 }

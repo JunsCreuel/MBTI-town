@@ -118,6 +118,8 @@ export const MSG = {
   music: 'music',
   /** 클럽: DJ에게 신청곡 (화면 → 서버) */
   musicRequest: 'music_request',
+  /** 서버 전체 공지 (서버 → 모두, AnnounceBroadcast) */
+  announce: 'announce',
 } as const;
 
 /**

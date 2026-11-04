@@ -101,6 +101,8 @@ export const playConfig = {
   fishPerDay: 300,
   /** 던졌는데 아무것도 안 걸릴(꽝) 확률 */
   fishMissRate: 0.22,
+  /** 황금 고래: 던질 때마다 0.001% (10만 번에 한 번). 낚으면 서버 전체 공지 */
+  goldenWhaleChance: 0.00001,
   /** 나무·낚시 자리에서 버튼이 뜨는 거리 (칸) */
   reach: 1.9,
 } as const;

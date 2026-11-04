@@ -128,7 +128,7 @@ export function FishingPanel({
         </div>
       )}
       {stage === 'caught' && result?.fish && (
-        <div className="fishing__result">
+        <div className={`fishing__result${result.fish.rarity === 'mythic' ? ' fishing__result--mythic' : ''}`}>
           <span className="fishing__fish" aria-hidden>
             <ItemIcon kind="fish" id={result.fish.id} size={56} />
           </span>
@@ -140,6 +140,9 @@ export function FishingPanel({
             <p className="fishing__meta">
               <span style={{ color: RARITY[result.fish.rarity].color }}>{RARITY[result.fish.rarity].label}</span> · 도감 {result.count}마리째
             </p>
+            {result.fish.rarity === 'mythic' && (
+              <p className="fishing__meta fishing__mythic">{result.announced ? '마을 모두에게 소식이 퍼졌어요!' : '10만 번에 한 번 나오는 꿈의 고래예요!'}</p>
+            )}
           </div>
         </div>
       )}

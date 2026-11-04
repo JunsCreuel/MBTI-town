@@ -7,6 +7,7 @@ import { roomConfig, townConfig } from '../../src/config/game';
 import { MOVE_BUDGET_MAX, normalizeAngle, refillMoveBudget } from '../../src/shared/movement';
 import { ACTIONS, EMOTES, MSG, type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type HouseJoinOptions, type MoveMessage } from '../../src/shared/protocol';
 import { ROOM_BODY_RADIUS } from '../../src/shared/room';
+import { listenAnnouncements } from '../announce';
 import { verifyTownPass, type TownPass } from '../../src/shared/townToken';
 import { Player } from './TownState';
 
@@ -36,6 +37,8 @@ function kindOf<T extends string>(v: unknown, allowed: readonly T[]): T | null {
 }
 
 export class HouseRoom extends Room<{ state: HouseState }> {
+  /** 서버 전체 공지 듣기를 멈춘다 */
+  private stopAnnouncements?: () => void;
   maxClients = roomConfig.maxPeople;
   patchRate = townConfig.patchRateMs;
   maxMessagesPerSecond = townConfig.maxMessagesPerSecond;
@@ -56,6 +59,7 @@ export class HouseRoom extends Room<{ state: HouseState }> {
 
   onCreate() {
     this.autoDispose = true;
+    this.stopAnnouncements = listenAnnouncements(this);
     this.onMessage(MSG.move, (client, message: unknown) => this.handleMove(client, message));
     this.onMessage(MSG.action, (client, message: unknown) => {
       const kind = kindOf<ActionKind>(message, ACTIONS);
@@ -94,6 +98,10 @@ export class HouseRoom extends Room<{ state: HouseState }> {
     player.moving = false;
     this.state.players.set(client.sessionId, player);
     this.budgets.set(client.sessionId, { value: MOVE_BUDGET_MAX, at: Date.now() });
+  }
+
+  onDispose() {
+    this.stopAnnouncements?.();
   }
 
   onLeave(client: Client) {

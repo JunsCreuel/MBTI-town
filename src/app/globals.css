@@ -4054,3 +4054,83 @@ a:focus-visible {
   }
 }
 
+
+/* 서버 전체 공지 띠 (모든 화면 위쪽). 황금 고래는 금빛으로 반짝인다 */
+.announce {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 50%;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 6px 24px var(--color-shadow);
+  font-size: 14px;
+  font-weight: 700;
+  transform: translateX(-50%);
+  animation: announce-in 0.35s ease-out;
+}
+.announce--golden_whale {
+  background: linear-gradient(100deg, var(--color-goldSoft), var(--color-goldBright) 45%, var(--color-goldSoft));
+  background-size: 220% 100%;
+  color: var(--color-goldInk);
+  box-shadow: 0 0 0 2px var(--color-gold), 0 8px 28px var(--color-goldGlow);
+  animation: announce-in 0.35s ease-out, announce-shine 2.4s linear infinite;
+}
+.announce__icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  color: var(--color-accent);
+}
+.announce__text {
+  min-width: 0;
+  line-height: 1.35;
+  word-break: keep-all;
+}
+.announce__close {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  opacity: 0.6;
+  cursor: pointer;
+}
+@keyframes announce-in {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+@keyframes announce-shine {
+  from { background-position: 100% 0; }
+  to { background-position: -120% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .announce,
+  .announce--golden_whale {
+    animation: none;
+  }
+}
+/* 가방: 신화 표시, 낚시: 황금 고래를 낚았을 때 */
+.inventory__badge--mythic {
+  background: linear-gradient(100deg, var(--color-goldBright), var(--color-gold));
+  color: var(--color-goldInk);
+}
+.fishing__result--mythic {
+  border-radius: var(--radius-md);
+  background: linear-gradient(100deg, var(--color-goldSoft), var(--color-goldBright));
+}
+.fishing__mythic {
+  color: var(--color-goldInk);
+  font-weight: 700;
+}

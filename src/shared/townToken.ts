@@ -91,3 +91,23 @@ export function verifyTownPass(token: unknown, nowSec = Math.floor(Date.now() / 
     ...(typeof raw.ilju === 'string' && /^[가-힣]{2}$/.test(raw.ilju) ? { ilju: raw.ilju } : {}),
   };
 }
+
+// ───────────────────────── 서버 전체 공지 서명 ─────────────────────────
+
+/** 공지 서명이 유효한 시간 (두 서버 시계가 조금 달라도 되게) */
+export const ANNOUNCE_TTL_MS = 60_000;
+
+const announceSig = (body: string, ts: number) => createHmac('sha256', secret()).update(`announce:${ts}:${body}`).digest();
+
+/** 웹 서버가 실시간 서버에 공지를 보낼 때 붙이는 서명. body = announcementBody(공지) */
+export function signAnnouncement(body: string, ts: number): string {
+  return b64(announceSig(body, ts));
+}
+
+export function verifyAnnouncement(body: string, ts: unknown, sig: unknown, now = Date.now()): boolean {
+  if (typeof ts !== 'number' || !Number.isFinite(ts) || typeof sig !== 'string') return false;
+  if (Math.abs(now - ts) > ANNOUNCE_TTL_MS) return false;
+  const want = announceSig(body, ts);
+  const got = Buffer.from(sig, 'base64url');
+  return got.length === want.length && timingSafeEqual(got, want);
+}

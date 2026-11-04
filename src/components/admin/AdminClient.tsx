@@ -1,12 +1,13 @@
 'use client';
 
-// 운영 화면 (운영자만): 요약 숫자, 신고 처리, 주민 찾기·계정 삭제.
+// 운영 화면 (운영자만): 요약 숫자, 전체 공지, 신고 처리, 주민 찾기·계정 삭제.
 // 운영자는 이 화면 말고도 모든 방·기록을 공개 범위와 상관없이 보고, 방명록·토론 논거를 지울 수 있다.
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { call } from '@/lib/api';
 import type { AdminReport, AdminUser } from '@/server/scene/service';
 import type { AdminCounts } from '@/server/scene/store';
+import { NOTICE_MAX } from '@/shared/announce';
 import { DISTRICT } from '@/shared/districts';
 import { TabBar } from '../app/TabBar';
 
@@ -32,6 +33,7 @@ export function AdminClient() {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -72,6 +74,21 @@ export function AdminClient() {
       await load();
     } catch (e) {
       setToast(e instanceof Error ? e.message : '처리하지 못했어요');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function sendNotice() {
+    const text = notice.trim();
+    if (!text || !confirm(`지금 마을에 접속한 모두에게 보낼까요?\n\n(공지) ${text}`)) return;
+    setBusy('notice');
+    try {
+      await call('POST', '/api/admin/notice', { text });
+      setNotice('');
+      setToast('공지를 보냈어요');
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '보내지 못했어요');
     } finally {
       setBusy(null);
     }
@@ -161,6 +178,23 @@ export function AdminClient() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="section card">
+        <h2 className="section-title">전체 공지</h2>
+        <p className="muted">지금 마을·동네·놀이터·집 안에 접속한 모두의 화면 위쪽에 몇 초 동안 보여요. 저장되지 않아서 나중에 들어온 사람은 못 봐요.</p>
+        <form
+          className="admin-search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void sendNotice();
+          }}
+        >
+          <input value={notice} onChange={(e) => setNotice(e.target.value)} placeholder="예: 오늘 밤 10시에 광장에서 만나요!" maxLength={NOTICE_MAX} aria-label="공지 내용" />
+          <button className="btn-primary btn-primary--inline" disabled={!notice.trim() || busy === 'notice'}>
+            보내기
+          </button>
+        </form>
       </section>
 
       <section className="section card">

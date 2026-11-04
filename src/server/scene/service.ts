@@ -4,6 +4,7 @@ import 'server-only';
 import { randomBytes } from 'node:crypto';
 import { recordConfig, socialConfig, townConfig } from '@/config/game';
 import { isMbtiType, type MbtiType } from '@/design/mbti';
+import { NOTICE_MAX, parseAnnouncement, type Announcement } from '@/shared/announce';
 import { AVATAR_COLORS, cleanAvatar, type Avatar } from '@/shared/avatar';
 import { bgmTrack } from '@/shared/bgm';
 import { cleanTaste, isDistrict, type District, type Taste } from '@/shared/districts';
@@ -18,7 +19,7 @@ import { SajuError, cleanBirthInput, computeSaju, dayPillarOn, type BirthInput, 
 import { localDate } from '@/shared/debate';
 import { dailyFortune, type DailyFortune } from '@/shared/fortune';
 import {
-  FORTUNE_FRUIT, FRUITS, fishDef, fortuneFor, parseTreeSpot, rollCatch, treeSpotId,
+  FORTUNE_FRUIT, FRUITS, GOLDEN_WHALE_ID, fishDef, fortuneFor, parseTreeSpot, rollCatch, treeSpotId,
   type FishDef, type FortuneFruit,
 } from '@/shared/play';
 import { playConfig } from '@/config/game';
@@ -165,6 +166,8 @@ export interface FishResult {
   count: number;
   /** 오늘 남은 횟수 (화면에는 보여 주지 않는다) */
   left: number;
+  /** 황금 고래를 낚아 서버 전체에 공지했는지 */
+  announced?: boolean;
 }
 
 export interface PlayState {
@@ -319,10 +322,14 @@ export function sniffImage(bytes: Uint8Array): 'image/jpeg' | 'image/png' | 'ima
   return null;
 }
 
+/** 서버 전체 공지를 보내는 길 (웹 서버에서는 실시간 서버로, 테스트에서는 기록만). 보냈으면 true */
+export type Announcer = (a: Announcement) => Promise<boolean>;
+
 export class SceneService {
   constructor(
     private readonly store: SceneStore,
     private readonly now: () => Date = () => new Date(),
+    private readonly announce: Announcer = async () => false,
   ) {}
 
   // ───────────────────────── 나 ─────────────────────────
@@ -813,6 +820,16 @@ export class SceneService {
     }));
   }
 
+  /** 운영자 공지: 지금 실시간 서버에 접속한 모두에게 위쪽 띠로 보인다 (저장하지 않는다) */
+  async adminNotice(viewer: Viewer | null, text: unknown): Promise<{ sent: boolean }> {
+    await this.requireAdmin(viewer);
+    const a = parseAnnouncement({ kind: 'notice', text });
+    if (!a) throw new SceneError('bad_request', `공지 내용을 ${NOTICE_MAX}자 안으로 적어 주세요.`);
+    const sent = await this.announce(a).catch(() => false);
+    if (!sent) throw new SceneError('conflict', '실시간 서버에 공지를 보내지 못했어요. 잠시 뒤에 다시 보내 주세요.');
+    return { sent };
+  }
+
   /** 계정 삭제 (되돌릴 수 없다). 나와 다른 운영자는 지울 수 없다 */
   async adminDeleteUser(viewer: Viewer | null, id: string): Promise<void> {
     const me = await this.requireAdmin(viewer);
@@ -961,12 +978,17 @@ export class SceneService {
       const used = (await this.store.dailySpots(p.id, day, 'fish:')).length;
       // 화면에는 횟수를 보여 주지 않는다. 자동으로 계속 던지는 것만 막는 넉넉한 상한
       if (used >= playConfig.fishPerDay) throw new SceneError('conflict', '물고기들이 오늘은 쉬고 싶대요. 내일 또 와요!');
-      const caught = rollCatch(Math.random(), Math.random(), Math.random());
+      const caught = rollCatch(Math.random(), Math.random(), Math.random(), Math.random());
       // 같은 번호를 동시에 쓰면 다시 센다
       if (!(await this.store.takeDailySpot(p.id, day, `fish:${used + 1}`, caught?.fish.id ?? null))) continue;
       const left = playConfig.fishPerDay - used - 1;
       if (!caught) return { fish: null, size: 0, count: 0, left };
       const count = await this.store.addToCollection(p.id, 'fish', caught.fish.id, 1);
+      // 황금 고래: 마을 모두에게 알린다
+      if (caught.fish.id === GOLDEN_WHALE_ID) {
+        const announced = await this.announce({ kind: 'golden_whale', name: displayNameOf(p) }).catch(() => false);
+        return { fish: caught.fish, size: caught.size, count, left, announced };
+      }
       return { fish: caught.fish, size: caught.size, count, left };
     }
     throw new SceneError('conflict', '잠깐 뒤에 다시 던져 주세요.');

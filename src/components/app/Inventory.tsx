@@ -23,6 +23,7 @@ export const RARITY: Record<FishDef['rarity'], { label: string; color: string }>
   common: { label: '흔해요', color: tokens.color.textSub },
   rare: { label: '드물어요', color: tokens.color.sky },
   legend: { label: '전설', color: tokens.emotion.joy },
+  mythic: { label: '신화', color: tokens.color.goldInk },
   junk: { label: '잡동사니', color: tokens.color.lose },
 };
 
@@ -86,7 +87,9 @@ export function InventorySheet({ state, onClose }: { state: PlayState | null; on
                         <ItemIcon kind="fish" id={f.id} size={44} unknown={!n} />
                         <span className="inventory__name">{n ? f.name : '???'}</span>
                         {n > 0 && <span className="inventory__count">{n}</span>}
-                        {n > 0 && f.rarity === 'legend' && <span className="inventory__badge">전설</span>}
+                        {n > 0 && (f.rarity === 'legend' || f.rarity === 'mythic') && (
+                          <span className={`inventory__badge${f.rarity === 'mythic' ? ' inventory__badge--mythic' : ''}`}>{RARITY[f.rarity].label}</span>
+                        )}
                       </button>
                     </li>
                   );

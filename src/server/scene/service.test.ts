@@ -1,7 +1,8 @@
 // 미니홈피 규칙을 실제 Postgres(PGlite, 메모리)로 확인한다. 공개 범위·차단은 서버 규칙이라 여기서 꼼꼼히 본다.
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { playConfig, townConfig } from '@/config/game';
+import type { Announcement } from '@/shared/announce';
 import { DISTRICTS, type District } from '@/shared/districts';
 import { verifyTownPass } from '@/shared/townToken';
 import { computeSaju, type BirthInput } from '../saju';
@@ -424,6 +425,34 @@ describe('놀거리: 열매·운세 열매·낚시', () => {
     expect(state.fishLeft).toBe(0);
     expect(Object.values(state.fish).reduce((a, b) => a + b, 0)).toBe(total);
   }, 60_000);
+
+  it('황금 고래를 낚으면 낚은 사람 이름으로 서버 전체에 공지한다', async () => {
+    const heard: Announcement[] = [];
+    const loud = new SceneService(new SceneStore(sql), () => now, async (a) => (heard.push(a), true));
+    const v = await user();
+    await onboard(v, '고래잡이');
+    // 난수가 모두 0이면 황금 고래 (던질 때마다 0.001%)
+    const spy = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      const r = await loud.castLine(v);
+      expect(r).toMatchObject({ fish: { id: 'golden_whale', rarity: 'mythic' }, count: 1, announced: true });
+      expect(r.size).toBeGreaterThanOrEqual(800);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(heard).toEqual([{ kind: 'golden_whale', name: '고래잡이' }]);
+    expect((await loud.playState(v)).fish).toMatchObject({ golden_whale: 1 });
+    // 실시간 서버에 못 보내도 낚시는 된다
+    const quiet = new SceneService(new SceneStore(sql), () => now, async () => {
+      throw new Error('실시간 서버가 잠들었어요');
+    });
+    const spy2 = vi.spyOn(Math, 'random').mockReturnValue(0);
+    try {
+      expect(await quiet.castLine(v)).toMatchObject({ fish: { id: 'golden_whale' }, count: 2, announced: false });
+    } finally {
+      spy2.mockRestore();
+    }
+  });
 });
 
 describe('주민증', () => {
@@ -514,5 +543,17 @@ describe('운영자', () => {
     await expectError(service.adminDeleteUser(other, found[0].id), 'not_found');
     await service.adminDeleteUser(admin, found[0].id);
     await expectError(service.roomView(admin, ho), 'not_found');
+  });
+
+  it('운영자 공지: 운영자만, 내용이 있어야 하고, 실시간 서버에 못 보내면 알려 준다', async () => {
+    const heard: Announcement[] = [];
+    const loud = new SceneService(new SceneStore(sql), () => now, async (a) => (heard.push(a), true));
+    await expectError(loud.adminNotice(other, '몰래 공지'), 'not_found');
+    await expectError(loud.adminNotice(null, '몰래 공지'), 'not_found');
+    await expectError(loud.adminNotice(admin, '   '), 'bad_request');
+    expect(await loud.adminNotice(admin, '  오늘 밤   광장에서 만나요! ')).toEqual({ sent: true });
+    expect(heard).toEqual([{ kind: 'notice', text: '오늘 밤 광장에서 만나요!' }]);
+    // 기본 service는 실시간 서버가 없다 (보내지 못함)
+    await expectError(service.adminNotice(admin, '안녕하세요'), 'conflict');
   });
 });

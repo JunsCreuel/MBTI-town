@@ -24,6 +24,12 @@ export const tokens = {
     win: '#2FB36B',
     lose: '#9A9AA5',
     danger: '#E5484D',
+    /** 황금 고래·신화 표시 (금빛 띠의 바탕, 진한 금색, 글자) */
+    goldSoft: '#FFF4CF',
+    gold: '#F2C14E',
+    goldBright: '#FFE08A',
+    goldInk: '#5A4100',
+    goldGlow: 'rgb(242 193 78 / 0.55)',
     shadow: 'rgb(40 50 64 / 0.1)',
     scrim: 'rgb(40 50 64 / 0.72)',
   },

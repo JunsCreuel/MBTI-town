@@ -4,7 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MSG, type EmoteBroadcast, type JoinOptions, type MusicState, type SnapMessage } from '../src/shared/protocol';
 import { loadTownMapForTest } from '../src/shared/testMap';
 import { gateSpawnName, lotDoor, spawnName, type TownMap } from '../src/shared/townMap';
-import { guestPid, signTownPass, townPid, type TownPass } from '../src/shared/townToken';
+import { announcementBody, type AnnounceBroadcast } from '../src/shared/announce';
+import { guestPid, signAnnouncement, signTownPass, townPid, type TownPass } from '../src/shared/townToken';
 import { createRealtimeServer } from './app';
 import { getHoodMap, getSpotMap } from './assets';
 
@@ -340,5 +341,42 @@ describe('집 안 (방)', () => {
     r.send(MSG.move, { x: 30, z: 2, rot: 0, moving: true });
     await new Promise((res) => setTimeout(res, 300));
     expect(near(r.state.players.get(r.sessionId), before, 0.01)).toBe(true);
+  });
+});
+
+describe('서버 전체 공지', () => {
+  const enter = (p: TownPass, house: string) => new Client(`http://localhost:${PORT}`).joinOrCreate('house', { token: signTownPass(p), house });
+  const post = (body: Record<string, unknown>) =>
+    fetch(`http://localhost:${PORT}/scene/announce`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+
+  it('서명이 맞는 공지는 마을·놀이터·집 안 모두에게 간다', async () => {
+    const town = await join(pass({ name: '광장' }), 'plaza');
+    const club = await join(pass({ name: '클럽' }), 'plaza', 'club');
+    const house = await enter(pass({ house: 'announce-house' }), 'announce-house');
+    rooms.push(house);
+    const got: { room: string; m: AnnounceBroadcast }[] = [];
+    for (const [name, r] of [['town', town], ['club', club], ['house', house]] as const) r.onMessage(MSG.announce, (m: AnnounceBroadcast) => got.push({ room: name, m }));
+    const a = { kind: 'golden_whale', name: '고래잡이' } as const;
+    const ts = Date.now();
+    const res = await post({ ...a, ts, sig: signAnnouncement(announcementBody(a), ts) });
+    expect(res.status).toBe(200);
+    await until(() => got.length === 3);
+    expect(got.map((g) => g.room).sort()).toEqual(['club', 'house', 'town']);
+    for (const g of got) expect(g.m).toMatchObject({ kind: 'golden_whale', text: '(공지) 고래잡이님이 황금 고래를 낚았습니다!' });
+  });
+
+  it('서명이 없거나 틀리거나 오래된 공지는 받지 않는다', async () => {
+    const r = await join(pass({ name: '듣는이' }), 'plaza');
+    let heard = 0;
+    r.onMessage(MSG.announce, () => heard++);
+    const a = { kind: 'notice', text: '가짜 공지' } as const;
+    const ts = Date.now();
+    expect((await post({ ...a, ts })).status).toBe(403);
+    expect((await post({ ...a, ts, sig: signAnnouncement(announcementBody({ kind: 'notice', text: '다른 글' }), ts) })).status).toBe(403);
+    const old = ts - 10 * 60_000;
+    expect((await post({ ...a, ts: old, sig: signAnnouncement(announcementBody(a), old) })).status).toBe(403);
+    expect((await post({ kind: 'shout', text: '아무 말' })).status).toBe(400);
+    await new Promise((res) => setTimeout(res, 300));
+    expect(heard).toBe(0);
   });
 });

@@ -91,7 +91,8 @@ export interface FishDef {
   size: [number, number];
   /** 몸 색 (낚은 장면에 그린다) */
   color: string;
-  rarity: 'common' | 'rare' | 'legend' | 'junk';
+  /** mythic = 황금 고래 하나뿐 (무게로 뽑지 않고 따로 아주 낮은 확률로 걸린다) */
+  rarity: 'common' | 'rare' | 'legend' | 'mythic' | 'junk';
   /** 도감에 보여 주는 한 줄 */
   desc: string;
 }
@@ -111,33 +112,77 @@ export const FISH: readonly FishDef[] = [
   { id: 'dragon_fish', name: '용궁 물고기', weight: 0.3, size: [80, 150], color: '#5BC0C8', rarity: 'legend', desc: '용궁에서 왔다는 전설의 물고기예요.' },
   { id: 'boot', name: '낡은 장화', weight: 5, size: [0, 0], color: '#6B5A4A', rarity: 'junk', desc: '누가 연못에 장화를 버렸을까요…' },
   { id: 'bottle', name: '편지 든 병', weight: 2, size: [0, 0], color: '#9ED6C9', rarity: 'junk', desc: '병 안에 누군가의 편지가 들어 있어요.' },
+  // ── 더 늘어난 물고기 30종 (흔해요 12 · 드물어요 12 · 전설 6) ──
+  { id: 'loach', name: '미꾸라지', weight: 7, size: [8, 20], color: '#8A7A5A', rarity: 'common', desc: '진흙 속을 꼬물꼬물. 비 오는 날이면 신이 나요.' },
+  { id: 'smelt', name: '빙어', weight: 7, size: [6, 15], color: '#CFE0E6', rarity: 'common', desc: '몸이 투명해서 속이 살짝 비쳐요. 추운 날 많이 나와요.' },
+  { id: 'bitterling', name: '납자루', weight: 6, size: [4, 10], color: '#B8A9C9', rarity: 'common', desc: '조개 속에 알을 낳는 신기한 물고기예요.' },
+  { id: 'gudgeon', name: '모래무지', weight: 6, size: [10, 25], color: '#CDB88F', rarity: 'common', desc: '모래 속에 쏙 숨는 걸 좋아해요.' },
+  { id: 'dark_chub', name: '갈겨니', weight: 6, size: [10, 20], color: '#9DB0A0', rarity: 'common', desc: '눈이 크고 옆구리에 진한 줄이 있어요.' },
+  { id: 'chinese_minnow', name: '버들치', weight: 7, size: [6, 15], color: '#A8A07A', rarity: 'common', desc: '맑은 개울의 단골손님. 버들잎처럼 생겼어요.' },
+  { id: 'aucha_perch', name: '꺽지', weight: 4, size: [10, 30], color: '#7A8566', rarity: 'common', desc: '바위 틈에 숨어 사는 우리나라 토박이 물고기예요.' },
+  { id: 'bluegill', name: '블루길', weight: 6, size: [8, 25], color: '#7E9CBA', rarity: 'common', desc: '동글납작한 몸에 파란 귀 무늬가 있어요.' },
+  { id: 'bass', name: '배스', weight: 5, size: [25, 60], color: '#8AA466', rarity: 'common', desc: '입이 아주 커요. 힘이 세서 손맛이 좋아요.' },
+  { id: 'bagrid', name: '동자개', weight: 5, size: [12, 30], color: '#D2B04C', rarity: 'common', desc: '잡으면 빠각빠각 소리를 내요. 수염이 귀여워요.' },
+  { id: 'snakehead', name: '가물치', weight: 3, size: [40, 90], color: '#6B6852', rarity: 'common', desc: '길쭉하고 힘이 센 연못의 골목대장이에요.' },
+  { id: 'guppy', name: '구피', weight: 5, size: [2, 5], color: '#7FC8D9', rarity: 'common', desc: '누가 놓아준 걸까요? 꼬리가 알록달록해요.' },
+  { id: 'splendid_dace', name: '쉬리', weight: 2, size: [8, 15], color: '#D9C27A', rarity: 'rare', desc: '우리나라에만 사는 물고기. 몸에 고운 줄무늬가 있어요.' },
+  { id: 'redfin_culter', name: '강준치', weight: 2, size: [30, 70], color: '#C9CFD4', rarity: 'rare', desc: '은빛으로 길쭉해요. 입이 하늘을 보고 있어요.' },
+  { id: 'lenok', name: '열목어', weight: 1.5, size: [30, 70], color: '#B98A6A', rarity: 'rare', desc: '차가운 물에만 사는 귀한 물고기예요.' },
+  { id: 'masu', name: '산천어', weight: 2, size: [20, 40], color: '#A6B4B8', rarity: 'rare', desc: '깊은 산 맑은 계곡에서 왔어요. 몸에 둥근 무늬가 있어요.' },
+  { id: 'salmon', name: '연어', weight: 1.5, size: [50, 90], color: '#E58F72', rarity: 'rare', desc: '먼 바다를 돌아 고향 연못으로 돌아왔어요.' },
+  { id: 'golden_mandarin', name: '황쏘가리', weight: 1, size: [20, 50], color: '#E8B940', rarity: 'rare', desc: '온몸이 노란 아주 귀한 쏘가리예요.' },
+  { id: 'paradise_fish', name: '버들붕어', weight: 1.5, size: [4, 8], color: '#C96A5A', rarity: 'rare', desc: '지느러미가 하늘하늘. 거품으로 집을 지어요.' },
+  { id: 'rose_bitterling', name: '각시붕어', weight: 2, size: [3, 6], color: '#E3A0B5', rarity: 'rare', desc: '봄이 되면 몸이 분홍빛으로 물들어요.' },
+  { id: 'koi', name: '비단잉어', weight: 1.5, size: [30, 80], color: '#F6F1E8', rarity: 'rare', desc: '빨강·하양 무늬가 비단처럼 고와요.' },
+  { id: 'betta', name: '베타', weight: 1, size: [5, 7], color: '#4A63C9', rarity: 'rare', desc: '부채 같은 지느러미를 활짝 펴고 뽐내요.' },
+  { id: 'piranha', name: '피라냐', weight: 0.8, size: [15, 35], color: '#8E9AA6', rarity: 'rare', desc: '이빨이 뾰족하고 배가 빨개요. 손가락 조심!' },
+  { id: 'arowana', name: '아로와나', weight: 0.6, size: [50, 100], color: '#D9C08A', rarity: 'rare', desc: '용을 닮은 물고기. 턱에 수염이 두 가닥 있어요.' },
+  { id: 'sturgeon', name: '철갑상어', weight: 0.3, size: [100, 250], color: '#7C8A94', rarity: 'legend', desc: '공룡 시대부터 살아온 살아 있는 화석이에요.' },
+  { id: 'moon_killifish', name: '달빛 송사리', weight: 0.3, size: [3, 6], color: '#CFE3FF', rarity: 'legend', desc: '보름달이 뜬 밤에만 보인다는 빛나는 송사리예요.' },
+  { id: 'sakura_trout', name: '벚꽃 송어', weight: 0.25, size: [30, 60], color: '#F7B8C8', rarity: 'legend', desc: '몸에 벚꽃 무늬가 피어 있어요. 봄을 부르는 물고기예요.' },
+  { id: 'rainbow_goldfish', name: '무지개 금붕어', weight: 0.2, size: [8, 20], color: '#F28C5A', rarity: 'legend', desc: '비늘이 일곱 빛깔로 반짝여요.' },
+  { id: 'crystal_catfish', name: '수정 메기', weight: 0.2, size: [40, 100], color: '#BDE7F0', rarity: 'legend', desc: '몸이 수정처럼 맑아요. 소원을 하나 들어준대요.' },
+  { id: 'fire_carp', name: '불꽃 잉어', weight: 0.2, size: [60, 120], color: '#E85A3A', rarity: 'legend', desc: '꼬리에서 불꽃이 일렁이는 전설의 잉어예요.' },
+  // ── 황금 고래: 던질 때마다 따로 0.001% (무게 0이라 아래 무게 뽑기에는 안 나온다). 낚으면 서버 전체에 공지 ──
+  { id: 'golden_whale', name: '황금 고래', weight: 0, size: [800, 1500], color: '#F2C14E', rarity: 'mythic', desc: '10만 번에 한 번 걸린다는 꿈의 고래. 낚으면 마을 모두에게 소식이 퍼져요!' },
 ];
+
+export const GOLDEN_WHALE_ID = 'golden_whale';
 
 export const fishDef = (id: string) => FISH.find((f) => f.id === id);
 
 /**
- * 던진 결과: 가끔은 아무것도 안 걸린다(꽝, null). 아니면 무게대로 하나 뽑는다.
- * r0, r1, r2: 0~1 난수
+ * 던진 결과. 먼저 황금 고래(던질 때마다 playConfig.goldenWhaleChance)를 보고,
+ * 아니면 가끔은 아무것도 안 걸린다(꽝, null). 그것도 아니면 무게대로 하나 뽑는다.
+ * r0, r1, r2, rWhale: 0~1 난수
  */
-export function rollCatch(r0: number, r1: number, r2: number): { fish: FishDef; size: number } | null {
+export function rollCatch(r0: number, r1: number, r2: number, rWhale = 1): { fish: FishDef; size: number } | null {
+  if (rWhale < playConfig.goldenWhaleChance) return sized(fishDef(GOLDEN_WHALE_ID)!, r2);
   if (r0 < playConfig.fishMissRate) return null;
   return rollFish(r1, r2);
 }
 
+/** 무게로 뽑는 것들 (황금 고래는 빠진다) */
+const POOL = FISH.filter((f) => f.weight > 0);
+const POOL_TOTAL = POOL.reduce((s, f) => s + f.weight, 0);
+
 /** 무게대로 하나 뽑고 크기를 정한다 (r1, r2: 0~1 난수) */
 export function rollFish(r1: number, r2: number): { fish: FishDef; size: number } {
-  const total = FISH.reduce((s, f) => s + f.weight, 0);
-  let x = r1 * total;
-  let fish = FISH[FISH.length - 1];
-  for (const f of FISH) {
+  let x = r1 * POOL_TOTAL;
+  let fish = POOL[POOL.length - 1];
+  for (const f of POOL) {
     x -= f.weight;
     if (x < 0) {
       fish = f;
       break;
     }
   }
+  return sized(fish, r2);
+}
+
+function sized(fish: FishDef, r: number): { fish: FishDef; size: number } {
   const [lo, hi] = fish.size;
-  return { fish, size: hi ? Math.round(lo + (hi - lo) * r2) : 0 };
+  return { fish, size: hi ? Math.round(lo + (hi - lo) * r) : 0 };
 }
 
 function hash(s: string): number {

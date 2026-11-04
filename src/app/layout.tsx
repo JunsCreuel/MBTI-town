@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { CSSProperties, ReactNode } from 'react';
 import { assetUrl } from '@/assets/manifest';
+import { AnnounceBanner } from '@/components/app/AnnounceBanner';
 import { RealtimeWarmup } from '@/components/app/RealtimeWarmup';
 import { tokens, tokensToCssVars } from '@/design/tokens';
 import './globals.css';
@@ -25,6 +26,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       </head>
       <body>
         {children}
+        <AnnounceBanner />
         <RealtimeWarmup />
       </body>
     </html>

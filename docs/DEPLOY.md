@@ -219,6 +219,7 @@ insert into public.admins (user_id) select id from auth.users where email = '<�
 |---|---|
 | 화면마다 "잠시 후 다시 시도해 주세요" | `DATABASE_URL` 이 Transaction pooler(포트 6543) 주소이고 비밀번호가 맞는지. 1-2의 `setup.sql` 을 실행했는지 (Table Editor에 `profiles`, `rooms` 같은 표가 보이는지). Vercel **Logs** 에서 오류 확인 |
 | 마을 화면에서 "마을 서버에 연결하지 못했어요" | `NEXT_PUBLIC_REALTIME_URL` 이 Render 주소와 같은지 (`https://`, 끝에 `/` 없이. 바꿨다면 Redeploy). `TOWN_TOKEN_SECRET` 이 Vercel과 Render에 똑같이 들어 있는지. Render Free가 자고 있었다면 1분 뒤 다시 |
+| 황금 고래·운영자 공지가 화면에 안 뜬다 | 웹 서버가 `NEXT_PUBLIC_REALTIME_URL`(또는 `REALTIME_URL`)의 `/scene/announce`로 보낸다. 주소가 맞는지, `TOWN_TOKEN_SECRET` 이 Vercel과 Render에 똑같은지 (다르면 서명이 틀려 403). 운영 화면에서 공지를 보내 "실시간 서버에 공지를 보내지 못했어요"가 뜨면 Render가 자고 있거나 주소가 틀린 것 |
 | 마을에 내 집이 없음 | 1-2의 `setup.sql` 을 마지막 버전으로 실행했는지 (`schema_migrations` 표에 `…_town.sql`, `…_hoods.sql` 이 있는지). 1동이 다 찼으면 집은 2동부터 서고, 접속하면 그 동네로 바로 간다 (본섬에서는 큰길 끝 동네 길 아치로 오간다) |
 | 사진을 올리면 "사진이 너무 커요" | 화면에서 긴 변 1600px JPEG로 줄여 올립니다. 그래도 크면 `recordConfig.photoMaxBytes` 확인 |
 | 로그인 뒤 `/login?error=1` | 5-1의 Redirect URLs에 `…/auth/callback` 이 있는지 |

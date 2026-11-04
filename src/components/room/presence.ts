@@ -5,6 +5,7 @@ import { roomConfig } from '@/config/game';
 import { call } from '@/lib/api';
 import { realtimeUrl, wakeRealtime } from '@/lib/realtime';
 import type { HouseTicket } from '@/server/scene/service';
+import type { AnnounceBroadcast } from '@/shared/announce';
 import { townConfig } from '@/config/game';
 import {
   MSG,
@@ -12,6 +13,7 @@ import {
 } from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
 import { SELF_GESTURE, now, type Gesture, type PlayerView } from '../village/session';
+import { showAnnouncement } from '../app/AnnounceBanner';
 
 /**
  * - loading: 입장 토큰을 받는 중
@@ -97,6 +99,7 @@ export class HousePresence {
       room.onMessage(MSG.snap, (m: SnapMessage) => this.snapListeners.forEach((fn) => fn(m)));
       room.onMessage(MSG.action, (m: ActionBroadcast) => this.applyAction(m.id, m.kind));
       room.onMessage(MSG.emote, (m: EmoteBroadcast) => this.applyEmote(m.id, m.kind));
+      room.onMessage(MSG.announce, (m: AnnounceBroadcast) => showAnnouncement(m));
       room.onLeave(() => {
         if (attempt !== this.attempt) return;
         this.room = null;

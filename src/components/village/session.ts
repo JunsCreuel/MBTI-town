@@ -5,6 +5,7 @@ import { call } from '@/lib/api';
 import { realtimeUrl, wakeRealtime } from '@/lib/realtime';
 import type { TownTicket } from '@/server/scene/service';
 import type { AccessoryId, AvatarColor } from '@/shared/avatar';
+import type { AnnounceBroadcast } from '@/shared/announce';
 import type { District } from '@/shared/districts';
 import {
   MSG,
@@ -13,6 +14,7 @@ import {
 } from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
 import { setClubDj } from './club';
+import { showAnnouncement } from '../app/AnnounceBanner';
 
 /** 서버 상태 중 클라이언트가 읽는 부분 */
 export interface PlayerView {
@@ -167,6 +169,7 @@ export class TownSession {
       room.onMessage(MSG.emote, (m: EmoteBroadcast) => this.applyEmote(m.id, m.kind));
       room.onMessage(MSG.snap, (m: SnapMessage) => this.snapListeners.forEach((fn) => fn(m)));
       room.onMessage(MSG.music, (m: MusicState) => setClubDj(m));
+      room.onMessage(MSG.announce, (m: AnnounceBroadcast) => showAnnouncement(m));
       room.onLeave((code: number) => {
         if (attempt !== this.attempt) return;
         this.room = null;

@@ -6,6 +6,7 @@ import { townConfig } from '../../src/config/game';
 import { MOVE_BUDGET_MAX, isMoveAllowed, normalizeAngle, refillMoveBudget } from '../../src/shared/movement';
 import { isStartPoint, placePoint } from '../../src/shared/spawn';
 import { randomSpawnPoint, type TownMap } from '../../src/shared/townMap';
+import { listenAnnouncements } from '../announce';
 import { verifyTownPass, type TownPass } from '../../src/shared/townToken';
 import {
   ACTIONS, EMOTES, MSG,
@@ -41,6 +42,8 @@ function kindOf<T extends string>(v: unknown, allowed: readonly T[]): T | null {
 }
 
 export class TownRoom extends Room<{ state: TownState; metadata: { channel: number; place: string } }> {
+  /** 서버 전체 공지 듣기를 멈춘다 */
+  private stopAnnouncements?: () => void;
   maxClients = townRoomCapacity();
   patchRate = townConfig.patchRateMs;
   maxMessagesPerSecond = townConfig.maxMessagesPerSecond;
@@ -78,6 +81,7 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     const place = spot ?? (here ? `${here.district}.${here.hood}` : 'town');
     this.state.channel = await this.nextChannelNumber(place);
     await this.setMetadata({ channel: this.state.channel, place });
+    this.stopAnnouncements = listenAnnouncements(this);
 
     this.onMessage(MSG.move, (client, message: unknown) => this.handleMove(client, message));
 
@@ -144,6 +148,10 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     this.moveBudget.set(client.sessionId, { value: MOVE_BUDGET_MAX, at: Date.now() });
     // 클럽에 들어오면 지금 신청곡을 알려 준다
     if (this.music) client.send(MSG.music, { ...this.music, serverNow: Date.now() } satisfies MusicState);
+  }
+
+  onDispose() {
+    this.stopAnnouncements?.();
   }
 
   onLeave(client: Client) {
