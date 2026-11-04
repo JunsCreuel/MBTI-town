@@ -159,6 +159,8 @@ export interface AdminUserRow {
   last_seen_at: Date | null;
   is_admin: boolean;
   records: number;
+  coins: number;
+  saju_tickets: number;
 }
 
 export class SceneStore {
@@ -520,7 +522,8 @@ export class SceneStore {
     return this.sql.query<AdminUserRow>(
       `select p.id, p.handle, p.display_name, p.district, p.onboarded_at, p.last_seen_at,
               exists (select 1 from public.admins a where a.user_id = p.id) as is_admin,
-              (select count(*) from public.records rc where rc.owner_id = p.id)::int as records
+              (select count(*) from public.records rc where rc.owner_id = p.id)::int as records,
+              p.coins, p.saju_tickets
        from public.profiles p
        where $1 = '%%' or p.display_name ilike $1 or p.handle ilike $1
        order by p.onboarded_at desc nulls last limit $2`,
@@ -667,6 +670,15 @@ export class SceneStore {
   async addCoins(userId: string, n: number): Promise<number> {
     const [r] = await this.sql.query<{ coins: number }>(`update public.profiles set coins = coins + $2 where id = $1 returning coins`, [userId, n]);
     return Number(r?.coins ?? 0);
+  }
+
+  /** 운영자가 코인·이용권을 더하거나 뺀다 (0 밑으로는 내려가지 않는다). 새 값, 없는 주민이면 null */
+  async adjustWallet(userId: string, coins: number, tickets: number): Promise<{ coins: number; tickets: number } | null> {
+    const [r] = await this.sql.query<{ coins: number; saju_tickets: number }>(
+      `update public.profiles set coins = greatest(0, coins + $2), saju_tickets = greatest(0, saju_tickets + $3) where id = $1 returning coins, saju_tickets`,
+      [userId, coins, tickets],
+    );
+    return r ? { coins: Number(r.coins), tickets: Number(r.saju_tickets) } : null;
   }
 
   /** 모자라지 않으면 코인을 쓴다. 새 잔액, 모자라면 null */

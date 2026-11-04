@@ -546,6 +546,22 @@ describe('운영자', () => {
     await expectError(service.roomView(admin, ho), 'not_found');
   });
 
+  it('운영자는 주민마다 코인·사주 이용권을 보고, 주거나 뺀다 (0 밑으로는 안 내려간다)', async () => {
+    const u = (await service.adminUsers(admin, '이웃')).find((x) => x.id === other.id)!;
+    expect(u).toMatchObject({ coins: 0, tickets: 0 });
+    await expectError(service.adminAdjustWallet(other, u.id, { coins: 100 }), 'not_found');
+    await expectError(service.adminAdjustWallet(admin, u.id, {}), 'bad_request');
+    await expectError(service.adminAdjustWallet(admin, u.id, { coins: 1.5 }), 'bad_request');
+    await expectError(service.adminAdjustWallet(admin, u.id, { coins: 2_000_000 }), 'bad_request');
+    await expectError(service.adminAdjustWallet(admin, '00000000-0000-0000-0000-000000000000', { coins: 10 }), 'not_found');
+    await expectError(service.adminAdjustWallet(admin, 'nope', { coins: 10 }), 'not_found');
+    expect(await service.adminAdjustWallet(admin, u.id, { coins: 1500 })).toEqual({ coins: 1500, tickets: 0 });
+    expect(await service.adminAdjustWallet(admin, u.id, { coins: -500, tickets: 2 })).toEqual({ coins: 1000, tickets: 2 });
+    expect(await service.adminAdjustWallet(admin, u.id, { coins: -99_999 })).toEqual({ coins: 0, tickets: 2 });
+    expect((await service.playState(other)).coins).toBe(0);
+    expect((await service.adminUsers(admin, '이웃')).find((x) => x.id === other.id)).toMatchObject({ coins: 0, tickets: 2 });
+  });
+
   it('운영자 공지: 운영자만, 내용이 있어야 하고, 실시간 서버에 못 보내면 알려 준다', async () => {
     const heard: Announcement[] = [];
     const loud = new SceneService(new SceneStore(sql), () => now, async (a) => (heard.push(a), true));
