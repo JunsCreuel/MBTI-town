@@ -13,6 +13,7 @@ import {
   type MoveMessage, type MusicResult, type MusicState, type RoomPlace, type SnapMessage, type TownPlace, type WarpMessage,
 } from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
+import type { YoutubeSong } from '@/shared/clubMusic';
 import { emitClubResult, setClubDj } from './club';
 import { showAnnouncement } from '../app/AnnounceBanner';
 
@@ -263,6 +264,13 @@ export class TownSession {
   requestSong(index: number): boolean {
     if (!this.room) return false;
     this.room.send(MSG.musicRequest, { index });
+    return true;
+  }
+
+  /** 클럽: 유튜브 신청곡 (웹 서버가 확인하고 서명한 신청표를 그대로 보낸다) */
+  requestYoutube(ticket: { song: YoutubeSong; exp: number; sig: string }): boolean {
+    if (!this.room) return false;
+    this.room.send(MSG.musicRequest, { youtube: ticket });
     return true;
   }
 

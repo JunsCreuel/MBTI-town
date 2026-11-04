@@ -111,3 +111,20 @@ export function verifyAnnouncement(body: string, ts: unknown, sig: unknown, now 
   const got = Buffer.from(sig, 'base64url');
   return got.length === want.length && timingSafeEqual(got, want);
 }
+
+// ───────────────────────── 클럽 유튜브 신청곡 서명 ─────────────────────────
+
+/** 웹 서버가 YouTube Data API로 확인한 영상만 실시간 서버가 받는다 (exp = 이 시각(ms)까지 유효) */
+const ytSig = (song: { id: string; title: string; seconds: number }, exp: number) =>
+  createHmac('sha256', secret()).update(`yt:${exp}:${song.id}:${song.seconds}:${song.title}`).digest();
+
+export function signYoutube(song: { id: string; title: string; seconds: number }, exp: number): string {
+  return b64(ytSig(song, exp));
+}
+
+export function verifyYoutube(song: { id: string; title: string; seconds: number }, exp: unknown, sig: unknown, now = Date.now()): boolean {
+  if (typeof exp !== 'number' || !Number.isFinite(exp) || exp < now || typeof sig !== 'string') return false;
+  const want = ytSig(song, exp);
+  const got = Buffer.from(sig, 'base64url');
+  return got.length === want.length && timingSafeEqual(got, want);
+}

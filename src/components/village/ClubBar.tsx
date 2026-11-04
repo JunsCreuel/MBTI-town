@@ -3,10 +3,10 @@
 // 클럽 화면: DJ 너굴에게 신청곡, 바텐더 곰돌에게 한 잔, 취했을 때 화면 효과(흐려짐·분홍빛·딸꾹질).
 import { useEffect, useRef, useState } from 'react';
 import { townConfig } from '@/config/game';
-import { CLUB_TRACKS } from '@/shared/clubMusic';
+import { CLUB_TRACKS, YOUTUBE_MAX_SECONDS, youtubeIdOf, type YoutubeSong } from '@/shared/clubMusic';
 import type { MusicResult } from '@/shared/protocol';
 import { Sheet } from '../app/Sheet';
-import { clubQueue, clubSchedule, onClubDj, onClubResult } from './club';
+import { clubQueue, clubSchedule, onClubDj, onClubResult, songTitle } from './club';
 import { BARTENDER_NAME, DJ_NAME } from './ClubNpcs';
 import { DRINKS, bartenderLine, drink, drinksNow, drunkLevel, type Drink } from './drunk';
 
@@ -17,8 +17,17 @@ const REFUSED: Record<Extract<MusicResult, { ok: false }>['reason'], string> = {
   closed: '지금은 신청할 수 없어요.',
 };
 
-/** DJ에게 신청곡: 지금 나오는 곡, 신청곡 목록(차례대로), 신청하기. 지금 곡은 끝까지 틀고 신청곡이 차례로 나온다 */
-export function DjSheet({ onRequest, onClose }: { onRequest: (index: number) => boolean; onClose: () => void }) {
+export type YoutubeTicket = { song: YoutubeSong; exp: number; sig: string };
+
+/** DJ에게 신청곡: 지금 나오는 곡, 신청곡 목록(차례대로), 신청하기(목록 곡 또는 유튜브 링크). 지금 곡은 끝까지 틀고 신청곡이 차례로 나온다 */
+export function DjSheet({
+  guest, onRequest, onYoutube, onClose,
+}: {
+  guest: boolean;
+  onRequest: (index: number) => boolean;
+  onYoutube: (ticket: YoutubeTicket) => boolean;
+  onClose: () => void;
+}) {
   const read = () => ({ now: clubSchedule(), queue: clubQueue() });
   const [line, setLine] = useState(read);
   const [note, setNote] = useState('');
@@ -37,6 +46,32 @@ export function DjSheet({ onRequest, onClose }: { onRequest: (index: number) => 
   function pick(i: number) {
     if (!onRequest(i)) setNote('실시간 서버에 연결된 뒤에 신청할 수 있어요.');
   }
+  const [link, setLink] = useState('');
+  const [checking, setChecking] = useState(false);
+  async function requestYoutube(e: React.FormEvent) {
+    e.preventDefault();
+    if (checking) return;
+    if (!youtubeIdOf(link)) {
+      setNote('유튜브 영상 링크를 넣어 주세요.');
+      return;
+    }
+    setChecking(true);
+    setNote('');
+    try {
+      const res = await fetch(`/api/club/youtube?url=${encodeURIComponent(link.trim())}`, { cache: 'no-store' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setNote(data.message ?? '유튜브 곡을 확인하지 못했어요.');
+        return;
+      }
+      if (onYoutube(data as YoutubeTicket)) setLink('');
+      else setNote('실시간 서버에 연결된 뒤에 신청할 수 있어요.');
+    } catch {
+      setNote('유튜브 곡을 확인하지 못했어요. 잠시 뒤에 다시 해 주세요.');
+    } finally {
+      setChecking(false);
+    }
+  }
   const playing = line.now?.index ?? -1;
   return (
     <Sheet title={`${DJ_NAME}에게 신청곡`} onClose={onClose}>
@@ -45,7 +80,7 @@ export function DjSheet({ onRequest, onClose }: { onRequest: (index: number) => 
         {line.now && (
           <div className="club-now">
             <span className="club-now__label">지금 나오는 곡</span>
-            <b>{CLUB_TRACKS[line.now.index].title}</b>
+            <b>{songTitle(line.now)}</b>
             {line.now.by && <span className="muted">{line.now.by}의 신청곡</span>}
           </div>
         )}
@@ -55,9 +90,12 @@ export function DjSheet({ onRequest, onClose }: { onRequest: (index: number) => 
         {line.queue.length ? (
           <ol className="club-queue">
             {line.queue.map((q, k) => (
-              <li key={`${k}:${q.who}:${q.index}`}>
+              <li key={`${k}:${q.who}:${q.yt?.id ?? q.index}`}>
                 <span className="club-queue__no">{k + 1}</span>
-                <span className="club-queue__title">{CLUB_TRACKS[q.index].title}</span>
+                <span className="club-queue__title">
+                  {q.yt && <span className="club-queue__yt">유튜브</span>}
+                  {songTitle(q)}
+                </span>
                 <span className="muted club-queue__by">{q.by}</span>
               </li>
             ))}
@@ -75,6 +113,26 @@ export function DjSheet({ onRequest, onClose }: { onRequest: (index: number) => 
             </li>
           ))}
         </ul>
+        <h3 className="club-sub">유튜브 링크로 신청</h3>
+        {!guest && <p className="muted club-yt-rule">음악 영상, {YOUTUBE_MAX_SECONDS / 60}분 이하 곡을 신청할 수 있어요. 나오는 동안 화면에 유튜브 플레이어가 보여요.</p>}
+        {guest ? (
+          <p className="muted">로그인한 주민만 유튜브 곡을 신청할 수 있어요.</p>
+        ) : (
+          <form className="club-yt-form" onSubmit={requestYoutube}>
+            <input
+              type="url"
+              inputMode="url"
+              value={link}
+              onChange={(e) => setLink(e.target.value)}
+              placeholder="https://youtu.be/..."
+              aria-label="유튜브 영상 링크"
+              autoComplete="off"
+            />
+            <button className="btn-primary btn-primary--inline" disabled={checking || !link.trim()}>
+              {checking ? '확인 중…' : '신청'}
+            </button>
+          </form>
+        )}
         {note && (
           <p className="notice" role="status">
             {note}

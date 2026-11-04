@@ -1,6 +1,6 @@
 // 실내 클럽: 맵 판별, 지금 흐르는 곡과 박자. 음악 플레이어(ClubMusic)가 오디오를 알려 주고, 무대 조명(ClubFx)이 박자를 읽는다.
 import { asset } from '@/assets/manifest';
-import { CLUB_TRACKS, advanceLine, clubLineAt, clubScheduleAt, type ClubLine, type ClubQueueItem } from '@/shared/clubMusic';
+import { CLUB_TRACKS, advanceLine, clubLineAt, clubScheduleAt, type ClubLine, type ClubQueueItem, type YoutubeSong } from '@/shared/clubMusic';
 import type { MusicResult, MusicState } from '@/shared/protocol';
 import type { TownMap } from '@/shared/townMap';
 
@@ -17,7 +17,7 @@ export const clubDj: { line: ClubLine | null; offset: number; version: number } 
 const djListeners = new Set<() => void>();
 
 export function setClubDj(m: MusicState | null) {
-  clubDj.line = m ? { index: m.index, startedAt: m.startedAt, by: m.by, queue: m.queue ?? [] } : null;
+  clubDj.line = m ? { index: m.index, ...(m.yt ? { yt: m.yt } : {}), startedAt: m.startedAt, by: m.by, queue: m.queue ?? [], after: m.after } : null;
   clubDj.offset = m ? m.serverNow - Date.now() : 0;
   clubDj.version++;
   djListeners.forEach((fn) => fn());
@@ -28,8 +28,11 @@ export function onClubDj(fn: () => void): () => void {
   return () => void djListeners.delete(fn);
 }
 
-/** 지금 곡·위치·신청한 사람: 흐름이 있으면 그 계산, 없으면 시계로 정한 순서 (클럽에 있는 사람 모두 같다) */
-export function clubSchedule(nowMs = Date.now()): { index: number; offset: number; left: number; by: string } | null {
+/** 곡 이름 (목록 곡 또는 유튜브) */
+export const songTitle = (s: { index: number; yt?: YoutubeSong }) => (s.yt ? s.yt.title : (CLUB_TRACKS[s.index]?.title ?? ''));
+
+/** 지금 곡·위치·신청한 사람: 흐름이 있으면 그 계산, 없으면 시계로 정한 순서 (클럽에 있는 사람 모두 같다). 유튜브면 yt */
+export function clubSchedule(nowMs = Date.now()): { index: number; yt?: YoutubeSong; offset: number; left: number; by: string } | null {
   if (clubDj.line) return clubLineAt(clubDj.line, nowMs + clubDj.offset, lengths());
   const s = clubScheduleAt(nowMs, lengths());
   return s && { ...s, by: '' };
@@ -39,6 +42,21 @@ export function clubSchedule(nowMs = Date.now()): { index: number; offset: numbe
 export function clubQueue(nowMs = Date.now()): ClubQueueItem[] {
   return clubDj.line ? advanceLine(clubDj.line, nowMs + clubDj.offset, lengths()).queue : [];
 }
+
+/** 다음에 나올 곡 (신청곡이 있으면 첫 신청곡, 없으면 목록의 다음 곡) */
+export function clubNext(nowMs = Date.now()): { index: number; yt?: YoutubeSong; by: string } | null {
+  const n = CLUB_TRACKS.length;
+  if (clubDj.line) {
+    const a = advanceLine(clubDj.line, nowMs + clubDj.offset, lengths());
+    const q = a.queue[0];
+    return q ? { index: q.index, ...(q.yt ? { yt: q.yt } : {}), by: q.by } : { index: (a.after ?? 0) % n, by: '' };
+  }
+  const s = clubScheduleAt(nowMs, lengths());
+  return s && { index: (s.index + 1) % n, by: '' };
+}
+
+/** 곡을 가리키는 이름 (같은 곡인지 견줄 때) */
+export const songKey = (s: { index: number; yt?: YoutubeSong }) => (s.yt ? `yt:${s.yt.id}` : `i:${s.index}`);
 
 /** 내가 보낸 신청이 어떻게 됐는지 (서버가 신청한 사람에게만 알려 준다) */
 const resultListeners = new Set<(r: MusicResult) => void>();
@@ -61,7 +79,7 @@ export function clubPulse(nowMs = Date.now()): { step: number; level: number } |
   let index: number;
   let pos: number;
   const a = clubAudio.el;
-  if (a && !a.paused && clubAudio.index >= 0) {
+  if (a && !a.paused && clubAudio.index >= 0 && !clubSchedule(nowMs)?.yt) {
     index = clubAudio.index;
     pos = a.currentTime;
   } else {
@@ -70,10 +88,11 @@ export function clubPulse(nowMs = Date.now()): { step: number; level: number } |
     index = s.index;
     pos = s.offset;
   }
-  const e = asset(CLUB_TRACKS[index].key);
+  // 유튜브 곡은 박자를 모르니 120 BPM으로 깜빡인다
+  const e = index >= 0 ? asset(CLUB_TRACKS[index].key) : { bpm: 120, beat: 0 };
   const beats = ((pos - (e.beat ?? 0)) * (e.bpm ?? 120)) / 60;
   const whole = Math.floor(beats);
-  return { step: whole + index * 7, level: (1 - (beats - whole)) ** 2.4 };
+  return { step: whole + Math.max(0, index) * 7, level: (1 - (beats - whole)) ** 2.4 };
 }
 
 /** 음수에도 쓰는 나머지 */
@@ -81,4 +100,3 @@ export const mod = (a: number, n: number) => ((a % n) + n) % n;
 
 /** 바텐더가 마지막으로 술을 내준 시각 (now 기준). 바텐더가 건배하는 동작에 쓴다 */
 export const clubBar = { servedAt: -100 };
-

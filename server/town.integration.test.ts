@@ -5,7 +5,7 @@ import { MSG, type EmoteBroadcast, type JoinOptions, type MusicResult, type Musi
 import { loadTownMapForTest } from '../src/shared/testMap';
 import { gateSpawnName, lotDoor, spawnName, type TownMap } from '../src/shared/townMap';
 import { announcementBody, type AnnounceBroadcast } from '../src/shared/announce';
-import { guestPid, signAnnouncement, signTownPass, townPid, type TownPass } from '../src/shared/townToken';
+import { guestPid, signAnnouncement, signTownPass, signYoutube, townPid, type TownPass } from '../src/shared/townToken';
 import { createRealtimeServer } from './app';
 import { getHoodMap, getSpotMap } from './assets';
 
@@ -267,6 +267,28 @@ describe('새 동네 (2동·3동…)', () => {
       expect(late[0].queue.map((q) => q.index)).toEqual([2, 0]);
     }
     await c.leave();
+    await a.leave();
+  });
+
+  it('유튜브 신청곡은 웹 서버가 서명한 신청표만 받는다', async () => {
+    const a = await join(pass({ name: '유튜버' }), 'home', 'club');
+    const got: MusicState[] = [];
+    const results: MusicResult[] = [];
+    a.onMessage(MSG.music, (m: MusicState) => got.push(m));
+    a.onMessage(MSG.musicResult, (r: MusicResult) => results.push(r));
+    const song = { id: 'dQw4w9WgXcQ', title: '유튜브 곡', seconds: 200 };
+    const exp = Date.now() + 60_000;
+    // 서명이 틀리거나, 곡 정보를 바꾸거나, 기한이 지난 신청표는 받지 않는다
+    a.send(MSG.musicRequest, { youtube: { song, exp, sig: 'forged' } });
+    a.send(MSG.musicRequest, { youtube: { song: { ...song, seconds: 30 }, exp, sig: signYoutube(song, exp) } });
+    a.send(MSG.musicRequest, { youtube: { song, exp: Date.now() - 1, sig: signYoutube(song, Date.now() - 1) } });
+    await until(() => results.length === 3);
+    expect(results).toEqual([{ ok: false, reason: 'closed' }, { ok: false, reason: 'closed' }, { ok: false, reason: 'closed' }]);
+    expect(got.length).toBe(0);
+    a.send(MSG.musicRequest, { youtube: { song, exp, sig: signYoutube(song, exp) } });
+    await until(() => got.length === 1 && results.length === 4);
+    expect(results[3]).toEqual({ ok: true, position: got[0].queue.length });
+    expect(got[0].queue.at(-1)).toEqual({ index: -1, by: '유튜버', who: a.sessionId, yt: song });
     await a.leave();
   });
 

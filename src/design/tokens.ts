@@ -24,6 +24,8 @@ export const tokens = {
     win: '#2FB36B',
     lose: '#9A9AA5',
     danger: '#E5484D',
+    /** 유튜브 신청곡 표시 */
+    youtube: '#D93A3F',
     /** 황금 고래·신화 표시 (금빛 띠의 바탕, 진한 금색, 글자) */
     goldSoft: '#FFF4CF',
     gold: '#F2C14E',

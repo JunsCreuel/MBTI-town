@@ -49,24 +49,36 @@ export function clubScheduleAt(epochMs: number, seconds: readonly number[]): { i
 
 // ───────────────────────── 신청곡 대기열 ─────────────────────────
 
-/** 신청곡 하나. who = 신청한 사람의 접속 번호 (한 사람이 몇 곡 기다리는지 센다) */
+/** 유튜브 신청곡 (웹 서버가 YouTube Data API로 확인하고 서명한 것만 받는다) */
+export interface YoutubeSong {
+  id: string;
+  title: string;
+  seconds: number;
+}
+
+/** 신청곡 하나. index = 목록 곡 번호 (유튜브면 -1), who = 신청한 사람의 접속 번호 (한 사람이 몇 곡 기다리는지 센다) */
 export interface ClubQueueItem {
   index: number;
   by: string;
   who: string;
+  yt?: YoutubeSong;
 }
 
 /**
- * 클럽 채널의 곡 흐름: 지금 곡(index, startedAt, by) → 신청곡 대기열(차례대로) → 그 뒤로는 목록 순서로 이어 간다.
+ * 클럽 채널의 곡 흐름: 지금 곡(index 또는 yt, startedAt, by) → 신청곡 대기열(차례대로) → 그 뒤로는 목록 순서로 이어 간다.
  * 지금 나오는 곡은 끝까지 틀고, 신청곡은 그 뒤에 나온다. 서버와 화면이 같은 계산을 해서 같은 곡의 같은 자리를 듣는다.
  */
 export interface ClubLine {
+  /** 목록 곡 번호 (유튜브면 -1) */
   index: number;
+  yt?: YoutubeSong;
   /** 지금 곡을 시작한 시각 (서버 시계, ms) */
   startedAt: number;
   /** 지금 곡을 신청한 사람 ('' = 목록 순서) */
   by: string;
   queue: ClubQueueItem[];
+  /** 대기열이 다 끝나면 이어서 틀 목록 곡 번호 (마지막 목록 곡 다음) */
+  after?: number;
 }
 
 const lenOf = (seconds: readonly number[], i: number) => (seconds[i] > 0 ? seconds[i] : 0);
@@ -78,39 +90,71 @@ const lenOf = (seconds: readonly number[], i: number) => (seconds[i] > 0 ? secon
 export function advanceLine(line: ClubLine, nowMs: number, seconds: readonly number[]): ClubLine {
   const n = seconds.length;
   if (!n || seconds.every((s) => !(s > 0))) return line;
-  let { index, startedAt, by } = line;
+  let { index, startedAt, by, yt } = line;
+  let after = line.after ?? (index >= 0 ? (index + 1) % n : 0);
   const queue = [...line.queue];
+  const songLen = () => (yt ? yt.seconds : lenOf(seconds, index));
   // 신청곡이 남아 있는 동안은 하나씩, 다 틀면 목록 순서로 (오래 비어 있으면 한 바퀴씩 건너뛴다)
   const total = seconds.reduce((s, x) => s + (x > 0 ? x : 0), 0) * 1000;
   for (let guard = 0; guard < 10_000; guard++) {
-    const len = lenOf(seconds, index) * 1000;
+    const len = songLen() * 1000;
     if (len > 0 && nowMs < startedAt + len) break;
     startedAt += len;
     const next = queue.shift();
     if (next) {
       index = next.index;
+      yt = next.yt;
       by = next.by;
+      if (!yt) after = (index + 1) % n;
     } else {
-      if (nowMs - startedAt > total) startedAt += Math.floor((nowMs - startedAt) / total) * total;
-      index = (index + 1) % n;
+      if (!yt && nowMs - startedAt > total) startedAt += Math.floor((nowMs - startedAt) / total) * total;
+      index = after;
+      after = (after + 1) % n;
+      yt = undefined;
       by = '';
     }
   }
-  return { index, startedAt, by, queue };
+  return { index, ...(yt ? { yt } : {}), startedAt, by, queue, after };
 }
 
-/** 흐름에서 지금 곡·위치(초)·남은 시간(초)·신청한 사람 */
-export function clubLineAt(line: ClubLine, nowMs: number, seconds: readonly number[]): { index: number; offset: number; left: number; by: string } | null {
-  if (!seconds.length || line.index < 0 || line.index >= seconds.length) return null;
+/** 흐름에서 지금 곡(목록 번호 또는 유튜브)·위치(초)·남은 시간(초)·신청한 사람 */
+export function clubLineAt(
+  line: ClubLine,
+  nowMs: number,
+  seconds: readonly number[],
+): { index: number; yt?: YoutubeSong; offset: number; left: number; by: string } | null {
+  if (!seconds.length || (!line.yt && (line.index < 0 || line.index >= seconds.length))) return null;
   const a = advanceLine(line, nowMs, seconds);
-  const len = lenOf(seconds, a.index);
+  const len = a.yt ? a.yt.seconds : lenOf(seconds, a.index);
   if (!len) return null;
   const offset = Math.max(0, (nowMs - a.startedAt) / 1000);
-  return { index: a.index, offset, left: Math.max(0, len - offset), by: a.by };
+  return { index: a.index, ...(a.yt ? { yt: a.yt } : {}), offset, left: Math.max(0, len - offset), by: a.by };
 }
 
 /** 신청곡이 없을 때(시계 순서) 지금 곡으로 흐름을 하나 만든다 */
 export function lineFromClock(nowMs: number, seconds: readonly number[]): ClubLine | null {
   const s = clubScheduleAt(nowMs, seconds);
-  return s ? { index: s.index, startedAt: nowMs - s.offset * 1000, by: '', queue: [] } : null;
+  return s ? { index: s.index, startedAt: nowMs - s.offset * 1000, by: '', queue: [], after: (s.index + 1) % seconds.length } : null;
 }
+
+/** 유튜브 주소에서 영상 id (watch?v=, youtu.be/, shorts/, embed/, music.youtube.com). 아니면 null */
+export function youtubeIdOf(url: string): string | null {
+  const s = url.trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  let u: URL;
+  try {
+    u = new URL(s);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.replace(/^www\.|^m\./, '');
+  let id: string | null = null;
+  if (host === 'youtu.be') id = u.pathname.slice(1).split('/')[0];
+  else if (host === 'youtube.com' || host === 'music.youtube.com') {
+    id = u.searchParams.get('v') ?? (/^\/(shorts|embed|live)\/([^/?#]+)/.exec(u.pathname)?.[2] ?? null);
+  }
+  return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+}
+
+/** 유튜브 신청곡 길이 한도 (초) */
+export const YOUTUBE_MAX_SECONDS = 8 * 60;

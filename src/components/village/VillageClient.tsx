@@ -879,7 +879,9 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       )}
       {npcOpen && <NpcDialog guest={isGuest} first={npcOpen.first} onClose={closeNpc} />}
       {stallOpen !== null && <MarketSheet slot={stallOpen} view={market} onChanged={setMarket} onClose={() => setStallOpen(null)} />}
-      {clubSheet === 'dj' && <DjSheet onRequest={(i) => session.requestSong(i)} onClose={() => setClubSheet(null)} />}
+      {clubSheet === 'dj' && (
+        <DjSheet guest={isGuest} onRequest={(i) => session.requestSong(i)} onYoutube={(t) => session.requestYoutube(t)} onClose={() => setClubSheet(null)} />
+      )}
       {clubSheet === 'bar' && (
         <BarSheet
           onDrink={(d) => {
