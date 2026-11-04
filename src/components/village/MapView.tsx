@@ -73,7 +73,8 @@ function buildBorders(map: TownMap): THREE.BufferGeometry {
   return g;
 }
 
-export function DistrictOverlay() {
+/** self = 내 위치 고리 (둘러보기 지도에는 내가 없다) */
+export function DistrictOverlay({ self = true }: { self?: boolean } = {}) {
   const { map, input } = useTown();
   const fill = useMemo(() => buildFill(map), [map]);
   const borders = useMemo(() => buildBorders(map), [map]);
@@ -100,7 +101,7 @@ export function DistrictOverlay() {
     <>
       <mesh ref={fillMesh} geometry={fill} material={fillMat} renderOrder={2} visible={false} />
       <mesh geometry={borders} material={borderMat} renderOrder={3} />
-      <SelfMarker />
+      {self && <SelfMarker />}
     </>
   );
 }

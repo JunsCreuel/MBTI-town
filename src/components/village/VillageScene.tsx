@@ -193,7 +193,8 @@ function CameraRig() {
   /** 내 캐릭터 자리를 처음 알았을 때 카메라를 바로 옮긴다 (맵 구석에서 날아오지 않게) */
   const placed = useRef(false);
   const goal = useMemo(() => new THREE.Vector3(), []);
-  const blend = useRef(0);
+  // 처음부터 지도로 여는 화면(둘러보기)은 날아오지 않고 바로 지도에서 시작한다
+  const blend = useRef(input.view === 'map' ? 1 : 0);
   const v = useMemo(
     () => ({ walkPos: new THREE.Vector3(), walkLook: new THREE.Vector3(), mapPos: new THREE.Vector3(), look: new THREE.Vector3() }),
     [],
@@ -213,8 +214,9 @@ function CameraRig() {
       return Math.hypot(a.x - b.x, a.y - b.y);
     };
     const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
+      // 지도에서는 휠을 막지 않는다 (둘러보기 화면이 위아래로 넘어가게)
       if (input.view !== 'walk') return;
+      e.preventDefault();
       cam.distance = clamp(cam.distance * Math.exp(e.deltaY * 0.0012));
       // 휠은 바로 따라간다 (부드럽게 하면 굴린 만큼 늦게 움직여 답답하다)
       distNow.current = cam.distance;
@@ -848,6 +850,52 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <GuideNpc />
         <ClubNpcs />
         <MarketStalls />
+        <FirstFrame
+          onFrame={() => {
+            if (!firstFrame.current) {
+              firstFrame.current = true;
+              onFirstFrame();
+            }
+          }}
+        />
+      </TownContext.Provider>
+    </Canvas>
+  );
+}
+
+/**
+ * 둘러보기(EXPLORE)의 마을 지도: 걷는 사람 없이 위에서 내려다본 본섬. 마을에서 전체 지도를 켰을 때와 같은 화면이다.
+ * value.input.view = 'map'으로 넘기면 처음부터 지도로 보인다. 이름표(HTML)는 부르는 쪽이 value.input.labels에 건다.
+ */
+export function MapScene({ value, onFirstFrame }: { value: TownContextValue; onFirstFrame: () => void }) {
+  const firstFrame = useRef(false);
+  return (
+    <Canvas
+      shadows="percentage"
+      dpr={[1, 1.5]}
+      gl={{ antialias: true, powerPreference: 'high-performance' }}
+      camera={{ fov: cameraConfig.fov, near: 0.3, far: 1600 }}
+      onCreated={({ gl }) => {
+        gl.toneMapping = THREE.NeutralToneMapping;
+        gl.toneMappingExposure = 1;
+      }}
+    >
+      <TownContext.Provider value={value}>
+        <fog attach="fog" args={[S.fog, 30, 90]} />
+        <Outdoors />
+        <Lights />
+        <FogRig />
+        <Ground />
+        <Props />
+        <Decor />
+        <WindClock />
+        <DayCycle />
+        <Houses />
+        <DistrictOverlay self={false} />
+        <MapLabelSync />
+        <CameraRig />
+        <AdaptiveResolution />
+        <BeaconSigns />
         <FirstFrame
           onFrame={() => {
             if (!firstFrame.current) {

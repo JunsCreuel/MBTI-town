@@ -1,9 +1,11 @@
 'use client';
 
 // EXPLORE: 마을 (PROJECT_GUIDE.md 3, 4장). 다섯 거주 지역과 중앙광장을 지도에서 고른다.
+// 지도는 마을에서 전체 지도를 켰을 때와 같은 3D 화면(ExploreMap). 3D를 못 쓰면 그림 지도(VillageMap)를 보인다.
 // 중앙광장: 새로 온 주민과 오늘의 토론 이벤트. 지역: 그 지역의 공개 방.
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { tokens } from '@/design/tokens';
 import { call } from '@/lib/api';
 import type { DebateView } from '@/server/debate/service';
@@ -12,6 +14,27 @@ import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
 import { Guide } from '../app/Guide';
 import { Icon } from '../app/Icon';
 import { TabBar } from '../app/TabBar';
+
+const ExploreMap = dynamic(() => import('./ExploreMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="explore-map">
+      <div className="explore-map__loading" aria-hidden>
+        <div className="loader" />
+      </div>
+    </div>
+  ),
+});
+
+/** WebGL(3D)을 쓸 수 있는지 */
+function canUse3d(): boolean {
+  try {
+    const c = document.createElement('canvas');
+    return !!(c.getContext('webgl2') || c.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
 
 interface ExploreData {
   rooms: RoomCard[];
@@ -122,6 +145,10 @@ export function ExploreClient() {
   const [data, setData] = useState<ExploreData | null>(null);
   const [friends, setFriends] = useState<Friends | null>(null);
   const [debate, setDebate] = useState<DebateView | null>(null);
+  // 3D 지도를 못 쓰면 그림 지도
+  const [flat, setFlat] = useState(false);
+  useEffect(() => setFlat(!canUse3d()), []);
+  const onMapFail = useCallback(() => setFlat(true), []);
 
   useEffect(() => {
     const q = selected === 'plaza' ? '' : `?district=${selected}`;
@@ -139,7 +166,11 @@ export function ExploreClient() {
         <h1>둘러보기</h1>
         <p className="muted">지역을 눌러 이웃의 방을 구경해요. <Link href="/village">마을 걷기 ›</Link></p>
       </header>
-      <VillageMap selected={selected} counts={data?.counts ?? {}} onSelect={setSelected} />
+      {flat ? (
+        <VillageMap selected={selected} counts={data?.counts ?? {}} onSelect={setSelected} />
+      ) : (
+        <ExploreMap selected={selected} counts={data?.counts ?? {}} onSelect={setSelected} onFail={onMapFail} />
+      )}
 
       {selected === 'plaza' ? (
         <>
