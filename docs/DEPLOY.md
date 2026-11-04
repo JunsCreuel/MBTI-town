@@ -46,7 +46,7 @@ SCENE(PROJECT SCENE)을 인터넷 주소로 띄우는 순서입니다. 처음 �
 2. 저장소의 `supabase/setup.sql` 내용을 **통째로** 복사해 붙여 넣고 **Run**.
 3. 아래쪽에 `Success. No rows returned` 가 나오면 끝입니다.
 
-`setup.sql` 은 `supabase/migrations/` 의 파일 여섯 개를 순서대로 이어 붙인 것입니다. 여러 번 실행해도 안전하고, 실행한 파일 목록이 `schema_migrations` 표에 남습니다 (**Table Editor** 에서 볼 수 있습니다).
+`setup.sql` 은 `supabase/migrations/` 의 파일을 모두 순서대로 이어 붙인 것입니다. 여러 번 실행해도 안전하고, 실행한 파일 목록이 `schema_migrations` 표에 남습니다 (**Table Editor** 에서 볼 수 있습니다).
 
 모든 표는 보안 규칙(RLS)으로 잠겨 있어서, 브라우저에서 직접 읽거나 쓸 수 없습니다. 읽기·쓰기는 모두 웹 서버(Vercel)가 규칙을 검사한 뒤에 합니다. RLS를 켜고 정책을 두지 않은 것이라 Supabase가 "RLS enabled, no policies" 라고 알려 줘도 정상입니다.
 

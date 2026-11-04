@@ -53,6 +53,8 @@ export interface PropPlacement {
   district?: District;
   /** 놓을 높이 (없으면 땅 높이). 물 위 연잎처럼 땅이 아닌 곳에 놓을 때 쓴다 */
   y?: number;
+  /** 화면에서만: TINT_MATERIAL을 이 색으로 칠한다 (상가 점포 차양처럼 주인이 고른 색). 지역 색보다 먼저 */
+  tint?: string;
 }
 
 /** 집터: 주민의 집이 서는 자리. 빈 집터는 울타리만 있다. 집터는 늘 막혀 있다. */

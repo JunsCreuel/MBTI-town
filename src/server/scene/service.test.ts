@@ -1,9 +1,10 @@
 // 미니홈피 규칙을 실제 Postgres(PGlite, 메모리)로 확인한다. 공개 범위·차단은 서버 규칙이라 여기서 꼼꼼히 본다.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { playConfig, townConfig } from '@/config/game';
+import { coinConfig, marketConfig, playConfig, townConfig } from '@/config/game';
 import type { Announcement } from '@/shared/announce';
 import { DISTRICTS, type District } from '@/shared/districts';
+import { refundFor } from '@/shared/market';
 import { verifyTownPass } from '@/shared/townToken';
 import { computeSaju, type BirthInput } from '../saju';
 import { createPgliteSql, createPostgresSql, type Sql } from '../db';
@@ -555,5 +556,86 @@ describe('운영자', () => {
     expect(heard).toEqual([{ kind: 'notice', text: '오늘 밤 광장에서 만나요!' }]);
     // 기본 service는 실시간 서버가 없다 (보내지 못함)
     await expectError(service.adminNotice(admin, '안녕하세요'), 'conflict');
+  });
+});
+
+describe('코인과 상가', () => {
+  const setCoins = (v: Viewer, n: number) => sql.query(`update public.profiles set coins = $2 where id = $1`, [v.id, n]);
+
+  it('열매·낚시로 코인을 모은다 (같은 나무를 또 따면 0)', async () => {
+    const v = await user();
+    await onboard(v, '코인꾼');
+    expect((await service.playState(v)).coins).toBe(0);
+    expect((await service.pickTree(v, 'fruit.earth.0')).earned).toBe(coinConfig.fruit * playConfig.fruitsPerTree);
+    expect((await service.pickTree(v, 'fruit.earth.0')).earned).toBe(0);
+    expect((await service.pickTree(v, 'fortune')).earned).toBe(coinConfig.fortune);
+    let fromFish = 0;
+    for (let i = 0; i < 20; i++) {
+      const r = await service.castLine(v);
+      expect(r.earned).toBe(r.fish ? coinConfig.fish[r.fish.rarity] : 0);
+      fromFish += r.earned;
+    }
+    expect((await service.playState(v)).coins).toBe(coinConfig.fruit * playConfig.fruitsPerTree + coinConfig.fortune + fromFish);
+  });
+
+  it('빈 점포를 코인으로 사고, 한 사람에 한 칸, 코인이 모자라면 못 산다', async () => {
+    const a = await user();
+    const b = await user();
+    await onboard(a, '사장님');
+    await onboard(b, '이웃사장');
+    await expectError(service.buyShop(null, { slot: 0, name: '가게' }), 'login_required');
+    await setCoins(a, marketConfig.price - 1);
+    await expectError(service.buyShop(a, { slot: 0, name: '가게' }), 'conflict');
+    expect((await service.playState(a)).coins).toBe(marketConfig.price - 1);
+    await setCoins(a, marketConfig.price + 100);
+    await expectError(service.buyShop(a, { slot: marketConfig.shops, name: '가게' }), 'bad_request');
+    await expectError(service.buyShop(a, { slot: 0, name: '' }), 'bad_request');
+    await expectError(service.buyShop(a, { slot: 0, name: '가게', color: 'neon' }), 'bad_request');
+    await expectError(service.buyShop(a, { slot: 0, name: 'http://x.kr' }), 'rejected');
+    const view = await service.buyShop(a, { slot: 3, name: '  붕어빵   가게 ', intro: '따끈따끈', color: 'coral' });
+    expect(view).toMatchObject({ myShop: 3, coins: 100, price: marketConfig.price });
+    expect(view.shops).toEqual([{ slot: 3, name: '붕어빵 가게', intro: '따끈따끈', color: 'coral', owner: { displayName: '사장님', handle: expect.any(String) }, mine: true }]);
+    // 한 사람에 한 칸
+    await setCoins(a, marketConfig.price);
+    await expectError(service.buyShop(a, { slot: 4, name: '두 번째' }), 'conflict');
+    // 남의 점포는 못 산다
+    await setCoins(b, marketConfig.price);
+    await expectError(service.buyShop(b, { slot: 3, name: '뺏기' }), 'conflict');
+    expect((await service.playState(b)).coins).toBe(marketConfig.price);
+    // 손님도 볼 수 있다 (코인 없음)
+    const guest = await service.marketView(null);
+    expect(guest).toMatchObject({ coins: null, myShop: null, admin: false });
+    expect(guest.shops.find((s) => s.slot === 3)).toMatchObject({ name: '붕어빵 가게', mine: false });
+  });
+
+  it('내 점포 이름·색 바꾸기, 내놓으면 절반을 돌려받는다', async () => {
+    const a = await user();
+    const b = await user();
+    await onboard(a, '주인');
+    await onboard(b, '구경꾼');
+    await setCoins(a, marketConfig.price);
+    await service.buyShop(a, { slot: 7, name: '꽃집' });
+    await expectError(service.updateShop(b, { name: '내꺼' }), 'not_found');
+    const v = await service.updateShop(a, { name: '꽃과 차', intro: '향긋해요', color: 'lavender' });
+    expect(v.shops.find((s) => s.slot === 7)).toMatchObject({ name: '꽃과 차', intro: '향긋해요', color: 'lavender', mine: true });
+    await expectError(service.releaseShop(b, 7), 'forbidden');
+    await expectError(service.releaseShop(a, 8), 'not_found');
+    const after = await service.releaseShop(a, '7');
+    expect(after).toMatchObject({ myShop: null, coins: refundFor() });
+    expect(after.shops.some((s) => s.slot === 7)).toBe(false);
+  });
+
+  it('운영자는 남의 점포를 비울 수 있고, 주인은 절반을 돌려받는다', async () => {
+    const admin = await user();
+    const owner = await user();
+    await onboard(admin, '관리');
+    await onboard(owner, '문제가게');
+    await sql.query(`insert into public.admins (user_id) values ($1)`, [admin.id]);
+    await setCoins(owner, marketConfig.price);
+    await service.buyShop(owner, { slot: 12, name: '이상한 이름' });
+    expect((await service.marketView(admin)).admin).toBe(true);
+    await service.releaseShop(admin, 12);
+    expect((await service.marketView(owner)).myShop).toBeNull();
+    expect((await service.playState(owner)).coins).toBe(refundFor());
   });
 });

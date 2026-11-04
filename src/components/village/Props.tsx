@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { townConfig } from '@/config/game';
 import { tokens } from '@/design/tokens';
 import { TINT_MATERIAL } from '@/shared/character';
+import { STALL_KEY } from '@/shared/market';
 import { groundHeightAt, type Lot, type PropPlacement } from '@/shared/townMap';
 import { GATE_KEY, HOUSE_KEY, LOT_KEY, tagTexture, type TownAssets } from './assets';
 import { lotKey, useTown } from './context';
@@ -93,7 +94,7 @@ export function InstancedProps({ group, onPick }: { group: PropGroup; onPick?: (
       placement.compose(pos.set(p.x, p.y ?? groundHeightAt(map, p.x, p.z), p.z), q, one);
       return {
         matrices: group.parts.map((part) => new THREE.Matrix4().multiplyMatrices(placement, part.local)),
-        color: p.district ? new THREE.Color(tokens.district[p.district]) : WHITE,
+        color: p.tint ? new THREE.Color(p.tint) : p.district ? new THREE.Color(tokens.district[p.district]) : WHITE,
       };
     });
   }, [group, map]);
@@ -319,7 +320,8 @@ export function Props() {
     const byKey = new Map<string, PropPlacement[]>();
     const boards: PropPlacement[] = [];
     for (const p of map.props) {
-      if (!assets.props[p.key]) continue;
+      // 상가 점포는 주인이 고른 색을 입혀 Market.tsx가 따로 그린다
+      if (!assets.props[p.key] || p.key === STALL_KEY) continue;
       if (CLICKABLE.has(p.key)) boards.push(p);
       else byKey.set(p.key, [...(byKey.get(p.key) ?? []), p]);
     }

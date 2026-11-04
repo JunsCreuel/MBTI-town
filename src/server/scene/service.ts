@@ -6,6 +6,7 @@ import { recordConfig, socialConfig, townConfig } from '@/config/game';
 import { isMbtiType, type MbtiType } from '@/design/mbti';
 import { NOTICE_MAX, parseAnnouncement, type Announcement } from '@/shared/announce';
 import { AVATAR_COLORS, cleanAvatar, type Avatar } from '@/shared/avatar';
+import { isShopColor, isShopSlot, refundFor, shopLabel, type MarketView, type ShopColor } from '@/shared/market';
 import { bgmTrack } from '@/shared/bgm';
 import { cleanTaste, isDistrict, type District, type Taste } from '@/shared/districts';
 import { moderate } from '@/shared/moderation';
@@ -22,7 +23,7 @@ import {
   FORTUNE_FRUIT, FRUITS, GOLDEN_WHALE_ID, fishDef, fortuneFor, parseTreeSpot, rollCatch, treeSpotId,
   type FishDef, type FortuneFruit,
 } from '@/shared/play';
-import { playConfig } from '@/config/game';
+import { coinConfig, marketConfig, playConfig } from '@/config/game';
 import type { AdminCounts, ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
 
 export type SceneErrorCode =
@@ -155,6 +156,8 @@ export interface PickResult {
   count: number;
   /** 운세 나무면 오늘의 운세 열매 */
   fortune: FortuneFruit | null;
+  /** 이번에 받은 코인 */
+  earned: number;
 }
 
 export interface FishResult {
@@ -168,6 +171,8 @@ export interface FishResult {
   left: number;
   /** 황금 고래를 낚아 서버 전체에 공지했는지 */
   announced?: boolean;
+  /** 이번에 받은 코인 (꽝이면 0) */
+  earned: number;
 }
 
 export interface PlayState {
@@ -179,6 +184,8 @@ export interface PlayState {
   fruits: Record<string, number>;
   /** 물고기 id → 마리 수 */
   fish: Record<string, number>;
+  /** 게임 코인 */
+  coins: number;
 }
 
 /** 집 안 입장 토큰: 그 방을 볼 수 있는 사람에게만 준다 */
@@ -294,6 +301,18 @@ function cleanHobby(v: unknown): string {
   const s = cleanText(v, socialConfig.hobbyMax, '취미');
   if (s && !moderate(s).allowed) throw new SceneError('rejected', '취미에는 거친 표현이나 링크·연락처를 넣을 수 없어요.');
   return s;
+}
+
+/** 점포 이름·소개·차양 색: 짧게, 거친 말·링크는 안 된다 */
+function cleanShopInput(input: Record<string, unknown>): { name: string; intro: string; color: ShopColor } {
+  const name = cleanText(input.name, marketConfig.nameMax, '점포 이름', true).replace(/\s+/g, ' ');
+  const intro = cleanText(input.intro, marketConfig.introMax, '점포 소개').replace(/\s+/g, ' ');
+  for (const s of [name, intro]) {
+    if (s && !moderate(s).allowed) throw new SceneError('rejected', '점포 이름·소개에는 거친 표현이나 링크·연락처를 넣을 수 없어요.');
+  }
+  const color = input.color === undefined ? 'mint' : input.color;
+  if (!isShopColor(color)) throw new SceneError('bad_request', '차양 색이 올바르지 않아요.');
+  return { name, intro, color };
 }
 
 function cleanText(v: unknown, max: number, what: string, required = false): string {
@@ -967,7 +986,9 @@ export class SceneService {
     const n = spot.kind === 'fortune' ? 1 : playConfig.fruitsPerTree;
     const fresh = await this.store.takeDailySpot(p.id, day, `tree:${treeSpotId(spot)}`, fruit.id);
     const count = fresh ? await this.store.addToCollection(p.id, 'fruit', fruit.id, n) : await this.countOf(p.id, 'fruit', fruit.id);
-    return { already: !fresh, fruit: { id: fruit.id, name: fruit.name, color: fruit.color }, added: fresh ? n : 0, count, fortune };
+    const earned = fresh ? (spot.kind === 'fortune' ? coinConfig.fortune : coinConfig.fruit * n) : 0;
+    if (earned) await this.store.addCoins(p.id, earned);
+    return { already: !fresh, fruit: { id: fruit.id, name: fruit.name, color: fruit.color }, added: fresh ? n : 0, count, fortune, earned };
   }
 
   /** 낚시 한 번. 하루 playConfig.fishPerDay번 */
@@ -982,14 +1003,16 @@ export class SceneService {
       // 같은 번호를 동시에 쓰면 다시 센다
       if (!(await this.store.takeDailySpot(p.id, day, `fish:${used + 1}`, caught?.fish.id ?? null))) continue;
       const left = playConfig.fishPerDay - used - 1;
-      if (!caught) return { fish: null, size: 0, count: 0, left };
+      if (!caught) return { fish: null, size: 0, count: 0, left, earned: 0 };
       const count = await this.store.addToCollection(p.id, 'fish', caught.fish.id, 1);
+      const earned = coinConfig.fish[caught.fish.rarity];
+      await this.store.addCoins(p.id, earned);
       // 황금 고래: 마을 모두에게 알린다
       if (caught.fish.id === GOLDEN_WHALE_ID) {
         const announced = await this.announce({ kind: 'golden_whale', name: displayNameOf(p) }).catch(() => false);
-        return { fish: caught.fish, size: caught.size, count, left, announced };
+        return { fish: caught.fish, size: caught.size, count, left, announced, earned };
       }
-      return { fish: caught.fish, size: caught.size, count, left };
+      return { fish: caught.fish, size: caught.size, count, left, earned };
     }
     throw new SceneError('conflict', '잠깐 뒤에 다시 던져 주세요.');
   }
@@ -998,10 +1021,11 @@ export class SceneService {
   async playState(viewer: Viewer | null): Promise<PlayState> {
     const p = await this.requireOnboarded(viewer);
     const day = localDate(this.now());
-    const [trees, fish, items] = await Promise.all([
+    const [trees, fish, items, coins] = await Promise.all([
       this.store.dailySpots(p.id, day, 'tree:'),
       this.store.dailySpots(p.id, day, 'fish:'),
       this.store.collection(p.id),
+      this.store.coinsOf(p.id),
     ]);
     return {
       day,
@@ -1009,7 +1033,76 @@ export class SceneService {
       fishLeft: Math.max(0, playConfig.fishPerDay - fish.length),
       fruits: Object.fromEntries(items.filter((i) => i.kind === 'fruit').map((i) => [i.item, i.count])),
       fish: Object.fromEntries(items.filter((i) => i.kind === 'fish' && fishDef(i.item)).map((i) => [i.item, i.count])),
+      coins,
     };
+  }
+
+  // ───────────────────────── 상가 ─────────────────────────
+
+  /** 상가 점포 (누구나 본다). 로그인했으면 내 코인과 내 점포 번호도 */
+  async marketView(viewer: Viewer | null): Promise<MarketView> {
+    const rows = await this.store.listShops();
+    const me = viewer ? await this.store.getProfile(viewer.id) : null;
+    const signedIn = !!me?.onboarded_at;
+    return {
+      shops: rows.map((r) => ({
+        slot: r.slot,
+        name: r.name,
+        intro: r.intro,
+        color: isShopColor(r.color) ? r.color : 'mint',
+        owner: { displayName: r.display_name || r.handle || '이름 없는 주민', handle: r.handle },
+        mine: r.owner_id === viewer?.id,
+      })),
+      price: marketConfig.price,
+      coins: signedIn ? await this.store.coinsOf(me!.id) : null,
+      myShop: rows.find((r) => r.owner_id === viewer?.id)?.slot ?? null,
+      admin: await this.isAdmin(viewer),
+    };
+  }
+
+  /** 빈 점포를 코인으로 산다. 한 사람에 한 칸 */
+  async buyShop(viewer: Viewer | null, input: Record<string, unknown>): Promise<MarketView> {
+    const p = await this.requireOnboarded(viewer);
+    const slot = input.slot;
+    if (!isShopSlot(slot)) throw new SceneError('bad_request', '점포 번호가 올바르지 않아요.');
+    const shop = cleanShopInput(input);
+    const shops = await this.store.listShops();
+    const mine = shops.find((r) => r.owner_id === p.id);
+    if (mine) throw new SceneError('conflict', `이미 ${shopLabel(mine.slot)} 점포 주인이에요. 점포는 한 사람에 한 칸이에요.`);
+    if (shops.some((r) => r.slot === slot)) throw new SceneError('conflict', '방금 다른 주민이 산 점포예요.');
+    if ((await this.store.spendCoins(p.id, marketConfig.price)) === null) {
+      const have = await this.store.coinsOf(p.id);
+      throw new SceneError('conflict', `코인이 모자라요. ${marketConfig.price.toLocaleString('ko-KR')}코인이 필요한데 ${have.toLocaleString('ko-KR')}코인 있어요.`);
+    }
+    // 동시에 같은 칸을 사거나 두 칸을 사려 하면 한쪽만 들어간다. 못 들어가면 코인을 돌려준다
+    if (!(await this.store.insertShop(slot, p.id, shop.name, shop.intro, shop.color, this.now()))) {
+      await this.store.addCoins(p.id, marketConfig.price);
+      throw new SceneError('conflict', '방금 다른 주민이 산 점포예요.');
+    }
+    return this.marketView(viewer);
+  }
+
+  /** 내 점포 이름·소개·차양 색 바꾸기 */
+  async updateShop(viewer: Viewer | null, input: Record<string, unknown>): Promise<MarketView> {
+    const p = await this.requireOnboarded(viewer);
+    const shop = cleanShopInput(input);
+    if (!(await this.store.updateShop(p.id, shop.name, shop.intro, shop.color, this.now()))) throw new SceneError('not_found', '내 점포가 없어요.');
+    return this.marketView(viewer);
+  }
+
+  /**
+   * 점포 비우기. 주인은 내 점포를 내놓고 값의 절반을 돌려받는다.
+   * 운영자는 남의 점포도 비울 수 있다 (이름이 문제일 때 등. 주인에게 같은 몫을 돌려준다).
+   */
+  async releaseShop(viewer: Viewer | null, slotRaw: unknown): Promise<MarketView> {
+    const p = await this.requireOnboarded(viewer);
+    const slot = typeof slotRaw === 'string' ? Number(slotRaw) : slotRaw;
+    if (!isShopSlot(slot)) throw new SceneError('bad_request', '점포 번호가 올바르지 않아요.');
+    const owner = (await this.store.listShops()).find((r) => r.slot === slot)?.owner_id;
+    if (!owner) throw new SceneError('not_found', '빈 점포예요.');
+    if (owner !== p.id && !(await this.isAdmin(viewer))) throw new SceneError('forbidden', '내 점포만 내놓을 수 있어요.');
+    if ((await this.store.deleteShop(slot)) === owner) await this.store.addCoins(owner, refundFor());
+    return this.marketView(viewer);
   }
 
   private async countOf(userId: string, kind: 'fruit' | 'fish', item: string): Promise<number> {

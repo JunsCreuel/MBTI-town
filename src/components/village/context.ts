@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { HouseView } from '@/server/scene/service';
 import type { AccessoryId, AvatarColor } from '@/shared/avatar';
+import type { MarketView } from '@/shared/market';
 import type { Lot, PropPlacement, TownMap } from '@/shared/townMap';
 import type { TownSession } from './session';
 import type { TownAssets } from './assets';
@@ -85,6 +86,10 @@ export interface TownContextValue {
   onHouse: (lot: Lot) => void;
   /** 동네 길 아치를 눌렀을 때 */
   onGate: (gate: PropPlacement) => void;
+  /** 상가 점포 (상가에 있을 때만, 받기 전이면 null) */
+  market: MarketView | null;
+  /** 상가 점포를 눌렀을 때 (점포 번호) */
+  onStall: (slot: number) => void;
 }
 
 export const TownContext = createContext<TownContextValue | null>(null);

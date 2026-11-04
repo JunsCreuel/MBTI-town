@@ -1,7 +1,7 @@
 'use client';
 
 // 비콘 간판: 비콘 옆에 기둥 둘 달린 간판을 세워 어디로 가는 곳인지 글자로 보여 준다.
-// - 광장: "낚시터"(나무 간판, 물고기 그림), "CLUB"(네온 간판)
+// - 광장: "낚시터"(나무 간판, 물고기 그림), "CLUB"(네온 간판), "상가"(나무 간판, 장바구니 그림)
 // - 놀이터: "광장으로" (클럽 안에서는 초록 네온 EXIT)
 // 글자는 캔버스로 그려 앞뒤 두 면에 붙인다 (뒤에서 봐도 거꾸로 보이지 않는다). 맵 파일은 건드리지 않는다.
 import { useEffect, useMemo, useState } from 'react';
@@ -24,7 +24,7 @@ const BOARD_Y = 1.62;
 /** 멀리서도 읽히게 조금 크게 */
 const SCALE = 1.2;
 
-type Style = 'fishing' | 'club' | 'home' | 'exit';
+type Style = 'fishing' | 'club' | 'market' | 'home' | 'exit';
 
 async function drawSign(style: Style): Promise<HTMLCanvasElement> {
   await Promise.all([document.fonts?.load(cardFont(800, 80)), document.fonts?.load(cardFont(600, 30))]);
@@ -54,6 +54,18 @@ async function drawSign(style: Style): Promise<HTMLCanvasElement> {
     g.fillStyle = S.signSub;
     g.font = cardFont(600, 30);
     g.fillText('물고기를 낚아요', textX + 4, 150);
+  } else if (style === 'market') {
+    try {
+      g.drawImage(await loadImage(assetUrl('ui.icon.basket')), 30, 34, 132, 132);
+    } catch {
+      // 그림 없이 글자만
+    }
+    g.fillStyle = S.signInk;
+    g.font = cardFont(800, 84);
+    g.fillText('상가', textX, 84);
+    g.fillStyle = S.signSub;
+    g.font = cardFont(600, 30);
+    g.fillText('점포 20칸 · 내 가게 열기', textX + 4, 150);
   } else if (style === 'home') {
     // 집 모양 그림
     g.fillStyle = tokens.color.accent;
@@ -186,7 +198,7 @@ export function BeaconSigns() {
       const lz = 0.15;
       const x = b.x + lx * Math.cos(b.yaw) + lz * Math.sin(b.yaw);
       const z = b.z - lx * Math.sin(b.yaw) + lz * Math.cos(b.yaw);
-      const style: Style = isReturn ? (indoor ? 'exit' : 'home') : b.kind === 'club' ? 'club' : 'fishing';
+      const style: Style = isReturn ? (indoor ? 'exit' : 'home') : b.kind;
       return { key: `${b.kind}:${b.x}:${b.z}`, style, x, z, yaw: b.yaw };
     });
   }, [map]);

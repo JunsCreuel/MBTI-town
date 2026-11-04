@@ -472,6 +472,13 @@ export function buildTownMap(tilesetFile: string) {
     }
   }
 
+  // 4-1. 상가 비콘: 언덕 지역 쪽 광장 가장자리 (맨 나중에 놓아서 앞의 배치가 그대로다)
+  {
+    const bm = freeSpot(8.4, districtAngle(DISTRICTS.indexOf('earth')) + 0.36, 1.0);
+    prop('prop.plaza.beacon_market', bm.x, bm.y, bm.tiles, facing(bm.x, bm.y, C, C));
+    taken.push({ x: bm.x, y: bm.y, r: 1.2 });
+  }
+
   // 5. 스폰: 광장은 분수 남쪽, 지역은 큰길 입구, 동네 길은 아치 앞
   const spawns = [
     spawnRect('spawn', C - 3, C + 3, 6, 2),
@@ -618,8 +625,9 @@ export function buildHoodMap(tilesetFile: string) {
 const SPOT_SIZE = 48;
 const SOUTH = Math.PI / 2;
 
-export function buildSpotMap(kind: 'fishing' | 'club', tilesetFile: string) {
+export function buildSpotMap(kind: 'fishing' | 'club' | 'market', tilesetFile: string) {
   if (kind === 'club') return buildClubMap(tilesetFile);
+  if (kind === 'market') return buildMarketMap(tilesetFile);
   const { ground, set, get, block, isBlocked, polar, taken, prop, facing, square, at, snap, onPath, spawnRect, toTiled } = canvas(SPOT_SIZE);
   const c = SPOT_SIZE / 2;
   const rand = rng(kind === 'fishing' ? 20261104 : 20261105);
@@ -794,4 +802,114 @@ function buildClubMap(tilesetFile: string) {
 
   // 7. 스폰: 출입문 앞
   return toTiled(tilesetFile, [spawnRect('spawn', c - 1.5, y1 - 3.5, 3, 2)]);
+}
+
+// ───────────────────────── 상가 ─────────────────────────
+// 중앙광장 비콘(언덕 지역 쪽)으로 가는 섬. 가운데 분수 광장을 점포 20칸이 네모나게 둘러싼다 (모두 광장 쪽을 본다).
+// 점포 번호는 소품 순서 그대로: 북서쪽에서 시계 방향으로 1~20호 (북 6 · 동 5 · 남 4 · 서 5). 남쪽 가운데는 입구.
+
+/** 점포가 광장 가운데에서 떨어진 거리 (칸) */
+const STALL_RING = 9;
+
+function buildMarketMap(tilesetFile: string) {
+  const { ground, set, get, block, isBlocked, polar, taken, prop, facing, rectTiles, square, at, snap, onPath, spawnRect, toTiled } = canvas(SPOT_SIZE);
+  const c = SPOT_SIZE / 2;
+  const rand = rng(20261106);
+  const shoreAt = (a: number) => 19.6 + Math.sin(a * 3 + 0.4) * 0.6 + Math.sin(a * 5 + 1.7) * 0.3;
+  const beaconR = shoreAt(SOUTH) - 3.0;
+  const PLAZA = 10.5;
+  const inPlaza = (x: number, y: number) => Math.abs(x + 0.5 - c) <= PLAZA && Math.abs(y + 0.5 - c) <= PLAZA;
+
+  // 1. 섬: 잔디 → 모래사장 → 바다. 가운데 네모난 돌바닥 광장, 남쪽 입구 길
+  for (let y = 0; y < SPOT_SIZE; y++) {
+    for (let x = 0; x < SPOT_SIZE; x++) {
+      const { d, a } = polar(x, y);
+      const shore = shoreAt(a);
+      if (d >= shore + 2.4) {
+        block(x, y);
+        continue;
+      }
+      if (d >= shore) set(ground, x, y, gid('sand'));
+      else if (inPlaza(x, y)) set(ground, x, y, Math.abs(x + 0.5 - c) > PLAZA - 1 || Math.abs(y + 0.5 - c) > PLAZA - 1 ? gid('stoneEdge') : gid('stone'));
+      else if (Math.abs(x + 0.5 - c) < 1.3 && y + 0.5 > c && y + 0.5 < c + beaconR + 1.5) set(ground, x, y, gid('path'));
+      else set(ground, x, y, rand() < 0.22 ? gid('grass2') : gid('grass'));
+    }
+  }
+
+  // 2. 점포 20칸 (정면 = 광장 가운데 쪽)
+  const stalls: { x: number; y: number }[] = [
+    ...[-8, -4.8, -1.6, 1.6, 4.8, 8].map((dx) => ({ x: c + dx, y: c - STALL_RING })),
+    ...[-6.4, -3.2, 0, 3.2, 6.4].map((dy) => ({ x: c + STALL_RING, y: c + dy })),
+    ...[8, 4.8, -4.8, -8].map((dx) => ({ x: c + dx, y: c + STALL_RING })),
+    ...[6.4, 3.2, 0, -3.2, -6.4].map((dy) => ({ x: c - STALL_RING, y: c + dy })),
+  ];
+  for (const st of stalls) {
+    // 가로줄은 남북을, 세로줄은 동서를 본다
+    const rot = Math.abs(st.y - c) === STALL_RING ? facing(st.x, st.y, st.x, c) : facing(st.x, st.y, c, st.y);
+    prop('prop.market.stall', st.x, st.y, rectTiles(st.x, st.y, 1.2, 0.65, rot), rot);
+    taken.push({ x: st.x, y: st.y, r: 1.8 });
+  }
+
+  // 3. 가운데 분수, 둘레 가로등·벤치 (남쪽 입구 쪽 벤치는 비운다)
+  prop('prop.plaza.fountain', c, c, square(c - 1, c - 1, 3, 3));
+  taken.push({ x: c, y: c, r: 2.4 });
+  for (const [dx, dy] of [[-4.5, -4.5], [4.5, -4.5], [-4.5, 4.5], [4.5, 4.5]]) {
+    const x = snap(c + dx);
+    const y = snap(c + dy);
+    prop('prop.plaza.lamp', x, y, [[Math.floor(x), Math.floor(y)]]);
+    taken.push({ x, y, r: 1 });
+  }
+  for (const [dx, dy] of [[0, -4.6], [4.6, 0], [-4.6, 0]]) {
+    const x = c + dx;
+    const y = c + dy;
+    prop('prop.plaza.bench', x, y, [[Math.floor(x), Math.floor(y)]], facing(x, y, c, c));
+    taken.push({ x, y, r: 1.2 });
+  }
+
+  // 4. 광장으로 돌아가는 비콘 (남쪽 길 옆)
+  {
+    const b = at(beaconR, SOUTH);
+    const x = snap(b.x + 2.2);
+    const y = snap(b.y);
+    prop('prop.plaza.beacon_market', x, y, [[Math.floor(x), Math.floor(y)]], 180);
+    taken.push({ x, y, r: 1.4 });
+  }
+
+  // 5. 나무: 광장 밖 풀밭 (언덕 지역 식물)
+  const flora = FLORA.earth;
+  const spawnAt = at(beaconR - 1.2, SOUTH);
+  for (const [kindKey, list, want] of [
+    ['tree', flora.trees, 30],
+    ['bush', flora.bushes, 16],
+    ['rock', flora.rocks, 5],
+  ] as const) {
+    let planted = 0;
+    for (let tries = 0; tries < 4000 && planted < want; tries++) {
+      const a = rand() * 2 * Math.PI;
+      const d = PLAZA + 1.5 + Math.sqrt(rand()) * Math.max(0, shoreAt(a) - PLAZA - 2.3);
+      const x = snap(c + Math.cos(a) * d);
+      const y = snap(c + Math.sin(a) * d);
+      if (isBlocked(x, y) || onPath(x, y) || inPlaza(Math.floor(x), Math.floor(y))) continue;
+      if (Math.hypot(x - spawnAt.x, y - spawnAt.y) < 3) continue;
+      if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + SPACING[kindKey])) continue;
+      prop(pickWeighted(list, rand()), x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360), 'earth');
+      taken.push({ x, y, r: SPACING[kindKey] });
+      planted++;
+    }
+  }
+  // 바닷가 야자수
+  for (let k = 0, planted = 0; k < 1500 && planted < 8; k++) {
+    const a = rand() * 2 * Math.PI;
+    const d = shoreAt(a) + 0.4 + rand() * 1.2;
+    const x = snap(c + Math.cos(a) * d);
+    const y = snap(c + Math.sin(a) * d);
+    if (get(ground, Math.floor(x), Math.floor(y)) !== gid('sand') || isBlocked(x, y)) continue;
+    if (Math.abs(wrap(a - SOUTH)) < 0.3 || taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + 2)) continue;
+    prop(pickWeighted(BEACH_TREES, rand()), x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360));
+    taken.push({ x, y, r: 1.2 });
+    planted++;
+  }
+
+  // 6. 스폰: 남쪽 비콘 앞
+  return toTiled(tilesetFile, [spawnRect('spawn', spawnAt.x - 1.5, spawnAt.y - 1, 3, 2)]);
 }

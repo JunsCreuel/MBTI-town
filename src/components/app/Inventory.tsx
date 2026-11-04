@@ -58,6 +58,11 @@ export function InventorySheet({ state, onClose }: { state: PlayState | null; on
             </button>
           </div>
 
+          <p className="inventory__coins">
+            코인 <b>{state.coins.toLocaleString('ko-KR')}</b>
+            <span className="muted"> · 낚시·열매로 모아 상가 점포를 살 수 있어요</span>
+          </p>
+
           {picked && <ItemDetail pick={picked} count={(picked.kind === 'fruit' ? state.fruits : state.fish)[picked.item.id] ?? 0} />}
 
           <ul className="inventory__grid">

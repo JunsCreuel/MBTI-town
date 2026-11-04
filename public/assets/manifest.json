@@ -832,5 +832,14 @@
   },
   "item.fish.golden_whale": {
     "file": "items/item_fish_golden_whale_ph.svg"
+  },
+  "prop.plaza.beacon_market": {
+    "file": "props/prop_plaza_beacon_market_ph.glb"
+  },
+  "prop.market.stall": {
+    "file": "props/prop_market_stall_ph.glb"
+  },
+  "map.market": {
+    "file": "maps/market.json"
   }
 }

@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { assetUrl } from '@/assets/manifest';
-import { playConfig, townConfig } from '@/config/game';
+import { marketConfig, playConfig, townConfig } from '@/config/game';
 import { call } from '@/lib/api';
 import { FORTUNE_FRUIT, FRUITS, type FortuneFruit } from '@/shared/play';
 import { withMaxLightness } from '@/design/mbti';
@@ -17,6 +17,7 @@ import { GesturePicker } from '@/components/app/GesturePicker';
 import { TabBar } from '@/components/app/TabBar';
 import type { HouseView, TownView } from '@/server/scene/service';
 import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
+import { shopLabel, type MarketView } from '@/shared/market';
 import { SPOT_NAME, parseRoomPlace, parseSpot, type RoomPlace, type Spot, type TownPlace } from '@/shared/protocol';
 import { castTarget, districtAt, lotDoor, nearWater, parseTownMap, randomSpawnPoint, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
 import { lotKey, type TownCamera, type TownContextValue, type TownInput } from './context';
@@ -27,6 +28,7 @@ import { TownSession, now } from './session';
 import { ClubMusic } from './ClubMusic';
 import { NpcDialog } from './NpcDialog';
 import { BarSheet, DjSheet, DrunkFx } from './ClubBar';
+import { MarketSheet, stallFront, stallsOf } from './Market';
 import { BARTENDER_NAME, DJ_NAME } from './ClubNpcs';
 import { clubBar } from './club';
 import { NPC_NAME, NPC_TALK_REACH, clubNpcSpots, guideNpcSpot, markNpcSeen, npcSeen } from './npc';
@@ -249,12 +251,38 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         : null,
     [passName, passColor, passAcc, passMbti, passIlju],
   );
+  // 상가: 점포 20칸 (주인·이름·차양 색). 상가에 있는 동안 20초마다, 점포 시트를 열 때 새로 받는다
+  const [market, setMarket] = useState<MarketView | null>(null);
+  const [stallOpen, setStallOpen] = useState<number | null>(null);
+  const onStall = useCallback(
+    (slot: number) => {
+      input.keys.clear();
+      input.tapTarget = null;
+      setStallOpen(slot);
+    },
+    [input],
+  );
+  useEffect(() => {
+    if (spot !== 'market') return;
+    let alive = true;
+    const load = () =>
+      call<MarketView>('GET', '/api/market')
+        .then((v) => alive && setMarket(v))
+        .catch(() => {});
+    void load();
+    const t = setInterval(load, 20_000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [spot, stallOpen]);
+
   const value = useMemo<TownContextValue | null>(
     () =>
       loaded && spawn && look
-        ? { session, selfId: snap.selfId, spawn, look, map: loaded.map, assets: loaded.assets, input, hood: hoodNo, houses, hidden, onHouse, onGate }
+        ? { session, selfId: snap.selfId, spawn, look, map: loaded.map, assets: loaded.assets, input, hood: hoodNo, houses, hidden, onHouse, onGate, market, onStall }
         : null,
-    [session, snap.selfId, spawn, look, loaded, input, hoodNo, houses, hidden, onHouse, onGate],
+    [session, snap.selfId, spawn, look, loaded, input, hoodNo, houses, hidden, onHouse, onGate, market, onStall],
   );
 
   const trees = useMemo(() => (loaded ? treesOf(loaded.map) : []), [loaded]);
@@ -267,6 +295,8 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const clubSpots = useMemo(() => (loaded ? clubNpcSpots(loaded.map) : null), [loaded]);
   const [nearClub, setNearClub] = useState<'dj' | 'bar' | null>(null);
   const [clubSheet, setClubSheet] = useState<'dj' | 'bar' | null>(null);
+  const stalls = useMemo(() => (loaded && spot === 'market' ? stallsOf(loaded.map) : []), [loaded, spot]);
+  const [nearStall, setNearStall] = useState<number | null>(null);
   const villageRef = useRef<HTMLDivElement>(null);
   const [npcOpen, setNpcOpen] = useState<{ first: boolean } | null>(null);
   const openNpc = useCallback(
@@ -318,7 +348,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       const r = await call<PickResult>('POST', '/api/play/pick', { spot: t.spot });
       if (!r.already) input.drops.push({ x: t.x, z: t.z, color: r.fruit.color, at: now() });
       if (r.fortune) setFortuneFruit(r.fortune);
-      else setToast({ text: r.already ? `이 나무는 오늘 이미 땄어요 (${r.fruit.name} ${r.count}개)` : `${r.fruit.name} ${r.added}개를 땄어요! 가방에 ${r.count}개`, fruit: r.fruit.id });
+      else setToast({ text: r.already ? `이 나무는 오늘 이미 땄어요 (${r.fruit.name} ${r.count}개)` : `${r.fruit.name} ${r.added}개를 땄어요! 가방에 ${r.count}개${r.earned ? ` · +${r.earned}코인` : ''}`, fruit: r.fruit.id });
       if (!r.already) session.sendAction('jump');
       refreshPlay();
     } catch (e) {
@@ -377,6 +407,18 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         const dBar = Math.hypot(clubSpots.bartender.x - input.self.x, clubSpots.bartender.z - input.self.z);
         setNearClub(dDj < 3.2 ? 'dj' : dBar < 3 ? 'bar' : null);
       } else setNearClub(null);
+      // 상가: 점포 앞에 서 있으면 그 점포
+      let stall: number | null = null;
+      let stallD = Infinity;
+      for (const st of stalls) {
+        const f = stallFront(st);
+        const d = Math.hypot(f.x - input.self.x, f.z - input.self.z);
+        if (d < marketConfig.reach && d < stallD) {
+          stallD = d;
+          stall = st.slot;
+        }
+      }
+      setNearStall(stall);
       // 낚시터 물가
       setCanFish(spot === 'fishing' && nearWater(loaded.map, input.self.x, input.self.z));
       // 클럽 무대에 서 있으면 저절로 춤춘다 (2초마다, 걷는 중에는 걷기가 먼저)
@@ -391,7 +433,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       }
     }, 300);
     return () => clearInterval(t);
-  }, [loaded, input, here, trees, beacons, spot, session, npcSpot, clubSpots]);
+  }, [loaded, input, here, trees, beacons, spot, session, npcSpot, clubSpots, stalls]);
 
   const openMap = useCallback(
     (open: boolean) => {
@@ -677,7 +719,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
                 className="door-btn"
                 onClick={() => router.push(spot ? '/village?at=plaza' : `/village?place=${nearBeacon}`)}
               >
-                <Icon name={nearBeacon === 'fishing' ? 'fishing' : 'music'} size={20} />
+                <Icon name={nearBeacon === 'fishing' ? 'fishing' : nearBeacon === 'market' ? 'basket' : 'music'} size={20} />
                 {spot ? '광장으로 돌아가기' : `${SPOT_NAME[nearBeacon]}로 가기`}
               </button>
             )}
@@ -693,6 +735,13 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
               <button className="door-btn" onClick={() => openNpc(false)}>
                 <Icon name="question" size={20} />
                 {NPC_NAME}와 이야기하기
+              </button>
+            )}
+
+            {nearStall !== null && stallOpen === null && !nearBeacon && (
+              <button className="door-btn" onClick={() => onStall(nearStall)}>
+                <Icon name="basket" size={20} />
+                {shopLabel(nearStall)} {market?.shops.find((sh) => sh.slot === nearStall)?.name ?? '빈 점포'} 보기
               </button>
             )}
 
@@ -834,6 +883,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         />
       )}
       {npcOpen && <NpcDialog guest={isGuest} first={npcOpen.first} onClose={closeNpc} />}
+      {stallOpen !== null && <MarketSheet slot={stallOpen} view={market} onChanged={setMarket} onClose={() => setStallOpen(null)} />}
       {clubSheet === 'dj' && <DjSheet onRequest={(i) => session.requestSong(i)} onClose={() => setClubSheet(null)} />}
       {clubSheet === 'bar' && (
         <BarSheet

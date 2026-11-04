@@ -24,6 +24,7 @@ import { Terrain } from './Terrain';
 import { BeaconSigns } from './BeaconSigns';
 import { GuideNpc } from './GuideNpc';
 import { ClubNpcs } from './ClubNpcs';
+import { MarketStalls } from './Market';
 
 const S = tokens.scene;
 /** 저가폰을 고려해 휴대폰에서는 그림자 해상도를 낮춘다 */
@@ -846,6 +847,7 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <BeaconSigns />
         <GuideNpc />
         <ClubNpcs />
+        <MarketStalls />
         <FirstFrame
           onFrame={() => {
             if (!firstFrame.current) {

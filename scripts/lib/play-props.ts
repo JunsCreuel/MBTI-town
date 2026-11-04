@@ -1,7 +1,7 @@
-// 놀거리 소품 임시 3D 모델: 열매 나무, 운세 나무, 광장 비콘(낚시터·클럽), 클럽 무대 소품.
+// 놀거리 소품 임시 3D 모델: 열매 나무, 운세 나무, 광장 비콘(낚시터·클럽·상가), 클럽 무대 소품, 상가 점포.
 // 원점 = 바닥 가운데, 정면 = +Z. 1 = 한 칸. 잎은 'foliage'(바람에 흔들림), 빛나는 곳은 'glow'(밤에 켜짐).
 import * as THREE from 'three';
-import { ROD_TIP } from '../../src/shared/character';
+import { ROD_TIP, TINT_MATERIAL } from '../../src/shared/character';
 import { part, type Part } from './models';
 
 type Vec3 = [number, number, number];
@@ -73,7 +73,7 @@ export function fortuneTreeParts(): Part[] {
  * 광장 비콘: 돌 받침 위 빛나는 수정 기둥과 둥근 간판. 누르거나 가까이 가면 그곳(낚시터·클럽)으로 간다.
  * 수정·간판 테두리 색이 장소마다 다르다.
  */
-export function beaconParts(color: string, sign: 'fish' | 'club'): Part[] {
+export function beaconParts(color: string, sign: 'fish' | 'club' | 'shop'): Part[] {
   const parts: Part[] = [
     part(cyl(0.55, 0.65, 0.25, 8), C.stone, { pos: [0, 0.125, 0] }),
     part(cyl(0.42, 0.5, 0.18, 8), '#D6C7B2', { pos: [0, 0.34, 0] }),
@@ -90,6 +90,12 @@ export function beaconParts(color: string, sign: 'fish' | 'club'): Part[] {
     parts.push(
       part(sphere(0.16, 12, 8), color, { pos: [0.72, 1.42, 0.17], scale: [1, 0.55, 0.3] }),
       part(new THREE.ConeGeometry(0.09, 0.14, 3), color, { pos: [0.92, 1.42, 0.17], rot: [0, 0, 90] }),
+    );
+  } else if (sign === 'shop') {
+    // 장바구니 그림
+    parts.push(
+      part(box(0.26, 0.18, 0.04), color, { pos: [0.75, 1.38, 0.17] }),
+      part(new THREE.TorusGeometry(0.08, 0.018, 6, 16, Math.PI), color, { pos: [0.75, 1.47, 0.17] }),
     );
   } else {
     // 음표 그림
@@ -205,4 +211,41 @@ export function rodParts(): Part[] {
     part(cyl(0.007, 0.018, 1.12, 8), '#3B3F4A', { pos: [0, 0.86, 0] }),
     part(new THREE.TorusGeometry(0.014, 0.004, 6, 12), C.gold, { pos: ROD_TIP }),
   ];
+}
+
+// ───────────────────────── 상가 점포 ─────────────────────────
+
+/**
+ * 상가 점포 한 칸 (폭 2.4, 깊이 1.3). 정면(+Z)이 손님 쪽.
+ * 줄무늬 차양의 색 줄은 TINT_MATERIAL이라 화면에서 주인이 고른 색을 입힌다 (빈 점포는 흰색).
+ * 간판 글자(점포 이름)는 화면이 차양 위 간판(가운데 높이 MARKET_SIGN_Y, 앞면 z=0.69)에 그린다.
+ */
+export function marketStallParts(): Part[] {
+  const wood = '#C99B6B';
+  const woodDark = '#9B6B45';
+  const parts: Part[] = [
+    // 뒷벽과 선반
+    part(box(2.4, 1.9, 0.12), woodDark, { pos: [0, 0.95, -0.58] }),
+    part(box(2.2, 0.05, 0.3), wood, { pos: [0, 1.35, -0.42] }),
+    // 계산대
+    part(box(2.3, 0.88, 0.5), wood, { pos: [0, 0.44, 0.32] }),
+    part(box(2.42, 0.07, 0.62), woodDark, { pos: [0, 0.915, 0.32] }),
+    part(box(2.0, 0.5, 0.02), '#E8D2AE', { pos: [0, 0.46, 0.58] }),
+    // 앞 기둥 둘
+    ...[-1.14, 1.14].map((x) => part(box(0.1, 2.2, 0.1), woodDark, { pos: [x, 1.1, 0.58] })),
+    // 차양: 흰 줄과 색 줄이 번갈아 (앞으로 기울어진다)
+    ...Array.from({ length: 6 }, (_, k) =>
+      part(box(0.44, 0.05, 1.45), k % 2 ? '#FFFCF3' : '#FFFFFF', { pos: [-1.1 + k * 0.44, 2.22, 0.06], rot: [14, 0, 0], ...(k % 2 ? {} : { mat: TINT_MATERIAL }) }),
+    ),
+    // 차양 앞 물결 장식
+    ...Array.from({ length: 6 }, (_, k) =>
+      part(cyl(0.2, 0.2, 0.04, 14), '#FFFFFF', { pos: [-1.1 + k * 0.44, 2.05, 0.77], rot: [90, 0, 0], scale: [1, 1, 0.55], ...(k % 2 ? {} : { mat: TINT_MATERIAL }) }),
+    ),
+    // 차양 위 간판 (글자는 화면이 그린다)
+    part(box(1.7, 0.5, 0.08), woodDark, { pos: [0, 2.62, 0.64] }),
+    part(box(1.6, 0.42, 0.02), '#FFF7E3', { pos: [0, 2.62, 0.685] }),
+    // 등불 (밤에 켜짐)
+    ...[-1.14, 1.14].map((x) => part(sphere(0.09, 10, 8), C.glowWarm, { pos: [x, 1.86, 0.7], mat: 'glow' })),
+  ];
+  return parts;
 }

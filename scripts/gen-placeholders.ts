@@ -17,7 +17,7 @@ import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Par
 import { petParts } from './lib/pets';
 import { fishIcons, fruitIcons } from './lib/item-icons';
 import { bartenderBearSpec, djRaccoonSpec, guideCatSpec } from './lib/npc';
-import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, speakerParts } from './lib/play-props';
+import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, marketStallParts, speakerParts } from './lib/play-props';
 import { FRUITS } from '../src/shared/play';
 import { PET_ANIMALS } from '../src/shared/pet';
 import { TOWN_TILES, buildHoodMap, buildSpotMap, buildTownMap } from './lib/town-map';
@@ -167,6 +167,8 @@ async function genTownProps() {
     ['prop.plaza.fortune_tree', 'prop_plaza_fortune_tree', fortuneTreeParts()],
     ['prop.plaza.beacon_fishing', 'prop_plaza_beacon_fishing', beaconParts('#5BB6E8', 'fish')],
     ['prop.plaza.beacon_club', 'prop_plaza_beacon_club', beaconParts('#C77DFF', 'club')],
+    ['prop.plaza.beacon_market', 'prop_plaza_beacon_market', beaconParts('#F2A23A', 'shop')],
+    ['prop.market.stall', 'prop_market_stall', marketStallParts()],
     ['prop.club.booth', 'prop_club_booth', djBoothParts()],
     ['prop.club.speaker', 'prop_club_speaker', speakerParts()],
     // 실내 클럽: 벽·출입문·바·소파
@@ -222,8 +224,8 @@ function genTownMap() {
   const hood = 'maps/hood.json';
   if (FORCE_MAP || !existsSync(join(ROOT, hood))) save(hood, JSON.stringify(buildHoodMap(tiles)) + '\n');
   register('map.hood', { file: hood });
-  // 놀이터: 중앙광장 비콘으로 가는 낚시터·클럽
-  for (const kind of ['fishing', 'club'] as const) {
+  // 놀이터: 중앙광장 비콘으로 가는 낚시터·클럽·상가
+  for (const kind of ['fishing', 'club', 'market'] as const) {
     const f = `maps/${kind}.json`;
     if (FORCE_MAP || !existsSync(join(ROOT, f))) save(f, JSON.stringify(buildSpotMap(kind, tiles)) + '\n');
     register(`map.${kind}`, { file: f });

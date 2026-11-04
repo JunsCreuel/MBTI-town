@@ -107,6 +107,29 @@ export const playConfig = {
   reach: 1.9,
 } as const;
 
+/** 게임 코인: 낚시·열매로 모은다 (현금으로 사거나 바꿀 수 없다) */
+export const coinConfig = {
+  /** 물고기 한 마리 값 (흔해요·드물어요·전설·신화·잡동사니) */
+  fish: { common: 10, rare: 40, legend: 300, mythic: 10_000, junk: 2 },
+  /** 열매 한 개 값 */
+  fruit: 5,
+  /** 운세 열매 값 */
+  fortune: 10,
+} as const;
+
+/** 상가: 중앙광장 비콘(언덕 지역 쪽)으로 가는 섬의 점포 20칸 (PROJECT_GUIDE.md 3장) */
+export const marketConfig = {
+  shops: 20,
+  /** 점포 값 (코인). 하루 30번쯤 낚시하면 일주일쯤 모은다 */
+  price: 3000,
+  nameMax: 12,
+  introMax: 40,
+  /** 점포를 내놓으면 돌려받는 몫 */
+  refundRate: 0.5,
+  /** 점포 앞 이 거리(칸) 안이면 "점포 보기" 버튼이 뜬다 */
+  reach: 1.9,
+} as const;
+
 // 나의 방 = 마을 속 내 집의 안 (PROJECT_GUIDE.md 6장)
 export const roomConfig = {
   /** 바닥 칸 수 (가로 x, 세로 z). 방 크기 확장은 2차 */

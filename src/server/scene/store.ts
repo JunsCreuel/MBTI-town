@@ -34,6 +34,16 @@ export interface ProfileRow {
   house_lot: number | null;
 }
 
+export interface ShopRow {
+  slot: number;
+  owner_id: string;
+  name: string;
+  intro: string;
+  color: string;
+  display_name: string | null;
+  handle: string | null;
+}
+
 export interface HouseRow {
   id: string;
   handle: string | null;
@@ -603,6 +613,61 @@ export class SceneStore {
       [userId],
     );
     return rows.map((r) => ({ ...r, count: Number(r.count) }));
+  }
+
+  // ───────────────────────── 코인·상가 ─────────────────────────
+
+  async coinsOf(userId: string): Promise<number> {
+    const [r] = await this.sql.query<{ coins: number }>(`select coins from public.profiles where id = $1`, [userId]);
+    return Number(r?.coins ?? 0);
+  }
+
+  /** 코인을 더한다. 새 잔액 */
+  async addCoins(userId: string, n: number): Promise<number> {
+    const [r] = await this.sql.query<{ coins: number }>(`update public.profiles set coins = coins + $2 where id = $1 returning coins`, [userId, n]);
+    return Number(r?.coins ?? 0);
+  }
+
+  /** 모자라지 않으면 코인을 쓴다. 새 잔액, 모자라면 null */
+  async spendCoins(userId: string, n: number): Promise<number | null> {
+    const [r] = await this.sql.query<{ coins: number }>(
+      `update public.profiles set coins = coins - $2 where id = $1 and coins >= $2 returning coins`,
+      [userId, n],
+    );
+    return r ? Number(r.coins) : null;
+  }
+
+  async listShops(): Promise<ShopRow[]> {
+    const rows = await this.sql.query<ShopRow>(
+      `select s.slot, s.owner_id, s.name, s.intro, s.color, p.display_name, p.handle
+       from public.market_shops s join public.profiles p on p.id = s.owner_id order by s.slot`,
+    );
+    return rows.map((r) => ({ ...r, slot: Number(r.slot) }));
+  }
+
+  /** 빈 칸이고 그 사람에게 점포가 없으면 넣는다. 넣었으면 true */
+  async insertShop(slot: number, ownerId: string, name: string, intro: string, color: string, at: Date): Promise<boolean> {
+    const rows = await this.sql.query<{ slot: number }>(
+      `insert into public.market_shops (slot, owner_id, name, intro, color, bought_at, updated_at) values ($1, $2, $3, $4, $5, $6, $6)
+       on conflict do nothing returning slot`,
+      [slot, ownerId, name, intro, color, at],
+    );
+    return rows.length > 0;
+  }
+
+  /** 내 점포의 이름·소개·색을 바꾼다. 내 점포가 없으면 false */
+  async updateShop(ownerId: string, name: string, intro: string, color: string, at: Date): Promise<boolean> {
+    const rows = await this.sql.query<{ slot: number }>(
+      `update public.market_shops set name = $2, intro = $3, color = $4, updated_at = $5 where owner_id = $1 returning slot`,
+      [ownerId, name, intro, color, at],
+    );
+    return rows.length > 0;
+  }
+
+  /** 점포를 비운다. 주인 id (빈 칸이었으면 null) */
+  async deleteShop(slot: number): Promise<string | null> {
+    const [r] = await this.sql.query<{ owner_id: string }>(`delete from public.market_shops where slot = $1 returning owner_id`, [slot]);
+    return r?.owner_id ?? null;
   }
 
   async recordVisit(ownerId: string, visitorId: string, at: Date, day: string): Promise<void> {

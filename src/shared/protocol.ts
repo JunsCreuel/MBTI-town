@@ -28,10 +28,10 @@ export function isTownPlace(v: unknown): v is TownPlace {
  */
 export type RoomPlace = 'town' | Spot | `${District}.${number}`;
 
-/** 놀이터: 중앙광장 비콘으로 가는 낚시터·클럽 (집터 없는 작은 섬) */
-export const SPOTS = ['fishing', 'club'] as const;
+/** 놀이터: 중앙광장 비콘으로 가는 낚시터·클럽·상가 (집터 없는 작은 섬) */
+export const SPOTS = ['fishing', 'club', 'market'] as const;
 export type Spot = (typeof SPOTS)[number];
-export const SPOT_NAME: Record<Spot, string> = { fishing: '낚시터', club: '클럽' };
+export const SPOT_NAME: Record<Spot, string> = { fishing: '낚시터', club: '클럽', market: '상가' };
 
 export function parseSpot(v: unknown): Spot | null {
   return typeof v === 'string' && (SPOTS as readonly string[]).includes(v) ? (v as Spot) : null;

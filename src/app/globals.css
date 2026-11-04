@@ -4134,3 +4134,66 @@ a:focus-visible {
   color: var(--color-goldInk);
   font-weight: 700;
 }
+
+/* 가방: 코인 */
+.inventory__coins {
+  margin: 0;
+  font-size: 14px;
+}
+.inventory__coins b {
+  color: var(--color-accentInk);
+  font-size: 16px;
+}
+/* 상가 점포 시트 */
+.shop-sheet {
+  display: grid;
+  gap: var(--space-3);
+}
+.shop-sheet__coins {
+  margin: 0;
+  font-size: 14px;
+}
+.shop-sheet__coins b {
+  color: var(--color-accentInk);
+  font-size: 16px;
+}
+.shop-sheet__foot {
+  margin: 0;
+  font-size: 12px;
+}
+.shop-card {
+  padding: var(--space-3);
+  border: 3px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+}
+.shop-card p {
+  margin: 0;
+}
+.shop-card__name {
+  font-size: 18px;
+  font-weight: 800;
+}
+.shop-card__intro {
+  margin-top: var(--space-1) !important;
+}
+.shop-form {
+  display: grid;
+  gap: var(--space-3);
+}
+.shop-colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.shop-color {
+  width: 36px;
+  height: 36px;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+.shop-color--on {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accentSoft);
+}
