@@ -96,7 +96,13 @@ export interface AdminUser {
   lastSeenAt: string | null;
   admin: boolean;
   records: number;
+  /** 가진 코인과 사주 이용권 */
+  coins: number;
+  tickets: number;
 }
+
+/** 운영자가 한 번에 주거나 뺄 수 있는 코인·이용권 한도 */
+export const ADMIN_WALLET_MAX = { coins: 1_000_000, tickets: 100 };
 
 /** 내 프로필 (설정 화면용) */
 export interface MyProfile extends PublicProfile {
@@ -896,7 +902,27 @@ export class SceneService {
       lastSeenAt: u.last_seen_at ? new Date(u.last_seen_at).toISOString() : null,
       admin: u.is_admin,
       records: Number(u.records),
+      coins: Number(u.coins ?? 0),
+      tickets: Number(u.saju_tickets ?? 0),
     }));
+  }
+
+  /** 운영자: 주민에게 코인·사주 이용권을 주거나 뺀다 (음수면 뺀다, 0 밑으로는 안 내려간다). 새 잔액 */
+  async adminAdjustWallet(viewer: Viewer | null, userId: unknown, input: Record<string, unknown>): Promise<{ coins: number; tickets: number }> {
+    await this.requireAdmin(viewer);
+    const int = (v: unknown, max: number) => {
+      if (v === undefined || v === null || v === '') return 0;
+      const n = Number(v);
+      if (!Number.isInteger(n) || Math.abs(n) > max) throw new SceneError('bad_request', `한 번에 ${max.toLocaleString('ko-KR')}까지 주거나 뺄 수 있어요.`);
+      return n;
+    };
+    const coins = int(input.coins, ADMIN_WALLET_MAX.coins);
+    const tickets = int(input.tickets, ADMIN_WALLET_MAX.tickets);
+    if (!coins && !tickets) throw new SceneError('bad_request', '줄 코인이나 이용권 수를 적어 주세요.');
+    if (typeof userId !== 'string' || !/^[0-9a-f-]{36}$/i.test(userId)) throw new SceneError('not_found', '주민을 찾지 못했어요.');
+    const r = await this.store.adjustWallet(userId, coins, tickets);
+    if (!r) throw new SceneError('not_found', '주민을 찾지 못했어요.');
+    return r;
   }
 
   /** 운영자 공지: 지금 실시간 서버에 접속한 모두에게 위쪽 띠로 보인다 (저장하지 않는다) */

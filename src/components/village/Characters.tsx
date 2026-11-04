@@ -9,6 +9,7 @@ import { shiftLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { profileTag, type AccessoryId, type AvatarColor } from '@/shared/avatar';
 import { CHARACTER_CLIPS, CHARACTER_HEIGHT, HEAD_SOCKET, TINT_MATERIAL, type ClipName } from '@/shared/character';
+import { gesturePose, hopHeight } from '@/shared/gesture';
 import { lerpAngle, moveWithCollision, yawFromVector } from '@/shared/movement';
 import { FishingRig } from './FishingRig';
 import { drunkLevel } from './drunk';
@@ -33,7 +34,10 @@ export interface Actor {
   emoteStart: number;
   /** 낚시 중이면 찌 자리와 단계 */
   fish?: FishingState | null;
+  /** 점프 중이면 0~1 (몸이 솟았다 내려오는 정도를 정한다) */
+  hop?: number;
 }
+
 
 /** 오른손에 든 낚싯대: 팔 관절 기준 손 위치와, 팔을 앞으로 들었을 때 앞위로 뻗는 방향 */
 const ROD_GRIP = new THREE.Vector3(-0.045, -0.19, 0.04);
@@ -118,7 +122,7 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
     const a = actor.current;
     const g = group.current;
     if (!a || !g) return;
-    g.position.set(a.x, a.y, a.z);
+    g.position.set(a.x, a.y + hopHeight(a.hop, townConfig.jumpHeight), a.z);
     model.rotation.y = a.rot;
     // 모르는 동작(새 버전에서 생긴 동작 등)은 서 있는 것으로 그린다
     const clip: ClipName = actions[a.clip] ? a.clip : 'idle';
@@ -173,11 +177,12 @@ function applyGesture(a: Actor, id: string, session: TownSession, walking: boole
     a.emote = g.emote;
     a.emoteStart = g.emoteStart;
   }
-  const acting = !!g?.action && t < g.actionUntil && !walking;
-  a.clip = walking ? 'walk' : acting ? g!.action! : 'idle';
-  a.clipStart = acting ? (g!.actionStart ?? 0) : 0;
-  // 걸으면 동작은 끝난다
-  if (walking && g) g.actionUntil = 0;
+  // 점프는 걸으면서도 한다 (달리다 폴짝). 다른 동작은 걸으면 끝난다
+  const pose = gesturePose(g, t, walking, townConfig.jumpMs / 1000);
+  a.clip = pose.clip;
+  a.clipStart = pose.clipStart;
+  a.hop = pose.hop;
+  if (pose.stop && g) g.actionUntil = 0;
 }
 
 /** 방향 전환은 부드럽게 (초당 회전 비율) */

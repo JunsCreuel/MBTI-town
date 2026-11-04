@@ -94,6 +94,26 @@ export function AdminClient() {
     }
   }
 
+  /** 주민마다 줄 코인 칸에 적은 값 */
+  const [give, setGive] = useState<Record<string, string>>({});
+  async function adjust(u: AdminUser, body: { coins?: number; tickets?: number }) {
+    setBusy(u.id);
+    try {
+      const r = await call<{ coins: number; tickets: number }>('POST', `/api/admin/users/${u.id}`, body);
+      setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, ...r } : x)));
+      setToast(body.coins ? `${u.displayName} 님 코인 ${r.coins.toLocaleString('ko-KR')}` : `${u.displayName} 님 사주 이용권 ${r.tickets}장`);
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '바꾸지 못했어요');
+    } finally {
+      setBusy(null);
+    }
+  }
+  function giveCoins(u: AdminUser, sign: 1 | -1) {
+    const n = Math.floor(Number(give[u.id] ?? '1000'));
+    if (!Number.isFinite(n) || n <= 0) return setToast('코인 수를 1 이상으로 적어 주세요');
+    void adjust(u, { coins: sign * n });
+  }
+
   async function deleteUser(u: AdminUser) {
     if (!confirm(`${u.displayName} 님의 계정을 지울까요?\n방·기록·사진·방명록이 모두 지워지고 되돌릴 수 없어요.`)) return;
     if (prompt(`정말 지우려면 이름(${u.displayName})을 그대로 적어 주세요.`) !== u.displayName) return;
@@ -220,6 +240,30 @@ export function AdminClient() {
                 <span className="muted">
                   {u.handle ? `@${u.handle}` : '방 없음'} · {u.district ? DISTRICT[u.district].short : '지역 없음'} · 가입 {u.joinedAt ?? '-'} · 기록 {u.records}
                 </span>
+                <span className="admin-user__wallet">
+                  코인 <b>{u.coins.toLocaleString('ko-KR')}</b> · 사주 이용권 <b>{u.tickets}</b>장
+                </span>
+              </div>
+              <div className="admin-wallet">
+                <input
+                  className="admin-wallet__input"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  step={100}
+                  value={give[u.id] ?? '1000'}
+                  onChange={(e) => setGive((g) => ({ ...g, [u.id]: e.target.value }))}
+                  aria-label={`${u.displayName} 님에게 줄 코인`}
+                />
+                <button className="btn-primary btn-primary--inline btn-small" disabled={busy === u.id} onClick={() => giveCoins(u, 1)}>
+                  코인 주기
+                </button>
+                <button className="btn-secondary btn-small" disabled={busy === u.id || u.coins === 0} onClick={() => giveCoins(u, -1)}>
+                  코인 빼기
+                </button>
+                <button className="btn-secondary btn-small" disabled={busy === u.id} onClick={() => void adjust(u, { tickets: 1 })}>
+                  이용권 +1
+                </button>
               </div>
               <div className="admin-actions">
                 {u.handle && (
