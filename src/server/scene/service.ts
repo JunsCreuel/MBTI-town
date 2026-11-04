@@ -26,6 +26,7 @@ import {
   type FishDef, type FortuneFruit,
 } from '@/shared/play';
 import { youtubeIdOf } from '@/shared/clubMusic';
+import { CLIENT_SOURCES, type Element, type ElementFill, type ElementSource, type ElementsView } from '@/shared/elements';
 import { coinConfig, contestConfig, marketConfig, playConfig, sajuConfig } from '@/config/game';
 import { contestLeader, previousContestWeek, type ContestDistrictScore, type ContestKind, type ContestStandings } from '@/shared/contest';
 import type { AdminCounts, ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
@@ -170,6 +171,8 @@ export interface PickResult {
   earned: number;
   /** 이번에 내 지역에 올린 대항전 점수 */
   contest?: number;
+  /** 오행 채우기 (목 기운) */
+  element?: ElementFill | null;
 }
 
 export interface FishResult {
@@ -189,6 +192,8 @@ export interface FishResult {
   ticket?: boolean;
   /** 이번에 내 지역에 올린 대항전 점수 */
   contest?: number;
+  /** 오행 채우기 (수 기운) */
+  element?: ElementFill | null;
 }
 
 export interface PlayState {
@@ -589,6 +594,7 @@ export class SceneService {
       bgm = t?.key ?? null;
     }
     await this.store.saveRoom(p.id, check.layout, bgm, this.now());
+    await this.element(p.id, 'earth', 'room');
     return { layout: check.layout, bgm };
   }
 
@@ -1101,7 +1107,8 @@ export class SceneService {
     const earned = fresh ? (spot.kind === 'fortune' ? coinConfig.fortune : coinConfig.fruit * n) : 0;
     if (earned) await this.store.addCoins(p.id, earned);
     const contest = fresh ? await this.contest(p, 'fruit', spot.kind === 'fortune' ? contestConfig.points.fortune : contestConfig.points.fruit) : 0;
-    return { already: !fresh, fruit: { id: fruit.id, name: fruit.name, color: fruit.color }, added: fresh ? n : 0, count, fortune, earned, contest };
+    const element = fresh ? await this.element(p.id, 'wood', 'fruit') : null;
+    return { already: !fresh, fruit: { id: fruit.id, name: fruit.name, color: fruit.color }, added: fresh ? n : 0, count, fortune, earned, contest, element };
   }
 
   /** 낚시 한 번. 하루 playConfig.fishPerDay번 */
@@ -1120,13 +1127,15 @@ export class SceneService {
       // 같은 번호를 동시에 쓰면 다시 센다
       if (!(await this.store.takeDailySpot(p.id, day, `fish:${used + 1}`, ticket ? 'saju_ticket' : (caught?.fish.id ?? null)))) continue;
       const left = playConfig.fishPerDay - used - 1;
+      // 낚싯대를 던지면 (꽝이어도) 수 기운 한 칸
+      const element = await this.element(p.id, 'water', 'fish');
       if (ticket) {
         await this.store.addTickets(p.id, 1);
         const contest = await this.contest(p, 'fish', contestConfig.points.ticket);
         const announced = await this.announce({ kind: 'saju_ticket', name: displayNameOf(p) }).catch(() => false);
-        return { fish: null, size: 0, count: 0, left, earned: 0, ticket: true, announced, contest };
+        return { fish: null, size: 0, count: 0, left, earned: 0, ticket: true, announced, contest, element };
       }
-      if (!caught) return { fish: null, size: 0, count: 0, left, earned: 0, contest: 0 };
+      if (!caught) return { fish: null, size: 0, count: 0, left, earned: 0, contest: 0, element };
       const count = await this.store.addToCollection(p.id, 'fish', caught.fish.id, 1);
       const earned = coinConfig.fish[caught.fish.rarity];
       await this.store.addCoins(p.id, earned);
@@ -1134,9 +1143,9 @@ export class SceneService {
       // 황금 고래: 마을 모두에게 알린다
       if (caught.fish.id === GOLDEN_WHALE_ID) {
         const announced = await this.announce({ kind: 'golden_whale', name: displayNameOf(p) }).catch(() => false);
-        return { fish: caught.fish, size: caught.size, count, left, announced, earned, contest };
+        return { fish: caught.fish, size: caught.size, count, left, announced, earned, contest, element };
       }
-      return { fish: caught.fish, size: caught.size, count, left, earned, contest };
+      return { fish: caught.fish, size: caught.size, count, left, earned, contest, element };
     }
     throw new SceneError('conflict', '잠깐 뒤에 다시 던져 주세요.');
   }
@@ -1253,6 +1262,33 @@ export class SceneService {
       return done((await this.store.getSajuReading<TarotResult>(p.id, key.kind, key.period))!, 0);
     }
     return done(reading, fee);
+  }
+
+  // ───────────────────────── 오행 채우기 ─────────────────────────
+
+  /** 오행 한 칸 채우기. 기록에 실패해도 놀이는 그대로 된다 */
+  private async element(userId: string, element: Element, source: ElementSource): Promise<ElementFill | null> {
+    return this.store.fillElement(userId, element, source, this.now()).catch((e) => {
+      console.error('[elements] 기록 실패', e);
+      return null;
+    });
+  }
+
+  /** 오늘의 오행 채우기 (가입을 마친 주민만) */
+  async elementsView(viewer: Viewer | null): Promise<ElementsView> {
+    const p = await this.requireOnboarded(viewer);
+    const v = await this.store.elementsView(p.id, this.now());
+    if (!v) throw new SceneError('not_found', '사주가 없어요. MY에서 생일을 넣어 주세요.');
+    return v;
+  }
+
+  /** 화면이 알려 오는 놀이 (클럽 춤·신청곡·한 잔, 상가 들르기): 하루에 한 번씩 한 칸 */
+  async reportElement(viewer: Viewer | null, input: Record<string, unknown>): Promise<{ fill: ElementFill | null }> {
+    const p = await this.requireOnboarded(viewer);
+    const element = input.element as Element;
+    const source = input.source as ElementSource;
+    if (!(CLIENT_SOURCES[element] ?? []).includes(source)) throw new SceneError('bad_request', '알 수 없는 놀이예요.');
+    return { fill: await this.element(p.id, element, source) };
   }
 
   // ───────────────────────── 클럽 유튜브 신청 제한 ─────────────────────────
@@ -1410,6 +1446,7 @@ export class SceneService {
       throw new SceneError('conflict', '방금 다른 주민이 산 점포예요.');
     }
     await this.contest(p, 'market', contestConfig.points.shop);
+    await this.element(p.id, 'earth', 'shop');
     return this.marketView(viewer);
   }
 
@@ -1418,6 +1455,7 @@ export class SceneService {
     const p = await this.requireOnboarded(viewer);
     const shop = cleanShopInput(input);
     if (!(await this.store.updateShop(p.id, shop.name, shop.intro, shop.color, this.now()))) throw new SceneError('not_found', '내 점포가 없어요.');
+    await this.element(p.id, 'earth', 'shop');
     return this.marketView(viewer);
   }
 

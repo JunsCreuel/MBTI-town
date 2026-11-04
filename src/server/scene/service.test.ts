@@ -1,7 +1,7 @@
 // 미니홈피 규칙을 실제 Postgres(PGlite, 메모리)로 확인한다. 공개 범위·차단은 서버 규칙이라 여기서 꼼꼼히 본다.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { coinConfig, contestConfig, marketConfig, playConfig, sajuConfig, townConfig } from '@/config/game';
+import { coinConfig, contestConfig, elementConfig, marketConfig, playConfig, sajuConfig, townConfig } from '@/config/game';
 import type { Announcement } from '@/shared/announce';
 import { DISTRICTS, type District } from '@/shared/districts';
 import { refundFor } from '@/shared/market';
@@ -868,5 +868,88 @@ describe('클럽 유튜브 신청 제한 (운영자)', () => {
     await sql.query(`insert into public.admins (user_id) values ($1) on conflict do nothing`, [admin.id]);
     expect(verifyTownPass((await service.townTicket(admin)).token)?.admin).toBe(true);
     expect(verifyTownPass((await service.townTicket(other)).token)?.admin).toBeUndefined();
+  });
+});
+
+describe('오행 채우기', () => {
+  /** 타고난 오행 개수를 테스트용으로 바꿔 넣는다 (여섯 글자) */
+  const setCounts = (v: Viewer, counts: Record<District, number>) =>
+    sql.query(`update public.profiles set saju = jsonb_set(saju, '{counts}', $2::jsonb) where id = $1`, [v.id, JSON.stringify(counts)]);
+  const coins = async (v: Viewer) => Number((await sql.query<{ coins: number }>(`select coins from public.profiles where id = $1`, [v.id]))[0].coins);
+
+  it('모자란 칸만큼 그 오행 놀이로 채우고, 다 채우면 하루 한 번 코인을 받는다', async () => {
+    const v = await user();
+    await onboard(v, '오행꾼');
+    // 목 2칸, 화·토·수 1칸, 금은 넉넉
+    await setCounts(v, { wood: 0, fire: 1, earth: 1, metal: 3, water: 1 });
+    const start = await service.elementsView(v);
+    expect(start).toMatchObject({ need: { wood: 2, fire: 1, earth: 1, metal: 0, water: 1 }, balanced: false, reward: 0, balanceDays: 0 });
+    expect(Object.values(start.filled).every((n) => n === 0)).toBe(true);
+
+    // 목: 열매 나무마다 한 칸 (같은 나무를 또 따면 안 채운다)
+    expect((await service.pickTree(v, 'fruit.wood.0')).element).toMatchObject({ element: 'wood', added: true, filled: 1, need: 2 });
+    expect((await service.pickTree(v, 'fruit.wood.0')).element ?? null).toBeNull();
+    expect((await service.pickTree(v, 'fruit.fire.0')).element).toMatchObject({ added: true, filled: 2, need: 2 });
+    // 다 찬 오행은 더 채우지 않는다
+    expect((await service.pickTree(v, 'fruit.water.0')).element).toMatchObject({ element: 'wood', added: false, filled: 2 });
+
+    // 화·토: 화면이 알려 오는 놀이
+    expect((await service.reportElement(v, { element: 'fire', source: 'dance' })).fill).toMatchObject({ added: true, filled: 1, need: 1 });
+    expect((await service.reportElement(v, { element: 'fire', source: 'drink' })).fill).toMatchObject({ added: false });
+    expect((await service.reportElement(v, { element: 'earth', source: 'market' })).fill).toMatchObject({ added: true, reward: 0 });
+    // 서버가 직접 세는 놀이나 엉뚱한 짝은 받지 않는다
+    await expectError(service.reportElement(v, { element: 'water', source: 'fish' }), 'bad_request');
+    await expectError(service.reportElement(v, { element: 'metal', source: 'debate' }), 'bad_request');
+    await expectError(service.reportElement(v, { element: 'fire', source: 'market' }), 'bad_request');
+
+    // 수: 낚싯대를 던질 때마다 (꽝이어도). 마지막 칸을 채우면 보상
+    const before = await coins(v);
+    const cast = await service.castLine(v);
+    expect(cast.element).toMatchObject({ element: 'water', added: true, filled: 1, reward: elementConfig.reward });
+    expect(await coins(v)).toBe(before + cast.earned + elementConfig.reward);
+    const again = await service.castLine(v);
+    expect(again.element).toMatchObject({ added: false, reward: 0 });
+    expect(await coins(v)).toBe(before + cast.earned + elementConfig.reward + again.earned);
+
+    const done = await service.elementsView(v);
+    expect(done).toMatchObject({ filled: { wood: 2, fire: 1, earth: 1, metal: 0, water: 1 }, balanced: true, reward: elementConfig.reward, balanceDays: 1 });
+
+    // 다음 날에는 칸이 비고, 균형을 맞춘 날 수는 남는다
+    const tomorrow = new SceneService(new SceneStore(sql), () => new Date(now.getTime() + 86_400_000));
+    expect(await tomorrow.elementsView(v)).toMatchObject({ filled: { wood: 0, fire: 0, earth: 0, metal: 0, water: 0 }, balanced: false, reward: 0, balanceDays: 1 });
+  });
+
+  it('하루 한 번 세는 놀이는 같은 날 다시 해도 한 번만 (다른 놀이로는 더 채운다)', async () => {
+    const v = await user();
+    await onboard(v, '클럽오행');
+    await setCounts(v, { wood: 2, fire: 0, earth: 0, metal: 2, water: 2 });
+    expect((await service.reportElement(v, { element: 'fire', source: 'dance' })).fill).toMatchObject({ added: true, filled: 1, need: 2 });
+    expect((await service.reportElement(v, { element: 'fire', source: 'dance' })).fill).toMatchObject({ added: false, filled: 1 });
+    expect((await service.reportElement(v, { element: 'fire', source: 'request' })).fill).toMatchObject({ added: true, filled: 2 });
+    // 토: 방 꾸미기 저장은 여러 번 해도 한 칸, 상가 들르기로 한 칸 더
+    const { room } = await service.me(v);
+    await service.saveRoom(v, { layout: room!.layout });
+    await service.saveRoom(v, { layout: room!.layout });
+    expect((await service.elementsView(v)).filled.earth).toBe(1);
+    // 동시에 보내도 한 칸만
+    const both = await Promise.all([
+      service.reportElement(v, { element: 'earth', source: 'market' }),
+      service.reportElement(v, { element: 'earth', source: 'market' }),
+    ]);
+    expect(both.filter((r) => r.fill?.added)).toHaveLength(1);
+    const view = await service.elementsView(v);
+    expect(view.filled).toMatchObject({ fire: 2, earth: 2 });
+    // 마지막 칸을 채운 쪽이 보상을 받았다
+    expect(both.find((r) => r.fill?.added)?.fill?.reward).toBe(elementConfig.reward);
+    expect(view).toMatchObject({ balanced: true, balanceDays: 1 });
+  });
+
+  it('가입을 마치지 않았으면 볼 수 없고, 놀이를 해도 채우지 않는다', async () => {
+    await expectError(service.elementsView(null), 'login_required');
+    const v = await user();
+    await expectError(service.elementsView(v), 'onboarding_required');
+    await expectError(service.reportElement(v, { element: 'fire', source: 'dance' }), 'onboarding_required');
+    const store = new SceneStore(sql);
+    expect(await store.fillElement(v.id, 'metal', 'debate', now)).toBeNull();
   });
 });

@@ -5,6 +5,8 @@ import type { Avatar } from '@/shared/avatar';
 import type { BirthInput, SajuReading } from '@/shared/saju';
 import type { ContestDistrictScore, ContestKind, ContestStandings, ContestWeek } from '@/shared/contest';
 import { addContestPoints, contestStandings, myContestPoints } from '../contest';
+import { elementsView, fillElement } from '../elements';
+import type { Element, ElementFill, ElementSource, ElementsView } from '@/shared/elements';
 import type { District, Taste } from '@/shared/districts';
 import type { Emotion, RecordInput, RecordKind, Visibility } from '@/shared/records';
 import type { RoomLayout } from '@/shared/room';
@@ -672,6 +674,16 @@ export class SceneStore {
   async addCoins(userId: string, n: number): Promise<number> {
     const [r] = await this.sql.query<{ coins: number }>(`update public.profiles set coins = coins + $2 where id = $1 returning coins`, [userId, n]);
     return Number(r?.coins ?? 0);
+  }
+
+  // ───────── 오행 채우기 ─────────
+
+  fillElement(userId: string, element: Element, source: ElementSource, now: Date): Promise<ElementFill | null> {
+    return fillElement(this.sql, userId, element, source, now);
+  }
+
+  elementsView(userId: string, now: Date): Promise<ElementsView | null> {
+    return elementsView(this.sql, userId, now);
   }
 
   // ───────── 클럽 유튜브 신청 제한 ─────────

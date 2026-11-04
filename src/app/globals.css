@@ -4966,3 +4966,136 @@ canvas {
   color: var(--color-goldInk);
   font-weight: 700;
 }
+
+/* 오행 채우기: 위쪽 게이지 칩과 시트 */
+.element-chip {
+  gap: var(--space-2);
+  border: 0;
+  font: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+}
+.element-chip__bars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+}
+.element-chip__bars i {
+  width: 5px;
+  height: var(--h);
+  border-radius: 2px;
+  background: var(--c);
+}
+.element-chip__label {
+  color: var(--color-accentInk);
+  font-weight: 800;
+}
+.elements {
+  display: grid;
+  gap: var(--space-3);
+}
+.elements p {
+  margin: 0;
+}
+.elements__intro {
+  font-size: 14px;
+}
+.elements__list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.elements__row {
+  display: grid;
+  grid-template-columns: 52px 1fr auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+}
+.elements__row--done {
+  box-shadow: inset 0 0 0 2px var(--c);
+}
+.elements__name {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  color: var(--c);
+  font-size: 18px;
+  font-weight: 800;
+}
+.elements__name small {
+  color: var(--color-textSub);
+  font-size: 12px;
+}
+.elements__slots {
+  display: flex;
+  gap: 4px;
+}
+.elements__slots i {
+  width: 22px;
+  height: 14px;
+  border-radius: 4px;
+  border: 2px solid var(--c);
+  background: transparent;
+}
+.elements__slots i.elements__slot--born {
+  background: var(--c);
+  opacity: 0.45;
+}
+.elements__slots i.elements__slot--today {
+  background: var(--c);
+}
+.elements__state {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-textSub);
+}
+.elements__row--done .elements__state {
+  color: var(--color-accentInk);
+}
+.elements__how {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--color-textSub);
+}
+.elements__how b {
+  margin-right: var(--space-1);
+  color: var(--color-text);
+}
+.elements__reward {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-goldSoft);
+  color: var(--color-goldInk);
+  font-size: 14px;
+}
+.elements__reward--done {
+  background: linear-gradient(100deg, var(--color-goldSoft), var(--color-goldBright));
+  font-weight: 700;
+}
+.elements__note {
+  font-size: 12px;
+}
+
+/* 좁은 화면: 왼쪽 칩(지역·토론·대항전·오행)은 한 줄로 두고, 오른쪽 아이콘이 줄을 바꾼다 */
+@media (max-width: 560px) {
+  .hud__left > .pill:not(.club-music):not(.reconnect) {
+    min-height: 34px;
+    padding: 6px var(--space-3);
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  .hud__right {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .hud__icons {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}

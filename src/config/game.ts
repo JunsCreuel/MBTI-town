@@ -171,6 +171,17 @@ export const contestConfig = {
   dailyCap: { fish: 30, fruit: 20, debate: 20, checkin: 5, market: 20 },
 } as const;
 
+/**
+ * 오행 채우기 (PROJECT_GUIDE.md 3장): 내 사주에 모자란 오행을 그 오행의 놀이로 하루에 채운다.
+ * 오행마다 target칸이 기준이고, 타고난 개수가 모자란 만큼 오늘 채울 칸이 생긴다. 다 채우면 하루 한 번 보상.
+ */
+export const elementConfig = {
+  /** 오행마다 기준 칸 수 (사주 여덟 글자로는 다섯 오행이 모두 이 수를 넘을 수 없어 누구나 채울 칸이 있다) */
+  target: 2,
+  /** 다섯 오행을 모두 채운 날 한 번 받는 코인 */
+  reward: 30,
+} as const;
+
 /** 상가: 중앙광장 비콘(언덕 지역 쪽)으로 가는 섬의 점포 20칸 (PROJECT_GUIDE.md 3장) */
 export const marketConfig = {
   shops: 20,

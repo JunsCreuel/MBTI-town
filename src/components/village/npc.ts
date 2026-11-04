@@ -1,6 +1,6 @@
-// 광장 안내 NPC 몬냥이: 서 있는 자리와 하는 말. 처음 온 사람이 헷갈리지 않게 마을·사주상담소·놀거리·클럽·코인·가방·조작·집을 알려 준다.
+// 광장 안내 NPC 몬냥이: 서 있는 자리와 하는 말. 처음 온 사람이 헷갈리지 않게 마을·대항전·오행 채우기·사주상담소·놀거리·클럽·코인·가방·조작·집을 알려 준다.
 // 복채·값은 설정(src/config/game.ts)에서 읽어 말한다 (값을 바꿔도 말이 맞게).
-import { coinConfig, contestConfig, marketConfig, sajuConfig, townConfig } from '@/config/game';
+import { coinConfig, contestConfig, elementConfig, marketConfig, sajuConfig, townConfig } from '@/config/game';
 import { FISH } from '@/shared/play';
 import type { TownMap } from '@/shared/townMap';
 
@@ -85,6 +85,17 @@ export const NPC_TOPICS: NpcTopic[] = [
       '한 사람이 하루에 올릴 수 있는 점수는 종류마다 정해져 있어요. 그래서 여러 주민이 함께할수록 유리해요.',
       '매주 일요일 밤 9시에 우승 지역을 발표하고, 마을 모두에게 소식이 퍼져요!',
       ...(guest ? ['대항전 점수는 집이 있는 주민만 올릴 수 있어요. 아래 "나도 집 짓기"부터 해 보세요!'] : []),
+    ],
+  },
+  {
+    id: 'elements',
+    ask: '오행 채우기가 뭐예요?',
+    lines: (guest) => [
+      `타고난 사주에 모자란 오행을 그 오행의 놀이로 채우는 하루 놀이예요. 오행마다 ${elementConfig.target}칸이 기준이고, 모자란 칸만큼 채우면 돼요.`,
+      '목(木)은 열매 따기, 화(火)는 클럽에서 춤·신청곡·한 잔, 토(土)는 상가 들르기와 점포·방 꾸미기, 금(金)은 오늘의 토론, 수(水)는 낚시예요.',
+      `위쪽 "오행" 버튼에서 오늘 채울 칸을 볼 수 있어요. 다섯 오행을 모두 채우면 하루 한 번 ${elementConfig.reward}코인을 받아요!`,
+      '칸은 매일 밤 12시에 다시 비어요. 재미로 보는 오행이니 가볍게 즐겨요.',
+      ...(guest ? ['오행 채우기는 집이 있는 주민만 할 수 있어요. 아래 "나도 집 짓기"부터 해 보세요!'] : []),
     ],
   },
   {

@@ -310,9 +310,10 @@ export class DebateService {
     await this.contest(viewer.id, district, contestConfig.points.vote);
   }
 
-  /** 오행 지역 대항전 점수 (하루 상한까지). 기록에 실패해도 토론은 그대로 된다 */
+  /** 오행 지역 대항전 점수 (하루 상한까지)와 오행 채우기(금). 기록에 실패해도 토론은 그대로 된다 */
   private async contest(userId: string, district: District, points: number): Promise<void> {
     await this.store.addContestPoints(userId, district, points, this.now()).catch((e) => console.error('[contest] 토론 점수 기록 실패', e));
+    await this.store.fillMetal(userId, this.now()).catch((e) => console.error('[elements] 금 기운 기록 실패', e));
   }
 
   /** 판정 시간이 끝난 경기를 모두 집계한다. 다른 요청이 집계 중인 경기는 건너뛴다. */

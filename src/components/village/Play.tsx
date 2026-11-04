@@ -10,6 +10,7 @@ import { parseSpot, type Spot } from '@/shared/protocol';
 import type { TownMap } from '@/shared/townMap';
 import { CARD_H, CARD_W, blankCard, canvasToBlob, cardFont, shareImage, wrapText } from '@/lib/shareCard';
 import { ItemIcon, RARITY } from '../app/Inventory';
+import { elementLine } from './ElementSheet';
 import { Sheet } from '../app/Sheet';
 
 export interface TreeInfo {
@@ -136,7 +137,10 @@ export function FishingPanel({
           </span>
           <div className="fishing__info">
             <p className="fishing__name">꽝!</p>
-            <p className="fishing__meta">아무것도 안 걸렸어요. 다시 던져 볼까요?</p>
+            <p className="fishing__meta">
+              아무것도 안 걸렸어요. 다시 던져 볼까요?
+              {result.element?.added && <> · {elementLine(result.element)}</>}
+            </p>
           </div>
         </div>
       )}
@@ -154,6 +158,7 @@ export function FishingPanel({
               <span style={{ color: RARITY[result.fish.rarity].color }}>{RARITY[result.fish.rarity].label}</span> · 도감 {result.count}마리째
               {result.earned > 0 && <> · +{result.earned.toLocaleString('ko-KR')}코인</>}
               {!!result.contest && <> · 대항전 +{result.contest}점</>}
+              {result.element?.added && <> · {elementLine(result.element)}</>}
             </p>
             {result.fish.rarity === 'mythic' && (
               <p className="fishing__meta fishing__mythic">{result.announced ? '마을 모두에게 소식이 퍼졌어요!' : '10만 번에 한 번 나오는 꿈의 고래예요!'}</p>

@@ -8,3 +8,6 @@ function jong(word: string): number {
 
 /** "로/으로" (ㄹ 받침은 "로") */
 export const withRo = (word: string) => `${word}${jong(word) === 0 || jong(word) === 8 ? '로' : '으로'}`;
+
+/** "이에요/예요" (받침이 있으면 이에요): 목이에요, 화예요 */
+export const withIeyo = (word: string) => `${word}${jong(word) === 0 ? '예요' : '이에요'}`;
