@@ -10,7 +10,7 @@ import type { District } from '@/shared/districts';
 import {
   MSG,
   type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type JoinOptions,
-  type MoveMessage, type MusicResult, type MusicState, type RoomPlace, type SnapMessage, type TownPlace, type WarpMessage,
+  type MoveMessage, type MusicAdmin, type MusicResult, type MusicState, type RoomPlace, type SnapMessage, type TownPlace, type WarpMessage,
 } from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
 import type { YoutubeSong } from '@/shared/clubMusic';
@@ -264,6 +264,13 @@ export class TownSession {
   requestSong(index: number): boolean {
     if (!this.room) return false;
     this.room.send(MSG.musicRequest, { index });
+    return true;
+  }
+
+  /** 클럽 운영자: 지금 곡 넘기기·신청곡 빼기 (실시간 서버가 운영자 토큰인지 확인한다) */
+  musicAdmin(cmd: MusicAdmin): boolean {
+    if (!this.room) return false;
+    this.room.send(MSG.musicAdmin, cmd);
     return true;
   }
 

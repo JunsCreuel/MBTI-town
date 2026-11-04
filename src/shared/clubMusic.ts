@@ -158,3 +158,20 @@ export function youtubeIdOf(url: string): string | null {
 
 /** 유튜브 신청곡 길이 한도 (초) */
 export const YOUTUBE_MAX_SECONDS = 8 * 60;
+
+/** 대기열 곡을 가리키는 값 (운영자가 뺄 때 다른 곡을 빼지 않게 확인한다) */
+export const queueKey = (q: ClubQueueItem) => `${q.who}:${q.yt ? `yt:${q.yt.id}` : q.index}`;
+
+/**
+ * 지금 곡을 끝내고 다음 곡을 nowMs부터 튼다 (운영자 넘기기). 다음 곡 = 대기열 첫 곡, 없으면 목록의 다음 곡.
+ * line은 nowMs에 맞게 당긴 흐름이어야 한다 (advanceLine).
+ */
+export function skipLine(line: ClubLine, nowMs: number, trackCount: number): ClubLine {
+  const n = Math.max(1, trackCount);
+  const after = line.after ?? (line.index >= 0 ? (line.index + 1) % n : 0);
+  const [next, ...rest] = line.queue;
+  if (next) {
+    return { index: next.index, ...(next.yt ? { yt: next.yt } : {}), startedAt: nowMs, by: next.by, queue: rest, after: next.yt ? after : (next.index + 1) % n };
+  }
+  return { index: after, startedAt: nowMs, by: '', queue: [], after: (after + 1) % n };
+}

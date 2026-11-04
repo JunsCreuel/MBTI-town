@@ -45,6 +45,26 @@ describe('유튜브 신청곡 확인', () => {
     for (const item of bad) expect(() => checkVideo('dQw4w9WgXcQ', item)).toThrow();
   });
 
+  it('제목·채널 이름에 욕설·성인·도박 같은 말이 있으면 받지 않는다 (노래 제목에 흔한 말은 괜찮다)', () => {
+    expect(() => checkVideo('dQw4w9WgXcQ', { ...ok, snippet: { ...ok.snippet, title: '19금 영상 모음' } })).toThrow('부적절한 말');
+    expect(() => checkVideo('dQw4w9WgXcQ', { ...ok, snippet: { ...ok.snippet, channelTitle: '카지노 채널' } })).toThrow('부적절한 말');
+    expect(() => checkVideo('dQw4w9WgXcQ', { ...ok, snippet: { ...ok.snippet, title: 'free porn clip' } })).toThrow('부적절한 말');
+    for (const title of ['Sexy Love (Official MV)', 'Kill This Love', '밤양갱']) {
+      expect(checkVideo('dQw4w9WgXcQ', { ...ok, snippet: { ...ok.snippet, title } }).title).toBe(title);
+    }
+  });
+
+  it('운영자가 끈 동안, 막은 영상·채널은 신청표를 주지 않는다', async () => {
+    vi.stubEnv('YOUTUBE_API_KEY', 'test-key');
+    vi.stubEnv('TOWN_TOKEN_SECRET', 'test-secret-for-youtube-0123456789');
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ items: [{ ...ok, snippet: { ...ok.snippet, channelId: 'UCbad' } }] }), { status: 200 })));
+    const url = 'https://youtu.be/dQw4w9WgXcQ';
+    await expect(lookupYoutube(url, 0, { on: async () => false, blocked: async () => null })).rejects.toThrow('쉬고 있어요');
+    await expect(lookupYoutube(url, 0, { on: async () => true, blocked: async (v) => (v === 'dQw4w9WgXcQ' ? 'video' : null) })).rejects.toThrow('막아 둔 영상');
+    await expect(lookupYoutube(url, 0, { on: async () => true, blocked: async (_v, c) => (c === 'UCbad' ? 'channel' : null) })).rejects.toThrow('막아 둔 채널');
+    expect((await lookupYoutube(url, 0, { on: async () => true, blocked: async () => null })).song.id).toBe('dQw4w9WgXcQ');
+  });
+
   it('API 키가 없으면 준비 중이라고 알린다', async () => {
     vi.stubEnv('YOUTUBE_API_KEY', '');
     await expect(lookupYoutube('https://youtu.be/dQw4w9WgXcQ')).rejects.toMatchObject({ code: 'conflict' });

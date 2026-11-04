@@ -16,7 +16,7 @@ describe('몬냥이 안내', () => {
 
   it('새 기능(사주상담소·타로·클럽·코인·가방)을 안내하고, 복채는 설정 값으로 말한다', () => {
     const ids = NPC_TOPICS.map((t) => t.id);
-    for (const id of ['saju', 'club', 'coins', 'bag']) expect(ids).toContain(id);
+    for (const id of ['saju', 'club', 'coins', 'bag', 'contest']) expect(ids).toContain(id);
     const saju = NPC_TOPICS.find((t) => t.id === 'saju')!.lines(false).join(' ');
     expect(saju).toContain(`${sajuConfig.tarotFee.one}코인`);
     expect(saju).toContain(`${sajuConfig.fee.month}코인`);

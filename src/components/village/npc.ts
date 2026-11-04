@@ -1,6 +1,6 @@
 // 광장 안내 NPC 몬냥이: 서 있는 자리와 하는 말. 처음 온 사람이 헷갈리지 않게 마을·사주상담소·놀거리·클럽·코인·가방·조작·집을 알려 준다.
 // 복채·값은 설정(src/config/game.ts)에서 읽어 말한다 (값을 바꿔도 말이 맞게).
-import { coinConfig, marketConfig, sajuConfig, townConfig } from '@/config/game';
+import { coinConfig, contestConfig, marketConfig, sajuConfig, townConfig } from '@/config/game';
 import { FISH } from '@/shared/play';
 import type { TownMap } from '@/shared/townMap';
 
@@ -56,6 +56,7 @@ export interface NpcTopic {
 export const NPC_GREETING = [
   '안녕하세요! 저는 이 마을 안내를 맡은 몬냥이에요.',
   '이 마을의 자랑은 광장 가장자리의 사주상담소예요. 부엉 도사가 사주와 타로를 봐 줘요!',
+  '그리고 매주 다섯 지역이 점수를 겨루는 오행 지역 대항전이 열려요. 분수 옆 큰 전광판에서 순위를 볼 수 있어요.',
   '처음 왔다면 뭐든 물어보세요. 언제든 저한테 다시 말 걸면 돼요!',
 ];
 export const NPC_AGAIN = ['또 왔네요! 궁금한 게 있어요?'];
@@ -73,6 +74,17 @@ export const NPC_TOPICS: NpcTopic[] = [
       '여기는 사주로 사는 동네가 정해지는 마을이에요. 태어난 날의 오행에 따라 숲·노을·언덕·은빛·호수, 다섯 지역 중 한 곳에 내 집이 생겨요.',
       '지금 서 있는 곳은 가운데 중앙광장이에요. 둘레 길을 따라가면 다섯 지역으로 갈 수 있고, 위쪽 지도 버튼으로 마을 전체를 볼 수 있어요.',
       '광장 게시판에서는 오늘의 토론이 열려요. 내 지역 편이 되어 겨뤄 보세요!',
+    ],
+  },
+  {
+    id: 'contest',
+    ask: '오행 대항전이 뭐예요?',
+    lines: (guest) => [
+      '다섯 지역이 한 주 동안 점수를 겨루는 오행 지역 대항전이에요. 분수 옆 큰 전광판과 위쪽 "대항전" 버튼에서 지금 순위를 볼 수 있어요.',
+      `낚시·열매·오늘의 토론·하루 첫 방문·점포 사기로 우리 지역 점수가 올라가요. 오늘의 토론에서 이긴 지역은 ${contestConfig.points.debateWin}점을 더 받아요.`,
+      '한 사람이 하루에 올릴 수 있는 점수는 종류마다 정해져 있어요. 그래서 여러 주민이 함께할수록 유리해요.',
+      '매주 일요일 밤 9시에 우승 지역을 발표하고, 마을 모두에게 소식이 퍼져요!',
+      ...(guest ? ['대항전 점수는 집이 있는 주민만 올릴 수 있어요. 아래 "나도 집 짓기"부터 해 보세요!'] : []),
     ],
   },
   {

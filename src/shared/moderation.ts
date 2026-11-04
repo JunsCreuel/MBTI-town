@@ -42,3 +42,20 @@ export function moderate(body: string): ModerationResult {
   if (REPEAT.test(body.replace(/\s/g, ''))) return { allowed: false, reason: '같은 글자를 너무 많이 반복했어요.' };
   return { allowed: true, reason: '문제없음' };
 }
+
+/**
+ * 클럽 유튜브 신청곡 제목·채널 이름 검사: 위의 욕설·비하에 더해 성인·도박·폭력 낱말이 있으면 거른다.
+ * 노래 제목에 흔한 말(Sexy, Kill This Love 등)은 걸리지 않게 영어는 낱말 단위로만, 뚜렷한 것만 넣는다.
+ */
+const YOUTUBE_BANNED: readonly string[] = ['19금', '야동', '섹스', '포르노', '성인방송', '야한영상', '노출방송', '카지노', '바카라', '토토사이트', '먹튀', '불법도박', '자살', '고어영상'];
+const YOUTUBE_BANNED_EN = /\b(porn|porno|nsfw|xxx|hentai|onlyfans|gore)\b/i;
+
+export function youtubeTextProblem(...texts: string[]): string | null {
+  for (const text of texts) {
+    const flat = squash(text);
+    if (BANNED.some((w) => flat.includes(w)) || YOUTUBE_BANNED.some((w) => flat.includes(w)) || YOUTUBE_BANNED_EN.test(text)) {
+      return '부적절한 말이 들어 있는 영상은 틀 수 없어요.';
+    }
+  }
+  return null;
+}

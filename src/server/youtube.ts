@@ -2,6 +2,7 @@
 // 키는 Vercel 환경 변수 YOUTUBE_API_KEY (없으면 유튜브 신청은 꺼진다). 재생은 화면에 보이는 유튜브 플레이어로만 한다.
 import 'server-only';
 import { YOUTUBE_MAX_SECONDS, youtubeIdOf, type YoutubeSong } from '@/shared/clubMusic';
+import { youtubeTextProblem } from '@/shared/moderation';
 import { signYoutube } from '@/shared/townToken';
 import { SceneError } from './scene/service';
 
@@ -23,7 +24,7 @@ export function isoDurationSeconds(v: string): number {
 }
 
 interface VideoItem {
-  snippet?: { title?: string; categoryId?: string; liveBroadcastContent?: string };
+  snippet?: { title?: string; categoryId?: string; liveBroadcastContent?: string; channelId?: string; channelTitle?: string };
   contentDetails?: { duration?: string; contentRating?: { ytRating?: string }; regionRestriction?: { allowed?: string[]; blocked?: string[] } };
   status?: { embeddable?: boolean; privacyStatus?: string };
 }
@@ -44,6 +45,8 @@ export function checkVideo(id: string, item: VideoItem | undefined): YoutubeSong
   if (!YOUTUBE_CATEGORIES.includes(sn.categoryId ?? '')) throw new SceneError('bad_request', '음악·엔터테인먼트 영상만 신청할 수 있어요.');
   const rr = cd.regionRestriction;
   if (rr?.blocked?.includes('KR') || (rr?.allowed && !rr.allowed.includes('KR'))) throw new SceneError('bad_request', '우리나라에서 볼 수 없는 영상이에요.');
+  const bad = youtubeTextProblem(sn.title ?? '', sn.channelTitle ?? '');
+  if (bad) throw new SceneError('bad_request', bad);
   const seconds = isoDurationSeconds(cd.duration ?? '');
   if (!seconds) throw new SceneError('bad_request', '영상 길이를 읽지 못했어요.');
   if (seconds > YOUTUBE_MAX_SECONDS) throw new SceneError('bad_request', `${YOUTUBE_MAX_SECONDS / 60}분 이하 곡만 신청할 수 있어요.`);
@@ -51,16 +54,34 @@ export function checkVideo(id: string, item: VideoItem | undefined): YoutubeSong
   return { id, title, seconds };
 }
 
-export async function lookupYoutube(url: unknown, now = Date.now()): Promise<YoutubeTicket> {
+/** 운영자가 정한 제한 (켜고 끄기, 막은 영상·채널). 테스트에서는 가짜로 넣는다 */
+export interface YoutubeLimits {
+  on(): Promise<boolean>;
+  blocked(videoId: string, channelId: string | null): Promise<'video' | 'channel' | null>;
+}
+
+const NO_LIMITS: YoutubeLimits = { on: async () => true, blocked: async () => null };
+
+/** 영상 정보 하나 (YouTube Data API v3). 키가 없거나 못 받으면 오류 */
+export async function fetchVideo(id: string): Promise<VideoItem | undefined> {
   const key = process.env.YOUTUBE_API_KEY;
   if (!key) throw new SceneError('conflict', '유튜브 신청은 준비 중이에요. (운영자가 YouTube API 키를 넣으면 열려요)');
-  const id = typeof url === 'string' ? youtubeIdOf(url) : null;
-  if (!id) throw new SceneError('bad_request', '유튜브 영상 링크를 넣어 주세요.');
   const api = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,status&id=${id}&key=${encodeURIComponent(key)}`;
   const res = await fetch(api, { signal: AbortSignal.timeout(6000) }).catch(() => null);
   if (!res?.ok) throw new SceneError('conflict', '유튜브에서 영상을 확인하지 못했어요. 잠시 뒤에 다시 해 주세요.');
   const data = (await res.json()) as { items?: VideoItem[] };
-  const song = checkVideo(id, data.items?.[0]);
+  return data.items?.[0];
+}
+
+export async function lookupYoutube(url: unknown, now = Date.now(), limits: YoutubeLimits = NO_LIMITS): Promise<YoutubeTicket> {
+  if (!process.env.YOUTUBE_API_KEY) throw new SceneError('conflict', '유튜브 신청은 준비 중이에요. (운영자가 YouTube API 키를 넣으면 열려요)');
+  if (!(await limits.on())) throw new SceneError('conflict', '지금은 유튜브 신청을 쉬고 있어요. 목록 곡을 신청해 주세요.');
+  const id = typeof url === 'string' ? youtubeIdOf(url) : null;
+  if (!id) throw new SceneError('bad_request', '유튜브 영상 링크를 넣어 주세요.');
+  const item = await fetchVideo(id);
+  const blocked = await limits.blocked(id, item?.snippet?.channelId ?? null);
+  if (blocked) throw new SceneError('bad_request', blocked === 'video' ? '운영자가 막아 둔 영상이에요.' : '운영자가 막아 둔 채널의 영상이에요.');
+  const song = checkVideo(id, item);
   const exp = now + TICKET_MS;
   return { song, exp, sig: signYoutube(song, exp) };
 }

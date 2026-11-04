@@ -76,7 +76,9 @@ export function ContestSheet({ guest, onClose }: { guest: boolean; onClose: () =
                     <i />
                   </span>
                   <span className="contest__score">
-                    <b>{fmt(r.score)}</b>점
+                    <span>
+                      <b>{fmt(r.score)}</b>점
+                    </span>
                     <small>
                       {r.people}명{r.debateWins ? ` · 토론 ${r.debateWins}승` : ''}
                     </small>

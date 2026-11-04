@@ -674,6 +674,51 @@ export class SceneStore {
     return Number(r?.coins ?? 0);
   }
 
+  // ───────── 클럽 유튜브 신청 제한 ─────────
+
+  /** 유튜브 신청을 받는지 (설정이 없으면 받는다) */
+  async youtubeRequestsOn(): Promise<boolean> {
+    const [r] = await this.sql.query<{ value: { on?: boolean } | string }>(`select value from public.app_settings where key = 'youtube_requests'`);
+    if (!r) return true;
+    const v = typeof r.value === 'string' ? JSON.parse(r.value) : r.value;
+    return v?.on !== false;
+  }
+
+  async setYoutubeRequestsOn(on: boolean, at: Date): Promise<void> {
+    await this.sql.query(
+      `insert into public.app_settings (key, value, updated_at) values ('youtube_requests', $1, $2)
+       on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at`,
+      [JSON.stringify({ on }), at],
+    );
+  }
+
+  async listYoutubeBlocks(): Promise<{ kind: 'video' | 'channel'; id: string; label: string; createdAt: string }[]> {
+    const rows = await this.sql.query<{ kind: 'video' | 'channel'; id: string; label: string; created_at: Date }>(
+      `select kind, id, label, created_at from public.youtube_blocks order by created_at desc limit 200`,
+    );
+    return rows.map((r) => ({ kind: r.kind, id: r.id, label: r.label, createdAt: new Date(r.created_at).toISOString() }));
+  }
+
+  async addYoutubeBlock(kind: 'video' | 'channel', id: string, label: string, at: Date): Promise<void> {
+    await this.sql.query(
+      `insert into public.youtube_blocks (kind, id, label, created_at) values ($1, $2, $3, $4) on conflict (kind, id) do update set label = excluded.label`,
+      [kind, id, label.slice(0, 120), at],
+    );
+  }
+
+  async removeYoutubeBlock(kind: 'video' | 'channel', id: string): Promise<void> {
+    await this.sql.query(`delete from public.youtube_blocks where kind = $1 and id = $2`, [kind, id]);
+  }
+
+  /** 막힌 영상이나 채널이면 그 종류 */
+  async youtubeBlocked(videoId: string, channelId: string | null): Promise<'video' | 'channel' | null> {
+    const rows = await this.sql.query<{ kind: 'video' | 'channel' }>(
+      `select kind from public.youtube_blocks where (kind = 'video' and id = $1) or (kind = 'channel' and id = $2)`,
+      [videoId, channelId ?? ''],
+    );
+    return rows.some((r) => r.kind === 'video') ? 'video' : rows.length ? 'channel' : null;
+  }
+
   // ───────── 오행 지역 대항전 ─────────
 
   /** 대항전 점수를 더한다 (하루 상한까지). 실제로 더해진 점수 */

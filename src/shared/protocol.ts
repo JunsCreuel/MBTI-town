@@ -121,6 +121,8 @@ export const MSG = {
   musicRequest: 'music_request',
   /** 클럽: 신청곡을 받았는지 (서버 → 신청한 사람, MusicResult) */
   musicResult: 'music_result',
+  /** 클럽: 운영자만 지금 곡 넘기기·신청곡 빼기 (화면 → 서버, MusicAdmin) */
+  musicAdmin: 'music_admin',
   /** 서버 전체 공지 (서버 → 모두, AnnounceBroadcast) */
   announce: 'announce',
 } as const;
@@ -133,6 +135,12 @@ export const MSG = {
 export interface MusicState extends ClubLine {
   serverNow: number;
 }
+
+/**
+ * 클럽 운영자 명령. skip = 지금 곡을 끝내고 다음 곡(대기열 첫 곡, 없으면 목록 다음 곡)을 지금부터.
+ * remove = 대기열 at번째(0부터) 곡을 뺀다. key는 그 곡이 맞는지 확인하는 값 (queueKey)
+ */
+export type MusicAdmin = { action: 'skip' } | { action: 'remove'; at: number; key: string };
 
 /** 신청곡을 받았는지 (신청한 사람에게만). position = 대기열에서 몇 번째인지 (1부터) */
 export type MusicResult = { ok: true; position: number } | { ok: false; reason: 'full' | 'mine' | 'cooldown' | 'closed' };

@@ -2,6 +2,7 @@
 import { Client, type Room } from '@colyseus/sdk';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { MSG, type EmoteBroadcast, type JoinOptions, type MusicResult, type MusicState, type SnapMessage } from '../src/shared/protocol';
+import { queueKey } from '../src/shared/clubMusic';
 import { loadTownMapForTest } from '../src/shared/testMap';
 import { gateSpawnName, lotDoor, spawnName, type TownMap } from '../src/shared/townMap';
 import { announcementBody, type AnnounceBroadcast } from '../src/shared/announce';
@@ -290,6 +291,37 @@ describe('새 동네 (2동·3동…)', () => {
     expect(results[3]).toEqual({ ok: true, position: got[0].queue.length });
     expect(got[0].queue.at(-1)).toEqual({ index: -1, by: '유튜버', who: a.sessionId, yt: song });
     await a.leave();
+  });
+
+  it('운영자만 지금 곡을 넘기고 신청곡을 뺄 수 있다 (운영자 표시는 서명된 토큰에만)', async () => {
+    const admin = await join(pass({ name: '운영자', admin: true }), 'home', 'club');
+    const user = await join(pass({ name: '주민' }), 'home', 'club');
+    expect(user.roomId).toBe(admin.roomId);
+    const got: MusicState[] = [];
+    user.onMessage(MSG.music, (m: MusicState) => got.push(m));
+    // 신청곡 둘 (사람마다 따로 세어서 바로 받는다. 시험 방 정원이 2명이라 둘이 한 곡씩)
+    user.send(MSG.musicRequest, { index: 1 });
+    await until(() => got.length === 1);
+    admin.send(MSG.musicRequest, { index: 2 });
+    await until(() => got.length === 2);
+    const before = got[1];
+    // 일반 주민의 명령은 무시한다
+    user.send(MSG.musicAdmin, { action: 'skip' });
+    user.send(MSG.musicAdmin, { action: 'remove', at: 0, key: queueKey(before.queue[0]) });
+    await new Promise((r) => setTimeout(r, 300));
+    expect(got).toHaveLength(2);
+    // 운영자: 열쇠가 틀리면 빼지 않고, 맞으면 뺀다
+    admin.send(MSG.musicAdmin, { action: 'remove', at: 0, key: 'nope' });
+    admin.send(MSG.musicAdmin, { action: 'remove', at: before.queue.length - 1, key: queueKey(before.queue.at(-1)!) });
+    await until(() => got.length === 3);
+    expect(got[2].queue.map((q) => q.index)).toEqual(before.queue.slice(0, -1).map((q) => q.index));
+    // 넘기기: 대기열 첫 곡이 지금 곡이 된다
+    admin.send(MSG.musicAdmin, { action: 'skip' });
+    await until(() => got.length === 4);
+    expect(got[3]).toMatchObject({ index: before.queue[0].index, by: before.queue[0].by });
+    expect(got[3].startedAt).toBeGreaterThanOrEqual(got[2].serverNow);
+    await user.leave();
+    await admin.leave();
   });
 
   it('없는 곳으로는 들어가지 못한다', async () => {

@@ -25,6 +25,7 @@ import {
   FORTUNE_FRUIT, FRUITS, GOLDEN_WHALE_ID, fishDef, fortuneFor, parseTreeSpot, rollCatch, treeSpotId,
   type FishDef, type FortuneFruit,
 } from '@/shared/play';
+import { youtubeIdOf } from '@/shared/clubMusic';
 import { coinConfig, contestConfig, marketConfig, playConfig, sajuConfig } from '@/config/game';
 import { contestLeader, previousContestWeek, type ContestDistrictScore, type ContestKind, type ContestStandings } from '@/shared/contest';
 import type { AdminCounts, ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
@@ -356,6 +357,12 @@ export function sniffImage(bytes: Uint8Array): 'image/jpeg' | 'image/png' | 'ima
   if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'image/png';
   if (String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' && String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP') return 'image/webp';
   return null;
+}
+
+/** 운영 화면: 클럽 유튜브 신청 */
+export interface AdminYoutube {
+  on: boolean;
+  blocks: { kind: 'video' | 'channel'; id: string; label: string; createdAt: string }[];
 }
 
 /** 대항전 화면 */
@@ -1040,6 +1047,7 @@ export class SceneService {
         // 이름표 둘째 줄: MBTI 태그와 일주만 (생일·다른 기둥은 담지 않는다)
         ...(p.mbti ? { mbti: p.mbti } : {}),
         ...(p.saju?.day?.ko ? { ilju: p.saju.day.ko } : {}),
+        ...((await this.isAdmin(viewer)) ? { admin: true as const } : {}),
       };
     } else {
       pass = {
@@ -1245,6 +1253,59 @@ export class SceneService {
       return done((await this.store.getSajuReading<TarotResult>(p.id, key.kind, key.period))!, 0);
     }
     return done(reading, fee);
+  }
+
+  // ───────────────────────── 클럽 유튜브 신청 제한 ─────────────────────────
+
+  /** 유튜브 신청을 확인할 때 쓰는 제한 (켜고 끄기, 막은 영상·채널) */
+  youtubeLimits() {
+    return {
+      on: () => this.store.youtubeRequestsOn(),
+      blocked: (videoId: string, channelId: string | null) => this.store.youtubeBlocked(videoId, channelId),
+    };
+  }
+
+  /** 운영자: 유튜브 신청 켜기·끄기와 막은 영상·채널 목록 */
+  async adminYoutube(viewer: Viewer | null): Promise<AdminYoutube> {
+    await this.requireAdmin(viewer);
+    const [on, blocks] = await Promise.all([this.store.youtubeRequestsOn(), this.store.listYoutubeBlocks()]);
+    return { on, blocks };
+  }
+
+  /**
+   * 운영자: { on } 켜기·끄기, { block: { url, scope: 'video' | 'channel' } } 막기, { unblock: { kind, id } } 풀기.
+   * resolve = 영상 id로 제목·채널을 알아오는 길 (YouTube API, 라우트가 넣어 준다)
+   */
+  async adminYoutubeUpdate(
+    viewer: Viewer | null,
+    input: Record<string, unknown>,
+    resolve: (videoId: string) => Promise<{ title: string; channelId: string; channelTitle: string } | null>,
+  ): Promise<AdminYoutube> {
+    await this.requireAdmin(viewer);
+    const now = this.now();
+    if (typeof input.on === 'boolean') await this.store.setYoutubeRequestsOn(input.on, now);
+    const block = input.block as { url?: unknown; scope?: unknown } | undefined;
+    if (block) {
+      const url = typeof block.url === 'string' ? block.url.trim() : '';
+      const channel = /youtube\.com\/channel\/(UC[A-Za-z0-9_-]{22})/.exec(url)?.[1] ?? (/^UC[A-Za-z0-9_-]{22}$/.test(url) ? url : null);
+      if (channel) await this.store.addYoutubeBlock('channel', channel, channel, now);
+      else {
+        const id = youtubeIdOf(url);
+        if (!id) throw new SceneError('bad_request', '유튜브 영상 링크나 채널 주소(youtube.com/channel/…)를 넣어 주세요.');
+        const info = await resolve(id).catch(() => null);
+        if (block.scope === 'channel') {
+          if (!info?.channelId) throw new SceneError('conflict', '이 영상의 채널을 알아내지 못했어요. 잠시 뒤에 다시 해 주세요.');
+          await this.store.addYoutubeBlock('channel', info.channelId, info.channelTitle || info.channelId, now);
+        } else {
+          await this.store.addYoutubeBlock('video', id, info?.title || id, now);
+        }
+      }
+    }
+    const unblock = input.unblock as { kind?: unknown; id?: unknown } | undefined;
+    if (unblock && (unblock.kind === 'video' || unblock.kind === 'channel') && typeof unblock.id === 'string') {
+      await this.store.removeYoutubeBlock(unblock.kind, unblock.id);
+    }
+    return this.adminYoutube(viewer);
   }
 
   // ───────────────────────── 오행 지역 대항전 ─────────────────────────

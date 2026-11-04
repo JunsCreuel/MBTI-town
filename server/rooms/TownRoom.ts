@@ -15,7 +15,7 @@ import {
   isTownPlace, parseRoomPlace, parseSpot, type Spot,
 } from '../../src/shared/protocol';
 import { clubTrackSeconds, getHoodMap, getSpotMap, getTownMap } from '../assets';
-import { CLUB_TRACKS, YOUTUBE_MAX_SECONDS, advanceLine, lineFromClock, type ClubLine, type YoutubeSong } from '../../src/shared/clubMusic';
+import { CLUB_TRACKS, YOUTUBE_MAX_SECONDS, advanceLine, lineFromClock, queueKey, skipLine, type ClubLine, type YoutubeSong } from '../../src/shared/clubMusic';
 import { Player, TownState } from './TownState';
 
 export function townRoomCapacity(): number {
@@ -134,6 +134,27 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
       this.music = line;
       this.broadcast(MSG.music, { ...line, serverNow: now } satisfies MusicState);
       reply({ ok: true, position: line.queue.length });
+    });
+
+    // 클럽 운영자: 지금 곡 넘기기, 신청곡 빼기 (운영자가 아니면 아무 일도 없다). 일반 주민의 끄기는 그 사람 화면에서만 멈춘다
+    this.onMessage(MSG.musicAdmin, (client, message: unknown) => {
+      if (this.spot !== 'club' || !this.passes.get(client.sessionId)?.admin) return;
+      const msg = (message ?? {}) as Partial<{ action: string; at: unknown; key: unknown }>;
+      const now = Date.now();
+      const seconds = clubTrackSeconds();
+      const line = this.music ? advanceLine(this.music, now, seconds) : lineFromClock(now, seconds);
+      if (!line) return;
+      let next: ClubLine;
+      if (msg.action === 'skip') next = skipLine(line, now, CLUB_TRACKS.length);
+      else if (msg.action === 'remove') {
+        const at = msg.at;
+        if (typeof at !== 'number' || !Number.isInteger(at) || at < 0 || at >= line.queue.length) return;
+        // 그사이 목록이 바뀌었으면 (다른 곡이 그 자리에 왔으면) 빼지 않는다
+        if (queueKey(line.queue[at]) !== msg.key) return;
+        next = { ...line, queue: line.queue.filter((_, i) => i !== at) };
+      } else return;
+      this.music = next;
+      this.broadcast(MSG.music, { ...next, serverNow: now } satisfies MusicState);
     });
   }
 

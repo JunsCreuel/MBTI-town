@@ -25,6 +25,7 @@ import { BeaconSigns } from './BeaconSigns';
 import { GuideNpc } from './GuideNpc';
 import { ClubNpcs } from './ClubNpcs';
 import { ClubScreen } from './ClubScreen';
+import { ClubLights } from './ClubLights';
 import { PlazaScreen } from './PlazaScreen';
 import { MarketStalls } from './Market';
 import { SajuNpc } from './SajuNpc';
@@ -864,6 +865,7 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <FruitDrops />
         <ClubFx />
         <ClubScreen />
+        <ClubLights />
         <PlazaScreen />
         <BeaconSigns />
         <GuideNpc />

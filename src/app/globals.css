@@ -4821,7 +4821,7 @@ canvas {
 }
 .contest__row {
   display: grid;
-  grid-template-columns: 26px 92px 1fr auto;
+  grid-template-columns: 26px auto minmax(40px, 1fr) auto;
   align-items: center;
   gap: var(--space-2);
   padding: var(--space-2) var(--space-3);
@@ -4848,8 +4848,10 @@ canvas {
   gap: 4px;
   font-weight: 800;
   color: var(--color-text);
+  white-space: nowrap;
 }
 .contest__mine {
+  white-space: nowrap;
   padding: 0 5px;
   border-radius: 6px;
   background: var(--color-accentSoft);
@@ -4875,6 +4877,7 @@ canvas {
   justify-items: end;
   font-size: 13px;
   line-height: 1.2;
+  white-space: nowrap;
 }
 .contest__score b {
   font-size: 16px;
@@ -4930,4 +4933,29 @@ canvas {
   .contest__bar i {
     transition: none;
   }
+}
+
+/* 클럽 DJ 시트: 운영자 버튼 (지금 곡 넘기기, 신청곡 빼기, 영상 막기) */
+.club-admin {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+.club-queue li .club-admin {
+  grid-column: 1 / -1;
+  justify-content: flex-end;
+  margin-top: 0;
+}
+
+/* 운영: 클럽 유튜브 신청 켜기·끄기 */
+.admin-yt__switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.admin-yt__switch b {
+  color: var(--color-accentInk);
 }

@@ -828,3 +828,45 @@ describe('오행 지역 대항전', () => {
     expect(heard).toHaveLength(1);
   });
 });
+
+describe('클럽 유튜브 신청 제한 (운영자)', () => {
+  it('운영자만 켜고 끄고, 영상·채널을 막고 푼다. 막은 것은 신청 확인에 쓰인다', async () => {
+    const admin = await user();
+    const other = await user();
+    await onboard(admin, '유튜브운영자');
+    await onboard(other, '유튜브주민');
+    await sql.query(`insert into public.admins (user_id) values ($1) on conflict do nothing`, [admin.id]);
+    const resolve = async (id: string) => ({ title: `제목 ${id}`, channelId: 'UCaaaaaaaaaaaaaaaaaaaaaa', channelTitle: '채널 이름' });
+    await expectError(service.adminYoutube(other), 'not_found');
+    await expectError(service.adminYoutubeUpdate(other, { on: false }, resolve), 'not_found');
+    expect(await service.adminYoutube(admin)).toEqual({ on: true, blocks: [] });
+    expect((await service.adminYoutubeUpdate(admin, { on: false }, resolve)).on).toBe(false);
+    expect(await service.youtubeLimits().on()).toBe(false);
+    await service.adminYoutubeUpdate(admin, { on: true }, resolve);
+    // 영상 링크로 영상 막기, 같은 영상의 채널 막기, 채널 주소로 바로 막기
+    await service.adminYoutubeUpdate(admin, { block: { url: 'https://youtu.be/dQw4w9WgXcQ', scope: 'video' } }, resolve);
+    await service.adminYoutubeUpdate(admin, { block: { url: 'https://youtu.be/9bZkp7q19f0', scope: 'channel' } }, resolve);
+    const v = await service.adminYoutubeUpdate(admin, { block: { url: 'https://www.youtube.com/channel/UCbbbbbbbbbbbbbbbbbbbbbb', scope: 'video' } }, resolve);
+    expect(v.blocks.map((b) => [b.kind, b.id, b.label]).sort()).toEqual(
+      [['channel', 'UCaaaaaaaaaaaaaaaaaaaaaa', '채널 이름'], ['channel', 'UCbbbbbbbbbbbbbbbbbbbbbb', 'UCbbbbbbbbbbbbbbbbbbbbbb'], ['video', 'dQw4w9WgXcQ', '제목 dQw4w9WgXcQ']].sort(),
+    );
+    const limits = service.youtubeLimits();
+    expect(await limits.blocked('dQw4w9WgXcQ', null)).toBe('video');
+    expect(await limits.blocked('xxxxxxxxxxx', 'UCaaaaaaaaaaaaaaaaaaaaaa')).toBe('channel');
+    expect(await limits.blocked('xxxxxxxxxxx', 'UCzzzzzzzzzzzzzzzzzzzzzz')).toBeNull();
+    await expectError(service.adminYoutubeUpdate(admin, { block: { url: '아무 글', scope: 'video' } }, resolve), 'bad_request');
+    const after = await service.adminYoutubeUpdate(admin, { unblock: { kind: 'video', id: 'dQw4w9WgXcQ' } }, resolve);
+    expect(after.blocks.some((b) => b.kind === 'video')).toBe(false);
+    expect(await limits.blocked('dQw4w9WgXcQ', null)).toBeNull();
+  });
+
+  it('운영자 마을 토큰에는 운영자 표시가, 주민 토큰에는 없다', async () => {
+    const admin = await user();
+    const other = await user();
+    await onboard(admin, '토큰운영자');
+    await onboard(other, '토큰주민');
+    await sql.query(`insert into public.admins (user_id) values ($1) on conflict do nothing`, [admin.id]);
+    expect(verifyTownPass((await service.townTicket(admin)).token)?.admin).toBe(true);
+    expect(verifyTownPass((await service.townTicket(other)).token)?.admin).toBeUndefined();
+  });
+});

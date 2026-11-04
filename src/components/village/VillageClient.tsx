@@ -899,7 +899,14 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       {contestOpen && <ContestSheet guest={isGuest} onClose={() => setContestOpen(false)} />}
       {stallOpen !== null && <MarketSheet slot={stallOpen} view={market} onChanged={setMarket} onClose={() => setStallOpen(null)} />}
       {clubSheet === 'dj' && (
-        <DjSheet guest={isGuest} onRequest={(i) => session.requestSong(i)} onYoutube={(t) => session.requestYoutube(t)} onClose={() => setClubSheet(null)} />
+        <DjSheet
+          guest={isGuest}
+          admin={!!snap.pass?.admin}
+          onRequest={(i) => session.requestSong(i)}
+          onYoutube={(t) => session.requestYoutube(t)}
+          onAdmin={(cmd) => session.musicAdmin(cmd)}
+          onClose={() => setClubSheet(null)}
+        />
       )}
       {clubSheet === 'bar' && (
         <BarSheet

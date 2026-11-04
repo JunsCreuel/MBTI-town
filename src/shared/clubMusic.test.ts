@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLUB_TRACKS, advanceLine, clubLineAt, clubScheduleAt, lineFromClock, youtubeIdOf, type ClubLine } from './clubMusic';
+import { CLUB_TRACKS, advanceLine, clubLineAt, clubScheduleAt, lineFromClock, queueKey, skipLine, youtubeIdOf, type ClubLine } from './clubMusic';
 import { PROVIDED_BY_OWNER } from './music';
 
 describe('클럽 음악 순서', () => {
@@ -120,5 +120,30 @@ describe('유튜브 신청곡', () => {
     for (const bad of ['', 'hello', 'https://example.com/watch?v=dQw4w9WgXcQ', 'https://youtube.com/watch?v=short', 'javascript:alert(1)']) {
       expect(youtubeIdOf(bad)).toBeNull();
     }
+  });
+});
+
+describe('운영자 곡 넘기기', () => {
+  const lens = [60, 90, 30];
+  const t0 = 1_000_000;
+  const song = { id: 'dQw4w9WgXcQ', title: '유튜브 곡', seconds: 45 };
+
+  it('지금 곡을 끝내고 대기열 첫 곡을 지금부터 튼다', () => {
+    const l: ClubLine = { index: 0, startedAt: t0, by: '', queue: [{ index: -1, yt: song, by: '유튜버', who: 'y' }, { index: 2, by: '다음', who: 'n' }], after: 1 };
+    const s = skipLine(l, t0 + 10_000, 3);
+    expect(s).toMatchObject({ index: -1, yt: song, startedAt: t0 + 10_000, by: '유튜버', after: 1 });
+    expect(s.queue.map((q) => q.who)).toEqual(['n']);
+    const s2 = skipLine(s, t0 + 20_000, 3);
+    expect(s2).toMatchObject({ index: 2, startedAt: t0 + 20_000, by: '다음', after: 0, queue: [] });
+    expect(clubLineAt(s2, t0 + 25_000, lens)).toMatchObject({ index: 2, offset: 5 });
+  });
+
+  it('대기열이 비었으면 목록의 다음 곡으로', () => {
+    expect(skipLine({ index: 1, startedAt: t0, by: '', queue: [], after: 2 }, t0 + 5000, 3)).toMatchObject({ index: 2, after: 0, by: '' });
+  });
+
+  it('대기열 곡을 가리키는 값은 신청한 사람과 곡으로 정한다', () => {
+    expect(queueKey({ index: 2, by: 'a', who: 's1' })).toBe('s1:2');
+    expect(queueKey({ index: -1, by: 'a', who: 's1', yt: song })).toBe('s1:yt:dQw4w9WgXcQ');
   });
 });

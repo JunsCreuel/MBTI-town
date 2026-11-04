@@ -3,8 +3,9 @@
 // 클럽 화면: DJ 너굴에게 신청곡, 바텐더 곰돌에게 한 잔, 취했을 때 화면 효과(흐려짐·분홍빛·딸꾹질).
 import { useEffect, useRef, useState } from 'react';
 import { townConfig } from '@/config/game';
-import { CLUB_TRACKS, YOUTUBE_MAX_SECONDS, youtubeIdOf, type YoutubeSong } from '@/shared/clubMusic';
-import type { MusicResult } from '@/shared/protocol';
+import { CLUB_TRACKS, YOUTUBE_MAX_SECONDS, queueKey, youtubeIdOf, type YoutubeSong } from '@/shared/clubMusic';
+import { call, errorMessage } from '@/lib/api';
+import type { MusicAdmin, MusicResult } from '@/shared/protocol';
 import { Sheet } from '../app/Sheet';
 import { clubQueue, clubSchedule, onClubDj, onClubResult, songTitle } from './club';
 import { BARTENDER_NAME, DJ_NAME } from './ClubNpcs';
@@ -21,11 +22,14 @@ export type YoutubeTicket = { song: YoutubeSong; exp: number; sig: string };
 
 /** DJ에게 신청곡: 지금 나오는 곡, 신청곡 목록(차례대로), 신청하기(목록 곡 또는 유튜브 링크). 지금 곡은 끝까지 틀고 신청곡이 차례로 나온다 */
 export function DjSheet({
-  guest, onRequest, onYoutube, onClose,
+  guest, admin = false, onRequest, onYoutube, onAdmin, onClose,
 }: {
   guest: boolean;
+  /** 운영자면 지금 곡 넘기기·신청곡 빼기·영상 막기 버튼이 보인다 (실시간 서버도 운영자인지 다시 확인한다) */
+  admin?: boolean;
   onRequest: (index: number) => boolean;
   onYoutube: (ticket: YoutubeTicket) => boolean;
+  onAdmin?: (cmd: MusicAdmin) => boolean;
   onClose: () => void;
 }) {
   const read = () => ({ now: clubSchedule(), queue: clubQueue() });
@@ -73,6 +77,20 @@ export function DjSheet({
     }
   }
   const playing = line.now?.index ?? -1;
+  function adminCmd(cmd: MusicAdmin, done: string) {
+    setNote(onAdmin?.(cmd) ? done : '실시간 서버에 연결된 뒤에 할 수 있어요.');
+  }
+  /** 운영자: 이 영상을 앞으로 신청할 수 없게 막는다 */
+  async function blockVideo(id: string, title: string) {
+    try {
+      await call('POST', '/api/admin/youtube', { block: { url: id, scope: 'video' } });
+      setNote(`"${title}" 영상을 막았어요. 다시 신청할 수 없어요.`);
+      return true;
+    } catch (e) {
+      setNote(errorMessage(e));
+      return false;
+    }
+  }
   return (
     <Sheet title={`${DJ_NAME}에게 신청곡`} onClose={onClose}>
       <div className="club-sheet">
@@ -82,6 +100,24 @@ export function DjSheet({
             <span className="club-now__label">지금 나오는 곡</span>
             <b>{songTitle(line.now)}</b>
             {line.now.by && <span className="muted">{line.now.by}의 신청곡</span>}
+            {admin && (
+              <span className="club-admin">
+                <button className="btn-secondary btn-small" onClick={() => adminCmd({ action: 'skip' }, '지금 곡을 넘겼어요. 채널 모두에게 다음 곡이 나와요.')}>
+                  지금 곡 넘기기
+                </button>
+                {line.now.yt && (
+                  <button
+                    className="btn-danger btn-small"
+                    onClick={async () => {
+                      const yt = line.now!.yt!;
+                      if (await blockVideo(yt.id, yt.title)) adminCmd({ action: 'skip' }, `"${yt.title}" 영상을 막고 넘겼어요.`);
+                    }}
+                  >
+                    영상 막고 넘기기
+                  </button>
+                )}
+              </span>
+            )}
           </div>
         )}
         <h3 className="club-sub">
@@ -97,6 +133,23 @@ export function DjSheet({
                   {songTitle(q)}
                 </span>
                 <span className="muted club-queue__by">{q.by}</span>
+                {admin && (
+                  <span className="club-admin">
+                    <button className="btn-secondary btn-small" aria-label={`${songTitle(q)} 신청곡 빼기`} onClick={() => adminCmd({ action: 'remove', at: k, key: queueKey(q) }, `"${songTitle(q)}" 신청곡을 뺐어요.`)}>
+                      빼기
+                    </button>
+                    {q.yt && (
+                      <button
+                        className="btn-danger btn-small"
+                        onClick={async () => {
+                          if (await blockVideo(q.yt!.id, q.yt!.title)) adminCmd({ action: 'remove', at: k, key: queueKey(q) }, `"${q.yt!.title}" 영상을 막고 뺐어요.`);
+                        }}
+                      >
+                        막기
+                      </button>
+                    )}
+                  </span>
+                )}
               </li>
             ))}
           </ol>

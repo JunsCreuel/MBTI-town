@@ -31,6 +31,8 @@ export interface TownPass {
   mbti?: string;
   /** 이름표에 보이는 사주 일주 한글 (예: 갑자). 생일·다른 기둥은 담지 않는다 */
   ilju?: string;
+  /** 운영자 (클럽 곡 넘기기·신청곡 빼기를 할 수 있다). 운영자만 담긴다 */
+  admin?: true;
 }
 
 const DEV_SECRET = 'scene-dev-town-secret';
@@ -89,6 +91,7 @@ export function verifyTownPass(token: unknown, nowSec = Math.floor(Date.now() / 
     ...(typeof raw.house === 'string' && raw.house ? { house: raw.house.slice(0, 32) } : {}),
     ...(typeof raw.mbti === 'string' && /^[EI][SN][TF][JP]$/.test(raw.mbti) ? { mbti: raw.mbti } : {}),
     ...(typeof raw.ilju === 'string' && /^[가-힣]{2}$/.test(raw.ilju) ? { ilju: raw.ilju } : {}),
+    ...(raw.admin === true ? { admin: true as const } : {}),
   };
 }
 

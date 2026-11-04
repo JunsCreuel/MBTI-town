@@ -5,7 +5,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { call } from '@/lib/api';
-import type { AdminReport, AdminUser } from '@/server/scene/service';
+import type { AdminReport, AdminUser, AdminYoutube } from '@/server/scene/service';
 import type { AdminCounts } from '@/server/scene/store';
 import { NOTICE_MAX } from '@/shared/announce';
 import { DISTRICT } from '@/shared/districts';
@@ -34,6 +34,8 @@ export function AdminClient() {
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const [youtube, setYoutube] = useState<AdminYoutube | null>(null);
+  const [ytLink, setYtLink] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -41,6 +43,8 @@ export function AdminClient() {
       setCounts(c);
       setReports(r.reports);
       setState('ok');
+      // 유튜브 제한 표가 아직 없어도(SQL 전) 다른 운영 기능은 쓸 수 있게 따로 받는다
+      call<AdminYoutube>('GET', '/api/admin/youtube').then(setYoutube, () => setYoutube(null));
     } catch {
       setState('error');
     }
@@ -112,6 +116,21 @@ export function AdminClient() {
     const n = Math.floor(Number(give[u.id] ?? '1000'));
     if (!Number.isFinite(n) || n <= 0) return setToast('코인 수를 1 이상으로 적어 주세요');
     void adjust(u, { coins: sign * n });
+  }
+
+  /** 클럽 유튜브: 켜기·끄기, 막기, 풀기 */
+  async function updateYoutube(body: Record<string, unknown>, done: string) {
+    setBusy('youtube');
+    try {
+      setYoutube(await call<AdminYoutube>('POST', '/api/admin/youtube', body));
+      setToast(done);
+      return true;
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '바꾸지 못했어요');
+      return false;
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function deleteUser(u: AdminUser) {
@@ -215,6 +234,74 @@ export function AdminClient() {
             보내기
           </button>
         </form>
+      </section>
+
+      <section className="section card">
+        <h2 className="section-title">클럽 유튜브 신청</h2>
+        {!youtube ? (
+          <p className="muted">유튜브 제한 정보를 불러오지 못했어요. (SQL을 실행했는지 확인해 주세요)</p>
+        ) : (
+          <>
+            <p className="muted">
+              제목·채널 이름에 욕설·성인·도박 같은 말이 있으면 저절로 막아요. 여기서 막은 영상·채널은 신청할 수 없어요. 이미 신청 목록에 있는 곡은 클럽 DJ 시트에서 빼 주세요.
+            </p>
+            <div className="admin-yt__switch">
+              <span>
+                지금 유튜브 신청 <b>{youtube.on ? '받는 중' : '쉬는 중'}</b>
+              </span>
+              <button
+                className={youtube.on ? 'btn-secondary btn-small' : 'btn-primary btn-primary--inline btn-small'}
+                disabled={busy === 'youtube'}
+                onClick={() => void updateYoutube({ on: !youtube.on }, youtube.on ? '유튜브 신청을 껐어요' : '유튜브 신청을 켰어요')}
+              >
+                {youtube.on ? '유튜브 신청 끄기' : '유튜브 신청 켜기'}
+              </button>
+            </div>
+            <form
+              className="admin-search"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (await updateYoutube({ block: { url: ytLink, scope: 'video' } }, '영상을 막았어요')) setYtLink('');
+              }}
+            >
+              <input value={ytLink} onChange={(e) => setYtLink(e.target.value)} placeholder="유튜브 영상 링크나 채널 주소" maxLength={200} aria-label="막을 유튜브 영상 링크나 채널 주소" />
+              <button className="btn-primary btn-primary--inline" disabled={!ytLink.trim() || busy === 'youtube'}>
+                영상 막기
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={!ytLink.trim() || busy === 'youtube'}
+                onClick={async () => {
+                  if (await updateYoutube({ block: { url: ytLink, scope: 'channel' } }, '채널을 막았어요')) setYtLink('');
+                }}
+              >
+                채널 막기
+              </button>
+            </form>
+            <ul className="admin-list">
+              {youtube.blocks.map((b) => (
+                <li key={`${b.kind}:${b.id}`} className="admin-user">
+                  <div className="admin-user__info">
+                    <b>
+                      {b.label || b.id}
+                      <span className="admin-badge">{b.kind === 'video' ? '영상' : '채널'}</span>
+                    </b>
+                    <span className="muted">
+                      {b.id} · {b.createdAt.slice(0, 10)}
+                    </span>
+                  </div>
+                  <div className="admin-actions">
+                    <button className="btn-secondary btn-small" disabled={busy === 'youtube'} onClick={() => void updateYoutube({ unblock: { kind: b.kind, id: b.id } }, '막은 것을 풀었어요')}>
+                      풀기
+                    </button>
+                  </div>
+                </li>
+              ))}
+              {youtube.blocks.length === 0 && <p className="muted">막은 영상·채널이 없어요.</p>}
+            </ul>
+          </>
+        )}
       </section>
 
       <section className="section card">
