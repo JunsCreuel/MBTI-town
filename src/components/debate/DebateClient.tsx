@@ -42,13 +42,13 @@ export function DebateClient({ matchId }: { matchId?: string }) {
   const [tick, setTick] = useState(() => Date.now());
 
   const refresh = useCallback(async () => {
+    // 나(로그인)를 먼저 받는다: 세션 갱신이 한 번만 일어나게 하고, 그다음 토론을 같은 세션으로 받는다.
+    // 내 정보를 못 받아도 토론은 보여 준다 (그때는 위쪽에 로그인 버튼 대신 아무것도 띄우지 않는다)
+    const m = await api<MeResponse>('/api/me').catch(() => null);
+    if (m) setMe(m);
     try {
-      const [v, m] = await Promise.all([
-        api<DebateView>(matchId ? `/api/debate/${matchId}` : '/api/debate'),
-        api<MeResponse>('/api/me'),
-      ]);
+      const v = await api<DebateView>(matchId ? `/api/debate/${matchId}` : '/api/debate');
       setView(v);
-      setMe(m);
       setSkew(Date.parse(v.now) - Date.now());
       setError(null);
     } catch (e) {
@@ -153,9 +153,9 @@ function TopBar({ me }: { me: MeResponse | null }) {
           {me.profile?.district ? `${DISTRICT[me.profile.district].short} 주민` : '주민 등록 전'}
           {me.mbti ? ` · ${me.mbti}` : ''} · 로그아웃
         </button>
-      ) : (
+      ) : me ? (
         <Link className="topbar__me" href="/login?next=/debate">로그인</Link>
-      )}
+      ) : null}
     </header>
   );
 }
