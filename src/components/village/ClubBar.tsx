@@ -2,7 +2,6 @@
 
 // 클럽 화면: DJ 너굴에게 신청곡, 바텐더 곰돌에게 한 잔, 취했을 때 화면 효과(흐려짐·분홍빛·딸꾹질).
 import { useEffect, useRef, useState } from 'react';
-import { asset } from '@/assets/manifest';
 import { CLUB_TRACKS } from '@/shared/clubMusic';
 import { Sheet } from '../app/Sheet';
 import { clubSchedule } from './club';
@@ -32,9 +31,6 @@ export function DjSheet({ onRequest, onClose }: { onRequest: (index: number) => 
                 <span className="club-track__title">
                   {t.title}
                   {i === playing && <span className="club-track__now">지금 나오는 곡</span>}
-                </span>
-                <span className="muted club-track__meta">
-                  {t.artist} · {t.mood} · {asset(t.key).bpm ?? t.tempo} BPM
                 </span>
               </button>
             </li>

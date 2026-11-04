@@ -1813,6 +1813,15 @@ a:focus-visible {
   color: var(--color-textSub);
 }
 
+.track__badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-accentSoft);
+  color: var(--color-accentInk);
+  font-size: 11px;
+  font-weight: 700;
+}
+
 .track__radio {
   width: 20px;
   height: 20px;

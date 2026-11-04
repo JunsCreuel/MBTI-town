@@ -5,7 +5,6 @@
 // WebGL을 못 쓰거나 불러오지 못하면 onFail을 불러 부르는 쪽이 그림 지도로 바꾼다.
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { assetUrl } from '@/assets/manifest';
-import { townConfig } from '@/config/game';
 import { tokens } from '@/design/tokens';
 import { withMaxLightness } from '@/design/mbti';
 import type { TownView } from '@/server/scene/service';
@@ -125,14 +124,10 @@ export default function ExploreMap({
               aria-label={`${DISTRICT[d].name}, 주민 ${counts[d] ?? 0}명`}
             >
               <span className="map-label__code">{DISTRICT[d].short} 지역</span>
-              <span className="map-label__share">주민 {counts[d] ?? 0}</span>
             </button>
           ))}
         </div>
       )}
-      <span className="explore-map__hint" aria-hidden>
-        지역 이름표를 눌러 보세요 · 집 {town.houses.filter((h) => h.hood === 1).length}/{townConfig.lotsPerDistrict * DISTRICTS.length}채
-      </span>
     </div>
   );
 }

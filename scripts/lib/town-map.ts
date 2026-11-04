@@ -782,8 +782,8 @@ function buildClubMap(tilesetFile: string) {
   {
     const rot = facing(x1, c, c, c);
     const bar = { x: x1 - 0.95, y: c - 2 };
-    // 선반·카운터·의자 자리 (벽 쪽 두 칸 × 네 칸)
-    prop('prop.club.bar', bar.x, bar.y, square(x1 - 2, bar.y - 2, 2, 4), rot);
+    // 선반·카운터·의자 자리 (벽 쪽 세 칸 × 네 칸. 카운터와 의자가 홀 쪽으로 나와 있다)
+    prop('prop.club.bar', bar.x, bar.y, square(x1 - 3, bar.y - 2, 3, 4), rot);
   }
 
   // 5. 서쪽 소파 둘 (동쪽을 본다)

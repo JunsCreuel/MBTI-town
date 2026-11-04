@@ -17,6 +17,7 @@ import { GesturePicker } from '@/components/app/GesturePicker';
 import { TabBar } from '@/components/app/TabBar';
 import type { HouseView, TownView } from '@/server/scene/service';
 import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
+import { withRo } from '@/shared/josa';
 import { shopLabel, type MarketView } from '@/shared/market';
 import { SPOT_NAME, parseRoomPlace, parseSpot, type RoomPlace, type Spot, type TownPlace } from '@/shared/protocol';
 import { castTarget, districtAt, lotDoor, nearWater, parseTownMap, randomSpawnPoint, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
@@ -541,9 +542,6 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
               aria-label={`${hoodName(here.district, here.hood)} 입구로 가기`}
             >
               <span className="map-label__code">{hoodName(here.district, here.hood)}</span>
-              <span className="map-label__share">
-                집 {counts[here.district].get(here.hood) ?? 0}/{townConfig.hoodLots}채
-              </span>
             </button>
           )}
           {!here && DISTRICTS.map((d) => (
@@ -557,9 +555,6 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
               aria-label={`${DISTRICT[d].short} 지역으로 가기, 1동 집 ${counts[d].get(1) ?? 0}채`}
             >
               <span className="map-label__code">{DISTRICT[d].short} 지역</span>
-              <span className="map-label__share">
-                {DISTRICT[d].element} · 집 {counts[d].get(1) ?? 0}채{hoodCount(d) > 1 && ` · ${hoodCount(d)}동까지`}
-              </span>
             </button>
           ))}
           {homeHere && (
@@ -720,7 +715,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
                 onClick={() => router.push(spot ? '/village?at=plaza' : `/village?place=${nearBeacon}`)}
               >
                 <Icon name={nearBeacon === 'fishing' ? 'fishing' : nearBeacon === 'market' ? 'basket' : 'music'} size={20} />
-                {spot ? '광장으로 돌아가기' : `${SPOT_NAME[nearBeacon]}로 가기`}
+                {spot ? '광장으로 돌아가기' : `${withRo(SPOT_NAME[nearBeacon])} 가기`}
               </button>
             )}
 

@@ -170,19 +170,19 @@ export function clubDoorParts(): Part[] {
 export function clubBarParts(): Part[] {
   const bottles = ['#7CC36A', '#F2C14E', '#E2483D', '#57E3FF', '#C77DFF', '#F4A08C', '#9ED6C9'];
   return [
-    // 카운터
-    part(box(3.8, 1.0, 0.7), CLUB.counter, { pos: [0, 0.5, 0.25] }),
-    part(box(3.96, 0.08, 0.86), CLUB.top, { pos: [0, 1.04, 0.25] }),
+    // 카운터: 바텐더가 가려지지 않게 손님 쪽으로 당기고 가슴 높이로 낮춘다 (바텐더는 선반과 카운터 사이)
+    part(box(3.8, 0.68, 0.42), CLUB.counter, { pos: [0, 0.34, 0.74] }),
+    part(box(3.96, 0.06, 0.54), CLUB.top, { pos: [0, 0.71, 0.74] }),
     // 뒤 선반 두 단
     part(box(3.6, 1.9, 0.3), CLUB.base, { pos: [0, 0.95, -0.75] }),
     ...[0.95, 1.45].map((y) => part(box(3.5, 0.05, 0.34), CLUB.top, { pos: [0, y, -0.6] })),
     ...[0.95, 1.45].flatMap((y, row) =>
       bottles.map((c, i) => part(cyl(0.06, 0.07, 0.3, 8), c, { pos: [-1.5 + i * 0.5 + row * 0.2, y + 0.18, -0.58], mat: (i + row) % 3 === 0 ? 'glow' : 'glass' })),
     ),
-    // 의자 셋
+    // 의자 셋 (카운터 앞)
     ...[-1.2, 0, 1.2].flatMap((x) => [
-      part(cyl(0.04, 0.05, 0.7, 8), C.metal, { pos: [x, 0.35, 0.95] }),
-      part(cyl(0.22, 0.2, 0.1, 16), CLUB.velvet, { pos: [x, 0.74, 0.95] }),
+      part(cyl(0.04, 0.05, 0.5, 8), C.metal, { pos: [x, 0.25, 1.28] }),
+      part(cyl(0.22, 0.2, 0.1, 16), CLUB.velvet, { pos: [x, 0.54, 1.28] }),
     ]),
   ];
 }

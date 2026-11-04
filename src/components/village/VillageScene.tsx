@@ -443,11 +443,25 @@ function Players() {
 }
 
 function KeyboardInput() {
-  const { input } = useTown();
+  const { input, session } = useTown();
   useEffect(() => {
     const MOVE_KEYS = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyW', 'KeyA', 'KeyS', 'KeyD'];
+    /** 스페이스바 점프: 다른 사람에게도 보인다 (서버가 몸짓 간격을 지키므로 화면도 같은 간격으로) */
+    let lastJump = 0;
     const down = (e: KeyboardEvent) => {
-      if (!MOVE_KEYS.includes(e.code) || e.metaKey || e.ctrlKey || e.altKey || input.view !== 'walk') return;
+      if (e.metaKey || e.ctrlKey || e.altKey || input.view !== 'walk') return;
+      if (e.code === 'Space') {
+        // 글을 쓰거나 버튼에 초점이 있을 때는 원래 동작 (띄어쓰기·누르기)
+        const el = e.target as HTMLElement | null;
+        if (el?.closest('input, textarea, select, button, a, [contenteditable="true"]')) return;
+        e.preventDefault();
+        const t = Date.now();
+        if (e.repeat || t - lastJump < townConfig.emoteCooldownMs) return;
+        lastJump = t;
+        session.sendAction('jump');
+        return;
+      }
+      if (!MOVE_KEYS.includes(e.code)) return;
       e.preventDefault();
       input.keys.add(e.code);
     };
@@ -461,7 +475,7 @@ function KeyboardInput() {
       window.removeEventListener('keyup', up);
       window.removeEventListener('blur', clear);
     };
-  }, [input]);
+  }, [input, session]);
   return null;
 }
 

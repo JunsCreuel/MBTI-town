@@ -258,10 +258,8 @@ export function OnboardingClient() {
                 <div key={t.key} className={`track${on ? ' track--on' : ''}`}>
                   <button className="track__pick" onClick={() => setBgm(t.key)} aria-pressed={on}>
                     <span className="track__radio" aria-hidden />
-                    <span>
-                      <b>{t.title}</b>
-                      <small>{t.mood}{t.key === recommendedBgm ? ' · 추천' : ''}</small>
-                    </span>
+                    <b>{t.title}</b>
+                    {t.key === recommendedBgm && <span className="track__badge">추천</span>}
                   </button>
                   <BgmPlayer trackKey={t.key} compact />
                 </div>

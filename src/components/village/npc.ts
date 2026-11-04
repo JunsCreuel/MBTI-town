@@ -15,7 +15,8 @@ export function clubNpcSpots(map: TownMap): { dj: NpcSpot; bartender: NpcSpot } 
   const bar = map.props.find((p) => p.key === 'prop.club.bar');
   if (!booth || !bar) return null;
   const behind = (p: { x: number; z: number; yaw: number }, d: number): NpcSpot => ({ x: p.x - Math.sin(p.yaw) * d, z: p.z - Math.cos(p.yaw) * d, yaw: p.yaw });
-  return { dj: behind(booth, 0.8), bartender: behind(bar, 0.35) };
+  // 바텐더는 뒤 선반과 카운터 사이 가운데 (카운터에 가려지지 않게 앞쪽)
+  return { dj: behind(booth, 0.8), bartender: behind(bar, 0.2) };
 }
 
 export interface NpcSpot {
