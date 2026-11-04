@@ -3,6 +3,8 @@ import 'server-only';
 import type { MbtiType } from '@/design/mbti';
 import type { Avatar } from '@/shared/avatar';
 import type { BirthInput, SajuReading } from '@/shared/saju';
+import type { ContestDistrictScore, ContestKind, ContestStandings, ContestWeek } from '@/shared/contest';
+import { addContestPoints, contestStandings, myContestPoints } from '../contest';
 import type { District, Taste } from '@/shared/districts';
 import type { Emotion, RecordInput, RecordKind, Visibility } from '@/shared/records';
 import type { RoomLayout } from '@/shared/room';
@@ -670,6 +672,40 @@ export class SceneStore {
   async addCoins(userId: string, n: number): Promise<number> {
     const [r] = await this.sql.query<{ coins: number }>(`update public.profiles set coins = coins + $2 where id = $1 returning coins`, [userId, n]);
     return Number(r?.coins ?? 0);
+  }
+
+  // ───────── 오행 지역 대항전 ─────────
+
+  /** 대항전 점수를 더한다 (하루 상한까지). 실제로 더해진 점수 */
+  addContestPoints(userId: string, district: string | null, kind: ContestKind, points: number, now: Date): Promise<number> {
+    return addContestPoints(this.sql, userId, district, kind, points, now);
+  }
+
+  contestStandings(now: Date, week?: ContestWeek): Promise<ContestStandings> {
+    return contestStandings(this.sql, now, week);
+  }
+
+  myContestPoints(userId: string, now: Date) {
+    return myContestPoints(this.sql, userId, now);
+  }
+
+  /** 정해 둔 한 주 결과 */
+  async getContestResult(week: string): Promise<{ winner: District | null; districts: ContestDistrictScore[] } | null> {
+    const [r] = await this.sql.query<{ winner: District | null; districts: ContestDistrictScore[] | string }>(
+      `select winner, districts from public.contest_results where week = $1`,
+      [week],
+    );
+    if (!r) return null;
+    return { winner: r.winner, districts: typeof r.districts === 'string' ? JSON.parse(r.districts) : r.districts };
+  }
+
+  /** 한 주 결과를 정한다. 처음 넣었으면 true (다른 요청이 먼저 넣었으면 false) */
+  async insertContestResult(week: string, winner: District | null, districts: ContestDistrictScore[], at: Date): Promise<boolean> {
+    const rows = await this.sql.query(
+      `insert into public.contest_results (week, winner, districts, decided_at) values ($1, $2, $3, $4) on conflict do nothing returning week`,
+      [week, winner, JSON.stringify(districts), at],
+    );
+    return rows.length > 0;
   }
 
   /** 운영자가 코인·이용권을 더하거나 뺀다 (0 밑으로는 내려가지 않는다). 새 값, 없는 주민이면 null */

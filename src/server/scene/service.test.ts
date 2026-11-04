@@ -1,7 +1,7 @@
 // 미니홈피 규칙을 실제 Postgres(PGlite, 메모리)로 확인한다. 공개 범위·차단은 서버 규칙이라 여기서 꼼꼼히 본다.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { coinConfig, marketConfig, playConfig, sajuConfig, townConfig } from '@/config/game';
+import { coinConfig, contestConfig, marketConfig, playConfig, sajuConfig, townConfig } from '@/config/game';
 import type { Announcement } from '@/shared/announce';
 import { DISTRICTS, type District } from '@/shared/districts';
 import { refundFor } from '@/shared/market';
@@ -738,5 +738,93 @@ describe('사주상담소', () => {
     }
     expect(heard).toEqual([{ kind: 'saju_ticket', name: '이용권낚시꾼' }]);
     expect((await loud.playState(v)).tickets).toBe(1);
+  });
+});
+
+describe('오행 지역 대항전', () => {
+  const kst = (s: string) => new Date(`${s}+09:00`);
+  /** 테스트마다 다른 주를 쓴다 (다른 테스트의 점수와 섞이지 않게) */
+  const at = (iso: string, heard: Announcement[] = []) =>
+    new SceneService(new SceneStore(sql), () => kst(iso), async (a) => (heard.push(a), true));
+
+  it('놀이로 내 지역 점수가 쌓인다: 열매·출석·낚시·상가 (나무마다 하루 한 번, 출석은 하루 한 번)', async () => {
+    const s = at('2027-01-05T10:00:00');
+    const v = await user();
+    await onboard(v, '대항전열매', { district: 'fire' });
+    const pick = await s.pickTree(v, 'fruit.wood.0');
+    expect(pick.contest).toBe(contestConfig.points.fruit);
+    expect((await s.pickTree(v, 'fruit.wood.0')).contest).toBe(0);
+    expect((await s.pickTree(v, 'fortune')).contest).toBe(contestConfig.points.fortune);
+    await s.townTicket(v);
+    await s.townTicket(v);
+    // 잡은 물고기는 희귀도만큼 (꽝·잡동사니는 0)
+    let caught = 0;
+    for (let i = 0; i < 30 && caught < 3; i++) {
+      const r = await s.castLine(v);
+      if (r.fish) {
+        caught++;
+        expect(r.contest).toBeLessThanOrEqual(contestConfig.points.fish[r.fish.rarity]);
+      }
+    }
+    const view = await s.contestView(v);
+    expect(view.me?.district).toBe('fire');
+    expect(view.me?.today.fruit).toBe(contestConfig.points.fruit + contestConfig.points.fortune);
+    expect(view.me?.today.checkin).toBe(contestConfig.points.checkin);
+    const fire = view.standings.districts.find((d) => d.district === 'fire')!;
+    expect(fire.people).toBe(1);
+    expect(fire.score).toBe(view.me!.week);
+    expect(view.standings.week).toBe('2027-01-04');
+    // 손님은 순위만 본다
+    expect((await s.contestView(null)).me).toBeNull();
+  });
+
+  it('종류마다 하루 상한까지만 쌓이고, 다음 날에는 다시 쌓인다', async () => {
+    const v = await user();
+    await onboard(v, '대항전상한', { district: 'earth' });
+    const store = new SceneStore(sql);
+    const day1 = kst('2027-02-02T10:00:00');
+    let added = 0;
+    for (let i = 0; i < 12; i++) added += await store.addContestPoints(v.id, 'earth', 'fish', 3, day1);
+    expect(added).toBe(contestConfig.dailyCap.fish);
+    expect(await store.addContestPoints(v.id, 'earth', 'fish', 3, day1)).toBe(0);
+    expect(await store.addContestPoints(v.id, 'earth', 'fish', 3, kst('2027-02-03T10:00:00'))).toBe(3);
+    // 지역이 없거나 0점이면 쌓지 않는다
+    expect(await store.addContestPoints(v.id, null, 'fish', 3, day1)).toBe(0);
+    expect(await store.addContestPoints(v.id, 'earth', 'fish', 0, day1)).toBe(0);
+    const s = await store.contestStandings(day1);
+    expect(s.districts.find((d) => d.district === 'earth')).toMatchObject({ score: contestConfig.dailyCap.fish + 3, people: 1 });
+  });
+
+  it('일요일 21시 뒤 처음 한 번만 지난주 결과를 정하고 우승 지역을 발표한다 (늦으면 조용히 정한다)', async () => {
+    const store = new SceneStore(sql);
+    const a = await user();
+    const b = await user();
+    await onboard(a, '대항전숲', { district: 'wood' });
+    await onboard(b, '대항전호수', { district: 'water' });
+    await store.addContestPoints(a.id, 'wood', 'fish', 20, kst('2027-03-03T10:00:00'));
+    await store.addContestPoints(b.id, 'water', 'fish', 5, kst('2027-03-04T10:00:00'));
+    // 발표 전에는 정하지 않는다 (지난주는 비어 있어 우승 없이 정해진다)
+    const heard: Announcement[] = [];
+    const before = at('2027-03-07T20:30:00', heard);
+    expect((await before.contestBoard()).standings.districts[0]).toMatchObject({ district: 'wood', score: 20 });
+    const quiet = await before.settleContest();
+    expect(quiet?.winner).toBeNull();
+    expect(heard).toEqual([]);
+    // 21시 뒤: 숲 우승을 한 번만 발표한다
+    const after = at('2027-03-07T21:10:00', heard);
+    expect(await after.settleContest()).toEqual({ week: '2027-03-01', winner: 'wood', announced: true });
+    expect(heard).toEqual([{ kind: 'contest', district: 'wood' }]);
+    expect(await at('2027-03-07T21:20:00', heard).settleContest()).toBeNull();
+    expect(heard).toHaveLength(1);
+    // 정해 둔 결과는 그 뒤에 점수가 바뀌어도 그대로
+    await store.addContestPoints(b.id, 'water', 'fish', 30, kst('2027-03-05T10:00:00'));
+    const board = await at('2027-03-08T09:00:00').contestBoard();
+    expect(board.last).toMatchObject({ week: '2027-03-01', winner: 'wood' });
+    expect(board.standings.week).toBe('2027-03-08');
+    // 오래 아무도 오지 않다가 늦게 정해지면 발표하지 않는다
+    await store.addContestPoints(a.id, 'wood', 'fish', 10, kst('2027-03-10T10:00:00'));
+    const late = await at('2027-03-16T12:00:00', heard).settleContest();
+    expect(late).toMatchObject({ week: '2027-03-08', winner: 'wood', announced: false });
+    expect(heard).toHaveLength(1);
   });
 });

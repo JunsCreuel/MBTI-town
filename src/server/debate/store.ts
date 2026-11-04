@@ -4,6 +4,7 @@ import type { MbtiType } from '@/design/mbti';
 import type { District } from '@/shared/districts';
 import type { Argument, Match, MatchResult, Side, Team, Topic, VoteRecord } from '@/shared/debate';
 import type { Sql } from '../db';
+import { addContestPoints } from '../contest';
 
 export interface Profile {
   id: string;
@@ -89,6 +90,11 @@ const MATCH_COLS = `id, key, seq, topic, team_a, team_b, opens_at, writing_ends_
 
 export class DebateStore {
   constructor(private readonly sql: Sql) {}
+
+  /** 오행 지역 대항전 점수 (토론: 논거·추천·판정). 실제로 더해진 점수 */
+  addContestPoints(userId: string, district: string, points: number, now: Date): Promise<number> {
+    return addContestPoints(this.sql, userId, district, 'debate', points, now);
+  }
 
   // ───────── 프로필 ─────────
 

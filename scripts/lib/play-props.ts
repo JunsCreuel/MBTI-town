@@ -291,3 +291,28 @@ export function sajuTentParts(): Part[] {
   ];
   return parts;
 }
+
+/**
+ * 광장 전광판 (폭 7.2, 화면 높이 0.65~3.25): 두 기둥 위 넓은 화면 틀. 화면 글·그림은 마을 화면(PlazaScreen)이 캔버스로 그린다.
+ * 정면(+Z)이 광장 쪽. 화면 판은 z = 0.16 앞에 붙는다 (PLAZA_SCREEN 값과 맞춘다).
+ */
+export function plazaScreenParts(): Part[] {
+  const frame = '#2A2838';
+  const trim = '#3E3B52';
+  // 화면 가운데 높이 1.7 (판 0.35~3.05): 위에서 내려다보는 카메라에 화면이 다 들어오게 낮게 건다
+  const cy = 1.7;
+  const parts: Part[] = [
+    // 받침과 기둥
+    ...[-3.05, 3.05].flatMap((x) => [
+      part(box(0.7, 0.18, 0.7), C.stone, { pos: [x, 0.09, -0.12] }),
+      part(box(0.26, 3.3, 0.26), C.metal, { pos: [x, 1.65, -0.12] }),
+    ]),
+    // 화면 틀 (뒤판 + 테두리)
+    part(box(7.2, 3.0, 0.24), frame, { pos: [0, cy, 0] }),
+    part(box(7.4, 0.14, 0.34), trim, { pos: [0, cy + 1.57, 0] }),
+    part(box(7.4, 0.14, 0.34), trim, { pos: [0, cy - 1.57, 0] }),
+    // 위쪽 작은 등 (밤에 빛난다)
+    ...Array.from({ length: 9 }, (_, i) => part(sphere(0.07, 10, 8), C.glowWarm, { pos: [-3.2 + i * 0.8, cy + 1.71, 0.08], mat: 'glow' })),
+  ];
+  return parts;
+}

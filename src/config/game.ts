@@ -141,6 +141,36 @@ export const sajuConfig = {
   tarotReversedChance: 0.35,
 } as const;
 
+/**
+ * 오행 지역 대항전 (PROJECT_GUIDE.md 3장): 한 주 동안 활동 점수를 내 지역에 모으고 일요일 밤 9시(한국 시간)에 발표한다.
+ * 한 주 = 일요일 21시 ~ 다음 일요일 21시. 종류마다 한 사람이 하루에 올릴 수 있는 점수가 정해져 있다 (한 사람이 판을 좌우하지 않게).
+ */
+export const contestConfig = {
+  /** 발표 요일(0 = 일요일)과 시각 (한국 시간) */
+  closeDow: 0,
+  closeHour: 21,
+  points: {
+    /** 물고기 한 마리 (흔해요·드물어요·전설·신화·잡동사니), 사주 이용권 */
+    fish: { common: 1, rare: 3, legend: 10, mythic: 50, junk: 0 },
+    ticket: 10,
+    /** 나무 하나에서 열매 따기, 운세 열매 */
+    fruit: 2,
+    fortune: 2,
+    /** 하루 첫 방문 */
+    checkin: 5,
+    /** 오늘의 토론: 논거 쓰기, 우리 지역 논거 추천, 관전 판정 */
+    argument: 5,
+    recommend: 1,
+    vote: 3,
+    /** 상가 점포 사기 */
+    shop: 20,
+    /** 오늘의 토론에서 이긴 지역 (지역 점수에 바로 더한다) */
+    debateWin: 30,
+  },
+  /** 종류마다 한 사람이 하루에 올릴 수 있는 점수 */
+  dailyCap: { fish: 30, fruit: 20, debate: 20, checkin: 5, market: 20 },
+} as const;
+
 /** 상가: 중앙광장 비콘(언덕 지역 쪽)으로 가는 섬의 점포 20칸 (PROJECT_GUIDE.md 3장) */
 export const marketConfig = {
   shops: 20,

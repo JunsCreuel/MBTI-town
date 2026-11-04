@@ -534,6 +534,35 @@ export function buildTownMap(tilesetFile: string) {
     taken.push({ x: bm.x, y: bm.y, r: 1.2 });
   }
 
+  // 4-3. 광장 전광판 (오행 대항전 순위·오늘의 토론·소식): 분수 북서쪽 광장 가장자리, 스폰 쪽을 본다.
+  // 맨 나중에 놓아서 앞의 배치가 그대로다. 폭 7칸쯤을 막는다 (화면 아래로 지나가지 않게)
+  {
+    const want = { x: C - 3, y: C - 6.3 };
+    let best: { x: number; y: number; rot: number; tiles: [number, number][] } | null = null;
+    let bestD = Infinity;
+    for (let dy = -2; dy <= 2; dy += 0.5) {
+      for (let dx = -2; dx <= 2; dx += 0.5) {
+        const x = want.x + dx;
+        const y = want.y + dy;
+        const rot = facing(x, y, C, C + 4);
+        const tiles = rectTiles(x, y, 3.55, 0.3, rot);
+        if (tiles.some(([tx, ty]) => isBlocked(tx + 0.5, ty + 0.5) || get(ground, tx, ty) === gid('path') || get(ground, tx, ty) === gid('water'))) continue;
+        if (inSpawn(x, y)) continue;
+        const d = Math.hypot(dx, dy);
+        if (d < bestD) {
+          bestD = d;
+          best = { x, y, rot, tiles };
+        }
+      }
+    }
+    if (!best) throw new Error('광장 전광판 자리를 찾지 못했습니다');
+    prop('prop.plaza.screen', best.x, best.y, best.tiles, best.rot);
+    taken.push({ x: best.x, y: best.y, r: 3.8 });
+    // 화면 앞을 가리는 식물은 뺀다
+    const b = best;
+    unprop((key, x, y) => /^prop\.nature\./.test(key) && Math.hypot(x - b.x, y - b.y) < 4.2);
+  }
+
   // 5. 스폰: 광장은 분수 남쪽, 지역은 큰길 입구, 동네 길은 아치 앞
   const spawns = [
     spawnRect('spawn', C - 3, C + 3, 6, 2),

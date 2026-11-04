@@ -3,7 +3,7 @@
 // 승패는 관전 지역이 정한다: 관전자가 대표 논거 하나를 고르면 그 논거의 팀에 한 표가 간다.
 // MBTI는 토론 편과 상관없는 프로필 태그다.
 import 'server-only';
-import { debateConfig } from '@/config/game';
+import { contestConfig, debateConfig } from '@/config/game';
 import { isMbtiType, type MbtiType } from '@/design/mbti';
 import {
   canVote, currentSlot, decideWinner, decisiveArgument, matchupFor, phaseOf, pickTopic, representatives, sideOf,
@@ -95,6 +95,11 @@ export class DebateService {
   ) {}
 
   /** 지금 칸의 경기. 없으면 대진과 주제를 정해 만든다. */
+  /** 이 서비스의 지금 시각 (개발용 시계 이동을 따른다) */
+  clock(): Date {
+    return this.now();
+  }
+
   async currentMatch(): Promise<Match> {
     const slot = currentSlot(this.now());
     const existing = await this.store.getMatchByKey(slot.key);
@@ -260,9 +265,11 @@ export class DebateService {
     }
     const check = moderate(body);
     if (!check.allowed) throw new DebateError('rejected', check.reason);
-    return this.store.insertArgument({
+    const inserted = await this.store.insertArgument({
       matchId: match.id, authorId: viewer!.id, authorDistrict: district, authorMbti: mbti, side, body, at: this.now(),
     });
+    await this.contest(viewer!.id, district, contestConfig.points.argument);
+    return inserted;
   }
 
   /** 운영자: 논거 지우기 (추천·대표 논거 투표도 같이 지워진다) */
@@ -277,13 +284,14 @@ export class DebateService {
   async recommend(viewer: Viewer | null, argumentId: unknown, on: unknown): Promise<void> {
     if (typeof argumentId !== 'string' || typeof on !== 'boolean') throw new DebateError('bad_request', '요청이 올바르지 않아요.');
     const match = await this.currentMatch();
-    const { side } = await this.requireMember(viewer, match);
+    const { side, district } = await this.requireMember(viewer, match);
     if (phaseOf(match, this.now()) !== 'writing') throw new DebateError('wrong_phase', '추천 시간이 끝났어요. 대표 논거가 정해졌어요.');
     const arg = await this.store.getArgument(argumentId);
     if (!arg || arg.matchId !== match.id) throw new DebateError('not_found', '논거를 찾을 수 없어요.');
     if (arg.side !== side) throw new DebateError('other_team', '추천은 우리 지역 논거에만 할 수 있어요.');
     if (arg.authorId === viewer!.id) throw new DebateError('own_argument', '내 논거는 추천할 수 없어요.');
     await this.store.setRecommendation(match.id, arg.id, viewer!.id, on);
+    if (on) await this.contest(viewer!.id, district, contestConfig.points.recommend);
   }
 
   /** 관전 판정: 양 팀 대표 논거 중 가장 설득력 있는 하나를 고른다 */
@@ -299,6 +307,12 @@ export class DebateService {
     if (!arg) throw new DebateError('not_representative', '대표 논거 중에서 골라 주세요.');
     const ok = await this.store.insertVote({ matchId: match.id, userId: viewer.id, voterDistrict: district, side: arg.side, argumentId: arg.id });
     if (!ok) throw new DebateError('already_voted', '이미 판정했어요.');
+    await this.contest(viewer.id, district, contestConfig.points.vote);
+  }
+
+  /** 오행 지역 대항전 점수 (하루 상한까지). 기록에 실패해도 토론은 그대로 된다 */
+  private async contest(userId: string, district: District, points: number): Promise<void> {
+    await this.store.addContestPoints(userId, district, points, this.now()).catch((e) => console.error('[contest] 토론 점수 기록 실패', e));
   }
 
   /** 판정 시간이 끝난 경기를 모두 집계한다. 다른 요청이 집계 중인 경기는 건너뛴다. */

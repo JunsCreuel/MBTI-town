@@ -18,7 +18,7 @@ import { petParts } from './lib/pets';
 import { fishIcons, fruitIcons, ticketIcons } from './lib/item-icons';
 import { tarotCards } from './lib/tarot-cards';
 import { bartenderBearSpec, djRaccoonSpec, guideCatSpec, sajuOwlSpec } from './lib/npc';
-import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, marketStallParts, sajuTentParts, speakerParts } from './lib/play-props';
+import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, marketStallParts, plazaScreenParts, sajuTentParts, speakerParts } from './lib/play-props';
 import { FRUITS } from '../src/shared/play';
 import { PET_ANIMALS } from '../src/shared/pet';
 import { TOWN_TILES, buildHoodMap, buildSpotMap, buildTownMap } from './lib/town-map';
@@ -172,6 +172,7 @@ async function genTownProps() {
     ['prop.plaza.beacon_market', 'prop_plaza_beacon_market', beaconParts('#F2A23A', 'shop')],
     ['prop.market.stall', 'prop_market_stall', marketStallParts()],
     ['prop.plaza.saju', 'prop_plaza_saju', sajuTentParts()],
+    ['prop.plaza.screen', 'prop_plaza_screen', plazaScreenParts()],
     ['prop.club.booth', 'prop_club_booth', djBoothParts()],
     ['prop.club.speaker', 'prop_club_speaker', speakerParts()],
     // 실내 클럽: 벽·출입문·바·소파
@@ -400,6 +401,9 @@ const ICONS: Record<string, string> = {
   flag: `<path d="M5.5 21V4.5M5.5 5h11l-2 4 2 4h-11" ${S}/>`,
   block: `<circle cx="12" cy="12" r="8.5" ${S}/><path d="m6 6 12 12" ${S}/>`,
   sparkle: '<path d="M12 3c.6 4.3 1.9 6 6 6.9-4.1.9-5.4 2.6-6 6.9-.6-4.3-1.9-6-6-6.9 4.1-.9 5.4-2.6 6-6.9Z"/><path d="M18.5 15c.3 1.8.9 2.5 2.5 2.8-1.6.3-2.2 1-2.5 2.7-.3-1.7-.9-2.4-2.5-2.7 1.6-.3 2.2-1 2.5-2.8Z"/>',
+  // 오행 지역 대항전: 왕관 (우승), 막대 순위 (순위표)
+  crown: `<path d="M4 18h16M4.5 15 3.5 7l5 4 3.5-6 3.5 6 5-4-1 8Z" ${S}/>`,
+  ranking: `<path d="M4 20h16M6.5 20v-6M12 20V6M17.5 20v-9" ${S}/>`,
   debate: `<path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h7A2.5 2.5 0 0 1 16 6.5v4a2.5 2.5 0 0 1-2.5 2.5H9l-3.5 3v-3A2.5 2.5 0 0 1 4 10.5Z" ${S}/><path d="M16 9h1.5A2.5 2.5 0 0 1 20 11.5v4A2.5 2.5 0 0 1 17.5 18v2.5L14.5 18H12" ${S}/>`,
 };
 

@@ -28,6 +28,16 @@ function walkable(start: { x: number; z: number }, path: { x: number; z: number 
 }
 
 describe('마을 맵', () => {
+  it('광장 전광판: 분수 북서쪽 광장 가장자리, 스폰 쪽을 보고, 화면 아래로 지나갈 수 없다', () => {
+    const screen = map.props.find((p) => p.key === 'prop.plaza.screen')!;
+    expect(screen).toBeDefined();
+    expect(Math.hypot(screen.x - C, screen.z - C)).toBeLessThan(9);
+    expect(screen.z).toBeLessThan(C);
+    // 정면(sin yaw, cos yaw)이 남쪽(스폰) 쪽
+    expect(Math.cos(screen.yaw)).toBeGreaterThan(0.8);
+    expect(isBlockedTile(map, Math.floor(screen.x), Math.floor(screen.z))).toBe(true);
+  });
+
   it('사주상담소 천막 앞(카메라 쪽)과 양옆에는 나무·덤불·돌이 없다 (천막을 가리지 않게)', () => {
     const tent = map.props.find((p) => p.key === 'prop.plaza.saju')!;
     expect(tent).toBeDefined();

@@ -25,7 +25,8 @@ import {
   FORTUNE_FRUIT, FRUITS, GOLDEN_WHALE_ID, fishDef, fortuneFor, parseTreeSpot, rollCatch, treeSpotId,
   type FishDef, type FortuneFruit,
 } from '@/shared/play';
-import { coinConfig, marketConfig, playConfig, sajuConfig } from '@/config/game';
+import { coinConfig, contestConfig, marketConfig, playConfig, sajuConfig } from '@/config/game';
+import { contestLeader, previousContestWeek, type ContestDistrictScore, type ContestKind, type ContestStandings } from '@/shared/contest';
 import type { AdminCounts, ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
 
 export type SceneErrorCode =
@@ -166,6 +167,8 @@ export interface PickResult {
   fortune: FortuneFruit | null;
   /** 이번에 받은 코인 */
   earned: number;
+  /** 이번에 내 지역에 올린 대항전 점수 */
+  contest?: number;
 }
 
 export interface FishResult {
@@ -183,6 +186,8 @@ export interface FishResult {
   earned: number;
   /** 사주 이용권을 낚았는지 (그때 fish는 null) */
   ticket?: boolean;
+  /** 이번에 내 지역에 올린 대항전 점수 */
+  contest?: number;
 }
 
 export interface PlayState {
@@ -353,6 +358,15 @@ export function sniffImage(bytes: Uint8Array): 'image/jpeg' | 'image/png' | 'ima
   return null;
 }
 
+/** 대항전 화면 */
+export interface ContestView {
+  standings: ContestStandings;
+  /** 지난주 결과 (우승 지역이 없으면 null: 모두 0점이거나 같은 점수) */
+  last: { week: string; winner: District | null; districts: ContestDistrictScore[] };
+  /** 내 지역과 이번 주 내가 올린 점수 (주민이 아니면 null) */
+  me: { district: District; week: number; today: Record<ContestKind, number> } | null;
+}
+
 /** 사주상담소 화면 */
 export interface SajuOffice {
   coins: number;
@@ -411,6 +425,8 @@ function makeReading(userId: string, saju: SajuReading, kind: SajuKind | 'premiu
 export type Announcer = (a: Announcement) => Promise<boolean>;
 
 export class SceneService {
+  /** 결과를 정해 둔 지난주 (같은 주를 또 묻지 않게) */
+  private settledWeek = '';
   constructor(
     private readonly store: SceneStore,
     private readonly now: () => Date = () => new Date(),
@@ -1031,6 +1047,8 @@ export class SceneService {
         color: AVATAR_COLORS[randomBytes(1)[0] % AVATAR_COLORS.length], acc: 'none', exp,
       };
     }
+    // 하루 첫 방문: 대항전 출석 점수 (하루 상한이 한 번 값이라 여러 번 들어와도 한 번)
+    if (p?.onboarded_at && p.district) await this.contest(p, 'checkin', contestConfig.points.checkin);
     return { token: signTownPass(pass), pass, guest: pass.district === '' };
   }
 
@@ -1074,7 +1092,8 @@ export class SceneService {
     const count = fresh ? await this.store.addToCollection(p.id, 'fruit', fruit.id, n) : await this.countOf(p.id, 'fruit', fruit.id);
     const earned = fresh ? (spot.kind === 'fortune' ? coinConfig.fortune : coinConfig.fruit * n) : 0;
     if (earned) await this.store.addCoins(p.id, earned);
-    return { already: !fresh, fruit: { id: fruit.id, name: fruit.name, color: fruit.color }, added: fresh ? n : 0, count, fortune, earned };
+    const contest = fresh ? await this.contest(p, 'fruit', spot.kind === 'fortune' ? contestConfig.points.fortune : contestConfig.points.fruit) : 0;
+    return { already: !fresh, fruit: { id: fruit.id, name: fruit.name, color: fruit.color }, added: fresh ? n : 0, count, fortune, earned, contest };
   }
 
   /** 낚시 한 번. 하루 playConfig.fishPerDay번 */
@@ -1095,19 +1114,21 @@ export class SceneService {
       const left = playConfig.fishPerDay - used - 1;
       if (ticket) {
         await this.store.addTickets(p.id, 1);
+        const contest = await this.contest(p, 'fish', contestConfig.points.ticket);
         const announced = await this.announce({ kind: 'saju_ticket', name: displayNameOf(p) }).catch(() => false);
-        return { fish: null, size: 0, count: 0, left, earned: 0, ticket: true, announced };
+        return { fish: null, size: 0, count: 0, left, earned: 0, ticket: true, announced, contest };
       }
-      if (!caught) return { fish: null, size: 0, count: 0, left, earned: 0 };
+      if (!caught) return { fish: null, size: 0, count: 0, left, earned: 0, contest: 0 };
       const count = await this.store.addToCollection(p.id, 'fish', caught.fish.id, 1);
       const earned = coinConfig.fish[caught.fish.rarity];
       await this.store.addCoins(p.id, earned);
+      const contest = await this.contest(p, 'fish', contestConfig.points.fish[caught.fish.rarity]);
       // 황금 고래: 마을 모두에게 알린다
       if (caught.fish.id === GOLDEN_WHALE_ID) {
         const announced = await this.announce({ kind: 'golden_whale', name: displayNameOf(p) }).catch(() => false);
-        return { fish: caught.fish, size: caught.size, count, left, announced, earned };
+        return { fish: caught.fish, size: caught.size, count, left, announced, earned, contest };
       }
-      return { fish: caught.fish, size: caught.size, count, left, earned };
+      return { fish: caught.fish, size: caught.size, count, left, earned, contest };
     }
     throw new SceneError('conflict', '잠깐 뒤에 다시 던져 주세요.');
   }
@@ -1226,6 +1247,65 @@ export class SceneService {
     return done(reading, fee);
   }
 
+  // ───────────────────────── 오행 지역 대항전 ─────────────────────────
+
+  /** 대항전 점수를 내 지역에 더한다 (하루 상한까지). 기록에 실패해도 놀이는 그대로 된다. 더해진 점수 */
+  private async contest(p: { id: string; district: string | null }, kind: ContestKind, points: number): Promise<number> {
+    return this.store.addContestPoints(p.id, p.district, kind, points, this.now()).catch((e) => {
+      console.error('[contest] 점수 기록 실패', e);
+      return 0;
+    });
+  }
+
+  /** 지난주 결과를 아직 정하지 않았는지 (정하기 전에 일요일 토론 결과부터 집계한다) */
+  async contestUnsettled(): Promise<boolean> {
+    const week = previousContestWeek(this.now()).week;
+    if (this.settledWeek === week) return false;
+    const done = !!(await this.store.getContestResult(week));
+    if (done) this.settledWeek = week;
+    return !done;
+  }
+
+  /**
+   * 지난주 결과를 처음 한 번 정해 둔다 (그 뒤로는 다시 계산하지 않는다). 처음 정한 요청이 서버 전체에 우승 지역을 발표한다.
+   * 발표는 일요일 21시에서 6시간 안에만 한다 (오래 아무도 오지 않다가 늦게 정해지면 조용히 정해 둔다).
+   */
+  async settleContest(): Promise<{ week: string; winner: District | null; announced: boolean } | null> {
+    const now = this.now();
+    const prev = previousContestWeek(now);
+    if (!(await this.contestUnsettled())) return null;
+    const s = await this.store.contestStandings(now, prev);
+    const winner = contestLeader(s.districts);
+    const first = await this.store.insertContestResult(prev.week, winner, s.districts, now);
+    this.settledWeek = prev.week;
+    if (!first) return null;
+    const fresh = now.getTime() - prev.closesAt.getTime() < 6 * 3600_000;
+    const announced = winner && fresh ? await this.announce({ kind: 'contest', district: winner }).catch(() => false) : false;
+    return { week: prev.week, winner, announced };
+  }
+
+  /** 대항전 순위 (누구나 본다): 이번 주와 지난주 결과 */
+  async contestBoard(): Promise<Pick<ContestView, 'standings' | 'last'>> {
+    const now = this.now();
+    const prev = previousContestWeek(now);
+    const [standings, saved] = await Promise.all([this.store.contestStandings(now), this.store.getContestResult(prev.week)]);
+    let last: { winner: District | null; districts: ContestDistrictScore[] };
+    if (saved) last = saved;
+    else {
+      const x = await this.store.contestStandings(now, prev);
+      last = { winner: contestLeader(x.districts), districts: x.districts };
+    }
+    return { standings, last: { week: prev.week, ...last } };
+  }
+
+  /** 대항전 화면: 이번 주 순위, 지난주 결과, (주민이면) 내 지역과 내가 올린 점수 */
+  async contestView(viewer: Viewer | null): Promise<ContestView> {
+    const now = this.now();
+    const [board, p] = await Promise.all([this.contestBoard(), viewer ? this.store.getProfile(viewer.id) : Promise.resolve(null)]);
+    const resident = p?.onboarded_at && p.district && isDistrict(p.district) ? p : null;
+    return { ...board, me: resident ? { district: resident.district as District, ...(await this.store.myContestPoints(resident.id, now)) } : null };
+  }
+
   // ───────────────────────── 상가 ─────────────────────────
 
   /** 상가 점포 (누구나 본다). 로그인했으면 내 코인과 내 점포 번호도 */
@@ -1268,6 +1348,7 @@ export class SceneService {
       await this.store.addCoins(p.id, marketConfig.price);
       throw new SceneError('conflict', '방금 다른 주민이 산 점포예요.');
     }
+    await this.contest(p, 'market', contestConfig.points.shop);
     return this.marketView(viewer);
   }
 

@@ -31,6 +31,7 @@ import { NpcDialog } from './NpcDialog';
 import { BarSheet, DjSheet, DrunkFx } from './ClubBar';
 import { MarketSheet, stallFront, stallsOf } from './Market';
 import { SajuSheet } from './SajuOffice';
+import { ContestChip, ContestSheet } from './ContestSheet';
 import { BARTENDER_NAME, DJ_NAME } from './ClubNpcs';
 import { clubBar } from './club';
 import { NPC_NAME, NPC_TALK_REACH, SAJU_NAME, clubNpcSpots, guideNpcSpot, markNpcSeen, npcSeen, sajuNpcSpot } from './npc';
@@ -296,6 +297,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   // 클럽: DJ 너굴(신청곡), 바텐더 곰돌(한 잔)
   const clubSpots = useMemo(() => (loaded ? clubNpcSpots(loaded.map) : null), [loaded]);
   const [nearClub, setNearClub] = useState<'dj' | 'bar' | null>(null);
+  const [contestOpen, setContestOpen] = useState(false);
   const [clubSheet, setClubSheet] = useState<'dj' | 'bar' | null>(null);
   const stalls = useMemo(() => (loaded && spot === 'market' ? stallsOf(loaded.map) : []), [loaded, spot]);
   // 광장 사주상담소의 부엉 도사
@@ -354,7 +356,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       const r = await call<PickResult>('POST', '/api/play/pick', { spot: t.spot });
       if (!r.already) input.drops.push({ x: t.x, z: t.z, color: r.fruit.color, at: now() });
       if (r.fortune) setFortuneFruit(r.fortune);
-      else setToast({ text: r.already ? `이 나무는 오늘 이미 땄어요 (${r.fruit.name} ${r.count}개)` : `${r.fruit.name} ${r.added}개를 땄어요! 가방에 ${r.count}개${r.earned ? ` · +${r.earned}코인` : ''}`, fruit: r.fruit.id });
+      else setToast({ text: r.already ? `이 나무는 오늘 이미 땄어요 (${r.fruit.name} ${r.count}개)` : `${r.fruit.name} ${r.added}개를 땄어요! 가방에 ${r.count}개${r.earned ? ` · +${r.earned}코인` : ''}${r.contest ? ` · 대항전 +${r.contest}점` : ''}`, fruit: r.fruit.id });
       if (!r.already) session.sendAction('jump');
       refreshPlay();
     } catch (e) {
@@ -592,6 +594,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
                 <span className="debate-link__tag">이벤트</span>
                 <span className="debate-link__label">오늘의 토론</span> ›
               </Link>
+              {spot !== 'club' && <ContestChip onOpen={() => setContestOpen(true)} />}
             </div>
             <div className="hud__right hud__right--stack">
               <div className="hud__icons">
@@ -893,6 +896,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       )}
       {npcOpen && <NpcDialog guest={isGuest} first={npcOpen.first} onClose={closeNpc} />}
       {sajuOpen && <SajuSheet onClose={() => setSajuOpen(false)} />}
+      {contestOpen && <ContestSheet guest={isGuest} onClose={() => setContestOpen(false)} />}
       {stallOpen !== null && <MarketSheet slot={stallOpen} view={market} onChanged={setMarket} onClose={() => setStallOpen(null)} />}
       {clubSheet === 'dj' && (
         <DjSheet guest={isGuest} onRequest={(i) => session.requestSong(i)} onYoutube={(t) => session.requestYoutube(t)} onClose={() => setClubSheet(null)} />

@@ -44,6 +44,8 @@ export function AnnounceBanner() {
           <ItemIcon kind="fish" id="golden_whale" size={34} />
         ) : current.kind === 'saju_ticket' ? (
           <ItemIcon kind="ticket" id="saju" size={34} />
+        ) : current.kind === 'contest' ? (
+          <Icon name="crown" size={22} />
         ) : (
           <Icon name="sparkle" size={20} />
         )}

@@ -153,6 +153,7 @@ export function FishingPanel({
             <p className="fishing__meta">
               <span style={{ color: RARITY[result.fish.rarity].color }}>{RARITY[result.fish.rarity].label}</span> · 도감 {result.count}마리째
               {result.earned > 0 && <> · +{result.earned.toLocaleString('ko-KR')}코인</>}
+              {!!result.contest && <> · 대항전 +{result.contest}점</>}
             </p>
             {result.fish.rarity === 'mythic' && (
               <p className="fishing__meta fishing__mythic">{result.announced ? '마을 모두에게 소식이 퍼졌어요!' : '10만 번에 한 번 나오는 꿈의 고래예요!'}</p>

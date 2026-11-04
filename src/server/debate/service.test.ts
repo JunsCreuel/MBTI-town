@@ -6,6 +6,8 @@ import { DISTRICTS, type District } from '@/shared/districts';
 import { createPgliteSql, createPostgresSql, type Sql } from '../db';
 import { DebateError, DebateService, type Viewer } from './service';
 import { DebateStore } from './store';
+import { contestConfig } from '@/config/game';
+import { contestStandings } from '../contest';
 
 const kst = (s: string) => new Date(`${s}+09:00`);
 
@@ -175,6 +177,23 @@ describe('하루 경기 흐름', () => {
     expect(view.me.loggedIn).toBe(false);
     expect(view.result?.winner).toBe('a');
     expect(view.arguments.find((a) => a.id === argA3.id)?.picks).toBe(2);
+  });
+
+  it('토론 활동은 오행 대항전 점수가 되고, 이긴 지역은 그 주 점수에 +30점', async () => {
+    const pts = await sql.query<{ user_id: string; points: number }>(`select user_id, points from public.contest_points where kind = 'debate'`);
+    const of = (v: Viewer) => pts.filter((p) => p.user_id === v.id).reduce((n, p) => n + Number(p.points), 0);
+    expect(of(a1)).toBeGreaterThanOrEqual(contestConfig.points.argument);
+    expect(of(b1)).toBeGreaterThanOrEqual(contestConfig.points.argument);
+    const [voted] = await sql.query<{ n: number }>(
+      `select coalesce(sum(cp.points), 0)::int as n from public.contest_points cp where cp.kind = 'debate' and cp.user_id in (select user_id from public.votes where match_id = $1)`,
+      [matchId],
+    );
+    expect(Number(voted.n)).toBe(5 * contestConfig.points.vote);
+    const s = await contestStandings(sql, clock);
+    const win = s.districts.find((d) => d.district === teamA)!;
+    expect(win.debateWins).toBe(1);
+    expect(win.score).toBeGreaterThanOrEqual(contestConfig.points.debateWin + 3 * contestConfig.points.argument);
+    expect(s.districts.find((d) => d.district === teamB)!.debateWins).toBe(0);
   });
 
   it('다음 날에는 새 경기, 다른 대진과 주제', async () => {

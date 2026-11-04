@@ -925,5 +925,14 @@
   },
   "item.tarot.back": {
     "file": "items/item_tarot_back_ph.svg"
+  },
+  "prop.plaza.screen": {
+    "file": "props/prop_plaza_screen_ph.glb"
+  },
+  "ui.icon.crown": {
+    "file": "ui/ui_icon_crown_ph.svg"
+  },
+  "ui.icon.ranking": {
+    "file": "ui/ui_icon_ranking_ph.svg"
   }
 }
