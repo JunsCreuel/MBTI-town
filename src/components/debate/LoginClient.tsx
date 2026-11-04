@@ -21,6 +21,8 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
   /** 메일을 보냈으면 무슨 메일인지 (가입 인증·비밀번호 재설정) */
   const [sent, setSent] = useState<'signup' | 'reset' | null>(null);
   const [needsConfirm, setNeedsConfirm] = useState(false);
+  /** 이미 있는 계정(가입했거나 예전 메일 링크 계정) 또는 비밀번호가 틀림 → 그 자리에서 재설정 메일을 받게 한다 */
+  const [offerReset, setOfferReset] = useState(false);
   const [error, setError] = useState<string | null>(failed ? authErrorMessage(failed) : null);
 
   const callback = (to: string) => `${window.location.origin}/auth/callback?next=${encodeURIComponent(to)}`;
@@ -31,6 +33,7 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
     setError(null);
     setSent(null);
     setNeedsConfirm(false);
+    setOfferReset(false);
   }
 
   async function oauth(provider: (typeof OAUTH_PROVIDERS)[number]['id']) {
@@ -55,6 +58,7 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
     setBusy(false);
     setError(authErrorMessage(err.code));
     if (err.code === 'email_not_confirmed') setNeedsConfirm(true);
+    if (err.code === 'invalid_credentials') setOfferReset(true);
   }
 
   async function signup(e: React.FormEvent) {
@@ -70,9 +74,13 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
       options: { emailRedirectTo: callback('/onboarding') },
     });
     setBusy(false);
+    const exists = err?.code === 'email_exists' || err?.code === 'user_already_exists' || (!err && data.user && data.user.identities?.length === 0);
+    if (exists) {
+      // 이미 있는 주소 (예전에 메일 링크로 가입한 계정은 비밀번호가 없다): 재설정 메일로 비밀번호를 정하게 한다
+      setOfferReset(true);
+      return setError('이미 가입한 이메일이에요. 비밀번호를 모르거나 예전에 메일 링크로 가입했다면, 재설정 메일을 받아 비밀번호를 정해 주세요.');
+    }
     if (err) return setError(authErrorMessage(err.code));
-    // 이미 가입한 주소면 Supabase는 오류 없이 빈 계정을 돌려준다
-    if (data.user && data.user.identities?.length === 0) return setError(authErrorMessage('email_exists'));
     if (data.session) {
       window.location.href = '/onboarding';
       return;
@@ -94,8 +102,13 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
 
   async function reset(e: React.FormEvent) {
     e.preventDefault();
+    await sendReset();
+  }
+
+  async function sendReset() {
     setBusy(true);
     setError(null);
+    setOfferReset(false);
     const { error: err } = await supabase().auth.resetPasswordForEmail(email.trim(), { redirectTo: callback(`/login/reset?next=${encodeURIComponent(next)}`) });
     setBusy(false);
     if (err) setError(authErrorMessage(err.code));
@@ -223,6 +236,14 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
               {' '}
               <button type="button" className="auth-link auth-link--inline" onClick={resend} disabled={busy}>
                 인증 메일 다시 받기
+              </button>
+            </>
+          )}
+          {offerReset && email.trim() && (
+            <>
+              {' '}
+              <button type="button" className="auth-link auth-link--inline" onClick={() => void sendReset()} disabled={busy}>
+                {email.trim()}로 비밀번호 재설정 메일 받기
               </button>
             </>
           )}
