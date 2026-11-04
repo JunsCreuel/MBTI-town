@@ -114,7 +114,7 @@ export function DjSheet({
           ))}
         </ul>
         <h3 className="club-sub">유튜브 링크로 신청</h3>
-        {!guest && <p className="muted club-yt-rule">음악 영상, {YOUTUBE_MAX_SECONDS / 60}분 이하 곡을 신청할 수 있어요. 나오는 동안 화면에 유튜브 플레이어가 보여요.</p>}
+        {!guest && <p className="muted club-yt-rule">음악·엔터테인먼트 영상, {YOUTUBE_MAX_SECONDS / 60}분 이하 곡을 신청할 수 있어요. 나오는 동안 화면에 유튜브 플레이어가 보여요.</p>}
         {guest ? (
           <p className="muted">로그인한 주민만 유튜브 곡을 신청할 수 있어요.</p>
         ) : (
