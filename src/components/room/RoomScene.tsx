@@ -1171,7 +1171,8 @@ function FirstFrame({ onFrame }: { onFrame?: () => void }) {
 
 /** 방 강아지 키 (마을에서 데리고 다니는 강아지와 같다) */
 const PET_HEIGHT = petDef('dog')!.height;
-const PET_SPEED = 1.3;
+/** 방 강아지 걷는 빠르기 (칸/초): 느긋하게 */
+const PET_SPEED = 1.0;
 let petModel: Promise<GLTF> | null = null;
 /** 강아지 모델 (뼈대와 걷기·서 있기 동작 포함, 한 번만 받는다) */
 function loadPetModel(): Promise<GLTF> {

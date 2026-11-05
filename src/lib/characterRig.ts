@@ -247,6 +247,9 @@ export function fitHeight(model: THREE.Object3D, height: number) {
   if (size.y > 0) model.scale.setScalar(height / size.y);
 }
 
+/** 펫 걷기 동작을 빠르게 돌리는 상한 (배) */
+const PET_WALK_MAX_RATE = 1.6;
+
 /**
  * 펫 하나: 모델을 복제해 키(height, 칸)에 맞추고, 걷기·서 있기 동작을 건다 (뼈대 없는 모델이면 동작 없이 그대로).
  * update(dt, speed): 움직이는 빠르기(칸/초)에 맞춰 걷기·서 있기를 고르고, 걸음 빠르기를 맞춘다.
@@ -275,8 +278,8 @@ export function petInstance(gltf: GLTF, height: number) {
           (current === 'walk' ? walk : idle).crossFadeTo(next, 0.2, false);
           current = want;
         }
-        // 걸음 한 바퀴에 키의 0.6배쯤 나아간다 (빠를수록 다리를 빨리 놀린다)
-        walk.timeScale = Math.min(4, Math.max(0.8, speed / height));
+        // 빠를수록 다리를 조금 더 빨리 놀린다. 너무 빨리 놀리면 다다닥거려 보여서 1.6배까지만
+        walk.timeScale = Math.min(PET_WALK_MAX_RATE, Math.max(0.6, speed / (height * 1.4)));
       }
       mixer.update(dt);
     },

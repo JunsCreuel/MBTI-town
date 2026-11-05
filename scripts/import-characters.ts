@@ -778,12 +778,13 @@ function rigQuadruped(doc: Document) {
       // 대각선 다리끼리 같이 (앞왼·뒤오른 / 앞오른·뒤왼)
       const off = n === 'FL' || n === 'BR' ? 0 : Math.PI;
       return [
-        [`leg${n}`, 'rotation', (ph: number) => quat(gait ? 26 * Math.sin(ph + off) : 0, 0, 0)],
+        [`leg${n}`, 'rotation', (ph: number) => quat(gait ? 30 * Math.sin(ph + off) : 0, 0, 0)],
         // 다리를 앞으로 내딛는 동안(각도가 줄어드는 동안) 무릎을 굽혀 발을 든다
-        [`knee${n}`, 'rotation', (ph: number) => quat(gait ? 38 * Math.max(0, -Math.cos(ph + off)) : 0, 0, 0)],
+        [`knee${n}`, 'rotation', (ph: number) => quat(gait ? 40 * Math.max(0, -Math.cos(ph + off)) : 0, 0, 0)],
       ] as [string, 'rotation', (ph: number) => number[]][];
     });
-  clip('walk', 0.6, 16, [
+  // 느긋한 걸음 (한 바퀴 0.8초, 보폭을 넓게). 화면이 빠르기에 맞춰 조금만 빠르게 돌린다
+  clip('walk', 0.8, 20, [
     ...legTracks(true),
     ['hips', 'translation', (ph) => [hipsRest[0], hipsRest[1] + 0.015 * H * Math.cos(2 * ph), hipsRest[2]]],
     ['chest', 'rotation', (ph) => quat(0, 0, 2.5 * Math.sin(ph))],
