@@ -12,7 +12,10 @@ import {
 describe('입력 정리', () => {
   it('모르는 값은 버린다', () => {
     expect(cleanTaste({ colors: ['sky', 'sky', 'nope'], moods: 'x', music: [1] })).toEqual({ colors: ['sky'], moods: [], music: [] });
-    expect(cleanAvatar({ color: 'gold', accessory: 'cap' })).toEqual({ color: 'mint', accessory: 'cap' });
+    // 몸을 모르면(예전에 저장한 캐릭터) 남자로
+    expect(cleanAvatar({ color: 'gold', accessory: 'cap' })).toEqual({ body: 'male', color: 'mint', accessory: 'cap' });
+    expect(cleanAvatar({ body: 'female', color: 'sky', accessory: 'none' })).toEqual({ body: 'female', color: 'sky', accessory: 'none' });
+    expect(cleanAvatar({ body: 'robot' }).body).toBe('male');
   });
 });
 

@@ -3,12 +3,13 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { assetUrl } from '@/assets/manifest';
 import { tokens } from '@/design/tokens';
-import { ACCESSORIES } from '@/shared/avatar';
+import { ACCESSORIES, bodyKey, type AvatarBody } from '@/shared/avatar';
 import { allFloraKeys } from '@/shared/flora';
 import type { TownMap } from '@/shared/townMap';
 import { EMOTES, type EmoteKind } from '@/shared/protocol';
+import { withMeshopt } from '@/lib/characterRig';
 import { EMOTE_INFO } from '../app/gestures';
-import { hasClubNpcs, hasGuideNpc } from './npc';
+import { hasClubNpcs } from './npc';
 
 /** 집터에 세우는 모델 */
 export const HOUSE_KEY = 'prop.town.house';
@@ -17,7 +18,8 @@ export const LOT_KEY = 'prop.town.lot';
 export const GATE_KEY = 'prop.hood.gate';
 
 export interface TownAssets {
-  character: GLTF;
+  /** 캐릭터 몸: 남자는 처음에 받고, 여자는 누군가 쓰면 받는다 (loadCharacter) */
+  characters: Partial<Record<AvatarBody, GLTF>>;
   /** 머리 소품 id → 모델 */
   accessories: Record<string, THREE.Object3D>;
   /** manifest 키 → 마을 소품 모델 (집·빈 집터 포함) */
@@ -25,7 +27,7 @@ export interface TownAssets {
   emotes: Record<EmoteKind, THREE.Texture>;
   /** 낚싯대 (낚시할 때 오른손에 든다) */
   rod: THREE.Object3D;
-  /** NPC: 광장 안내 몬냥이(광장 맵), 클럽 DJ·바텐더(클럽 맵). 그 맵에서만 받는다 */
+  /** NPC: 클럽 DJ·바텐더(클럽 맵). 그 맵에서만 받는다. 광장 안내 몬냥이는 첫 화면을 그린 뒤에 받는다 (loadNpc) */
   npcs: Partial<Record<NpcKind, GLTF>>;
 }
 
@@ -102,13 +104,40 @@ export function loadEmoteTextures(): Promise<Record<EmoteKind, THREE.Texture>> {
 
 const ROD_KEY = 'prop.tool.rod';
 
+const characterCache = new Map<AvatarBody, Promise<GLTF>>();
+
+/** 캐릭터 몸 모델 (한 번만 받는다) */
+export function loadCharacter(body: AvatarBody): Promise<GLTF> {
+  let p = characterCache.get(body);
+  if (!p) {
+    p = withMeshopt(new GLTFLoader()).loadAsync(assetUrl(bodyKey(body)));
+    characterCache.set(body, p);
+    p.catch(() => characterCache.delete(body));
+  }
+  return p;
+}
+
+const npcCache = new Map<NpcKind, Promise<GLTF>>();
+
+/** NPC 모델을 따로 받는다 (한 번만) */
+export function loadNpc(kind: NpcKind): Promise<GLTF> {
+  let p = npcCache.get(kind);
+  if (!p) {
+    p = withMeshopt(new GLTFLoader()).loadAsync(assetUrl(NPC_KEYS[kind]));
+    npcCache.set(kind, p);
+    p.catch(() => npcCache.delete(kind));
+  }
+  return p;
+}
+
 export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) => void): Promise<TownAssets> {
-  const loader = new GLTFLoader();
+  const loader = withMeshopt(new GLTFLoader());
   const accessoryKeys = ACCESSORIES.filter((a) => a.key).map((a) => [a.id, a.key!] as const);
   // 맵 소품 + 집 + 화면이 흩뿌리는 풀·꽃 (지역 식물 전부)
   const propKeys = [...new Set([...map.props.map((p) => p.key), HOUSE_KEY, LOT_KEY, ...allFloraKeys()])];
   // 같은 파일을 여러 키가 쓰면 한 번만 받는다
-  const npcKinds: NpcKind[] = [...(hasGuideNpc(map) ? (['guide'] as const) : []), ...(hasClubNpcs(map) ? (['dj', 'bartender'] as const) : [])];
+  // 광장 안내 NPC는 첫 화면 용량을 아끼려고 마을을 다 그린 뒤에 받는다 (GuideNpc가 loadNpc로 받는다)
+  const npcKinds: NpcKind[] = hasClubNpcs(map) ? ['dj', 'bartender'] : [];
   const urls = [...new Set(['char.base', ROD_KEY, ...npcKinds.map((k) => NPC_KEYS[k]), ...accessoryKeys.map(([, k]) => k), ...propKeys].map(assetUrl))];
   let done = 0;
   const models = new Map(
@@ -121,9 +150,10 @@ export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) =
     ),
   );
   const emotes = await loadEmoteTextures();
+  if (!characterCache.has('male')) characterCache.set('male', Promise.resolve(models.get(assetUrl('char.base'))!));
   onProgress(1);
   return {
-    character: models.get(assetUrl('char.base'))!,
+    characters: { male: models.get(assetUrl('char.base'))! },
     accessories: Object.fromEntries(accessoryKeys.map(([id, key]) => [id, models.get(assetUrl(key))!.scene])),
     props: Object.fromEntries(propKeys.map((k) => [k, models.get(assetUrl(k))!.scene])),
     emotes,

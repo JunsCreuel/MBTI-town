@@ -268,7 +268,7 @@ describe('입체 타일', () => {
 });
 
 describe('입장 토큰', () => {
-  const pass: TownPass = { pid: townPid('user-1'), name: '하루', handle: 'haru', district: 'ISFJ', hood: 2, lot: 3, color: 'sky', acc: 'cap', exp: 2_000_000_000 };
+  const pass: TownPass = { pid: townPid('user-1'), name: '하루', handle: 'haru', district: 'ISFJ', hood: 2, lot: 3, body: 'female', color: 'sky', acc: 'cap', exp: 2_000_000_000 };
 
   it('서명한 토큰을 그대로 읽는다', () => {
     expect(verifyTownPass(signTownPass(pass), 1_000)).toEqual(pass);

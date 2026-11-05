@@ -33,7 +33,7 @@ const inSpawn = (p: { x: number; z: number }, name: string, m: TownMap = map) =>
 
 function pass(over: Partial<TownPass> = {}): TownPass {
   return {
-    pid: guestPid(), name: '손님', handle: '', district: '', hood: 1, lot: -1, color: 'mint', acc: 'none',
+    pid: guestPid(), name: '손님', handle: '', district: '', hood: 1, lot: -1, body: 'male', color: 'mint', acc: 'none',
     exp: Math.floor(Date.now() / 1000) + 600, ...over,
   };
 }

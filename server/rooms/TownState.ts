@@ -13,6 +13,8 @@ export const Player = schema(
     acc: t.string(),
     /** 이름표 둘째 줄: MBTI 태그 (없으면 '') */
     mbti: t.string(),
+    /** 캐릭터 몸: 'male' | 'female' */
+    body: t.string(),
     x: t.float32(),
     z: t.float32(),
     /** 바라보는 방향 (라디안) */

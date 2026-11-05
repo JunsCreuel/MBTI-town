@@ -1,6 +1,6 @@
 'use client';
 
-// 클럽 NPC (3D): DJ 너구리는 부스 뒤에서 늘 춤추고, 신청곡이 바뀌면 손을 번쩍 든다.
+// 클럽 NPC (3D): DJ 여우비(여우)는 부스 뒤에서 늘 춤추고, 신청곡이 바뀌면 손을 번쩍 든다.
 // 바텐더 곰은 바 안쪽에 서서 가까이 오면 나를 보고, 처음 다가오면 손을 흔들고, 술을 내주면 건배한다.
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
@@ -9,6 +9,7 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { tokens } from '@/design/tokens';
 import { CHARACTER_HEIGHT } from '@/shared/character';
+import { characterActions, cloneCharacter } from '@/lib/characterRig';
 import { lerpAngle } from '@/shared/movement';
 import { groundHeightAt } from '@/shared/townMap';
 import { tagTexture } from './assets';
@@ -19,16 +20,16 @@ import { now } from './session';
 
 type Clip = 'idle' | 'wave' | 'cheer' | 'dance';
 
-export const DJ_NAME = 'DJ 너굴';
+export const DJ_NAME = 'DJ 여우비';
 export const BARTENDER_NAME = '바텐더 곰돌';
 
 function useRig(gltf: GLTF | undefined, clips: Clip[]) {
   const rig = useMemo(() => {
     if (!gltf) return null;
-    const model = SkeletonUtils.clone(gltf.scene);
+    const model = cloneCharacter(gltf);
     model.traverse((o) => void ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
     const mixer = new THREE.AnimationMixer(model);
-    const actions = Object.fromEntries(clips.map((c) => [c, mixer.clipAction(gltf.animations.find((a) => a.name === c)!)])) as Record<Clip, THREE.AnimationAction>;
+    const actions = characterActions(gltf, mixer, clips) as Record<Clip, THREE.AnimationAction>;
     return { model, mixer, actions };
     // clips는 고정 목록
     // eslint-disable-next-line react-hooks/exhaustive-deps

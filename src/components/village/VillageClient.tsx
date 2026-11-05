@@ -245,12 +245,13 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const passColor = snap.pass?.color;
   const passAcc = snap.pass?.acc;
   const passMbti = snap.pass?.mbti;
+  const passBody = snap.pass?.body ?? 'male';
   const look = useMemo(
     () =>
       passName !== undefined && passColor && passAcc
-        ? { name: passName, color: passColor, acc: passAcc, mbti: passMbti }
+        ? { name: passName, body: passBody, color: passColor, acc: passAcc, mbti: passMbti }
         : null,
-    [passName, passColor, passAcc, passMbti],
+    [passName, passBody, passColor, passAcc, passMbti],
   );
   // 상가: 점포 20칸 (주인·이름·차양 색). 상가에 있는 동안 20초마다, 점포 시트를 열 때 새로 받는다
   const [market, setMarket] = useState<MarketView | null>(null);
@@ -292,7 +293,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   // 안내 NPC 몬냥이 (광장): 가까우면 말 걸기, 처음 온 사람에게는 먼저 인사한다
   const npcSpot = useMemo(() => (loaded ? guideNpcSpot(loaded.map) : null), [loaded]);
   const [nearNpc, setNearNpc] = useState(false);
-  // 클럽: DJ 너굴(신청곡), 바텐더 곰돌(한 잔)
+  // 클럽: DJ 여우비(신청곡), 바텐더 곰돌(한 잔)
   const clubSpots = useMemo(() => (loaded ? clubNpcSpots(loaded.map) : null), [loaded]);
   const [nearClub, setNearClub] = useState<'dj' | 'bar' | null>(null);
   const [contestOpen, setContestOpen] = useState(false);

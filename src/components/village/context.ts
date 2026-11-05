@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { HouseView } from '@/server/scene/service';
-import type { AccessoryId, AvatarColor } from '@/shared/avatar';
+import type { AccessoryId, AvatarBody, AvatarColor } from '@/shared/avatar';
 import type { MarketView } from '@/shared/market';
 import type { Lot, PropPlacement, TownMap } from '@/shared/townMap';
 import type { TownSession } from './session';
@@ -59,6 +59,7 @@ export const lotKey = (l: { district: string; lot?: number; index?: number }) =>
 /** 내 캐릭터 모습 (입장 토큰에 적힌 것) */
 export interface SelfLook {
   name: string;
+  body: AvatarBody;
   color: AvatarColor;
   acc: AccessoryId;
   /** 이름표 둘째 줄 (MBTI) */

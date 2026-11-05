@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { socialConfig } from '@/config/game';
 import type { MbtiType } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
-import { ACCESSORIES, AVATAR_COLORS, DEFAULT_AVATAR, type Avatar } from '@/shared/avatar';
+import { ACCESSORIES, AVATAR_BODIES, AVATAR_COLORS, DEFAULT_AVATAR, type Avatar } from '@/shared/avatar';
 import { BGM_TRACKS, bgmForDistrict } from '@/shared/bgm';
 import { DEFAULT_DISTRICT, DISTRICT } from '@/shared/districts';
 import { FLOORS, STARTER_ROOMS, WALLPAPERS, starterLayout, type FloorId, type WallpaperId } from '@/shared/room';
@@ -164,7 +164,15 @@ export function OnboardingClient() {
         <section className="onboarding__body">
           <Guide>나를 닮은 캐릭터를 만들어 봐요. 나중에 옷장에서 언제든 바꿀 수 있어요.</Guide>
           <div className="avatar-stage">{assets ? <AvatarPreview assets={assets} avatar={avatar} /> : <div className="loader" aria-hidden />}</div>
-          <h2 className="field-title">색</h2>
+          <h2 className="field-title">캐릭터</h2>
+          <div className="chips">
+            {AVATAR_BODIES.map((b) => (
+              <button key={b.id} className={`chip${avatar.body === b.id ? ' chip--on' : ''}`} aria-pressed={avatar.body === b.id} onClick={() => setAvatar({ ...avatar, body: b.id })}>
+                {b.label}
+              </button>
+            ))}
+          </div>
+          <h2 className="field-title">티셔츠 색</h2>
           <div className="swatches">
             {AVATAR_COLORS.map((c) => (
               <button

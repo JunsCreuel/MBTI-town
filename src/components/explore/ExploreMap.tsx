@@ -84,7 +84,7 @@ export default function ExploreMap({
     input.self.x = center.x;
     input.self.z = center.z;
     return {
-      session, selfId: '', spawn: center, look: { name: '', color: 'mint', acc: 'none' }, map: loaded.map, assets: loaded.assets,
+      session, selfId: '', spawn: center, look: { name: '', body: 'male', color: 'mint', acc: 'none' }, map: loaded.map, assets: loaded.assets,
       input, hood: 1, houses, hidden, onHouse: noop, onGate: noop, market: null, onStall: noop,
     };
   }, [loaded, session, input, houses, hidden]);

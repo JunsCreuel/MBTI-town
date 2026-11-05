@@ -8,11 +8,12 @@ const ROOT = join(import.meta.dirname, '..', 'public', 'assets');
 const SCREEN_BUDGET_BYTES = 3 * 1024 * 1024;
 // 화면마다 처음 불러오는 키 접두사 (BGM은 누를 때 받으므로 뺀다). 화면마다 3MB를 넘지 않는다.
 // except = 그 화면에서는 받지 않는 키 (놀이터·클럽에서만 받는 것)
-// char.npc.saju = 광장 부엉 도사 (첫 화면을 그린 뒤에 받는다)
-const SPOT_ONLY = ['prop.club.', 'prop.market.', 'char.npc.dj', 'char.npc.bartender', 'char.npc.saju', 'map.club', 'map.fishing', 'map.market'];
+// char.npc.monnyang = 광장 안내 몬냥이 (첫 화면을 그린 뒤에 받는다), char.npc.rabbit = 아직 쓰지 않는 NPC
+// char.base.female = 여자 캐릭터 (누군가 쓸 때 받는다. 첫 화면에는 남자·여자 중 하나만 받으므로 같은 크기인 남자로 센다)
+const SPOT_ONLY = ['prop.club.', 'prop.market.', 'char.npc.dj', 'char.npc.bartender', 'char.npc.monnyang', 'char.npc.rabbit', 'char.base.female', 'map.club', 'map.fishing', 'map.market'];
 const SCREENS: { name: string; prefixes: string[]; except?: string[] }[] = [
   { name: '마을 첫 화면', prefixes: ['char.', 'map.', 'prop.', 'ui.'], except: SPOT_ONLY },
-  { name: '나의 방 첫 화면', prefixes: ['char.', 'furn.', 'room.', 'ui.'], except: ['char.npc.'] },
+  { name: '나의 방 첫 화면', prefixes: ['char.', 'furn.', 'room.', 'ui.'], except: ['char.npc.', 'char.base.female'] },
 ];
 // 규칙 검사에서 빼는 파일 (폰트 묶음은 외부 배포본의 파일명을 그대로 쓴다)
 const EXEMPT_DIRS = ['fonts/'];

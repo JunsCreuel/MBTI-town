@@ -3,14 +3,16 @@
 // 광장 안내 NPC 몬냥이 (3D). 가까이 오면 그쪽을 보고, 처음 다가오면 손을 흔든다.
 // 아직 이야기하지 않았으면 머리 위에 느낌표가 뜬다. 이야기를 시작하면 폴짝 뛴다.
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { tokens } from '@/design/tokens';
 import { CHARACTER_HEIGHT } from '@/shared/character';
+import { characterActions, cloneCharacter } from '@/lib/characterRig';
 import { lerpAngle } from '@/shared/movement';
 import { groundHeightAt } from '@/shared/townMap';
-import { tagTexture } from './assets';
+import { loadNpc, tagTexture } from './assets';
 import { useTown } from './context';
 import { NPC_NAME, guideNpcSpot } from './npc';
 import { now } from './session';
@@ -25,18 +27,33 @@ type Clip = 'idle' | 'wave' | 'jump';
 export function GuideNpc() {
   const { map, assets, input } = useTown();
   const spot = useMemo(() => guideNpcSpot(map), [map]);
-  const gltf = assets.npcs.guide;
+  // 첫 화면을 그린 뒤에 받는다 (첫 화면 용량을 아낀다)
+  const [gltf, setGltf] = useState<GLTF | undefined>(assets.npcs.guide);
+  useEffect(() => {
+    if (gltf || !spot) return;
+    let live = true;
+    loadNpc('guide')
+      .then((g) => live && setGltf(g))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [gltf, spot]);
   const rig = useMemo(() => {
     if (!gltf) return null;
-    const model = SkeletonUtils.clone(gltf.scene);
+    const model = cloneCharacter(gltf);
     model.traverse((o) => void ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
     const mixer = new THREE.AnimationMixer(model);
-    const clip = (name: Clip) => mixer.clipAction(gltf.animations.find((a) => a.name === name)!);
-    const actions = { idle: clip('idle'), wave: clip('wave'), jump: clip('jump') };
-    actions.idle.play();
+    const actions = characterActions(gltf, mixer, ['idle', 'wave', 'jump']) as Record<Clip, THREE.AnimationAction>;
     return { model, mixer, actions };
   }, [gltf]);
-  useEffect(() => () => void rig?.mixer.stopAllAction(), [rig]);
+  // 붙을 때마다 서 있기부터 (개발 모드의 붙였다 뗐다에도 멈추지 않게)
+  useEffect(() => {
+    if (!rig) return;
+    rig.actions.idle.reset().play();
+    st.current.playing = 'idle';
+    return () => void rig.mixer.stopAllAction();
+  }, [rig]);
   const tag = useMemo(() => tagTexture(`${NPC_NAME} · 안내`, tokens.color.accent, false, '처음이면 말 걸어 주세요'), []);
   const bang = useRef<THREE.Sprite>(null);
   const st = useRef({ playing: 'idle' as Clip, until: 0, wasNear: false, wasTalking: false, yaw: spot?.yaw ?? 0 });

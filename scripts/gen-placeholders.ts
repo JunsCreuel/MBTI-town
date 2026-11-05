@@ -57,23 +57,23 @@ function record(file: string, source = SELF): void {
 
 // ───────────────────────── 아바타 ─────────────────────────
 
+/** 실제 모델(scripts/import-characters.ts가 넣은 _ph 아닌 파일)이 있는 키는 임시 모델을 만들지 않는다 */
+const hasRealAsset = (key: string) => {
+  const f = manifest[key]?.file;
+  return typeof f === 'string' && !/_ph\.[a-z0-9]+$/.test(f);
+};
+
 async function genAvatar() {
-  const file = 'characters/char_base_ph.glb';
-  save(file, await buildSkinned('char_base', chibiCharacterSpec()));
-  register('char.base', { file });
-  record(file);
-  // 광장 안내 NPC 몬냥이 (베이스 캐릭터와 같은 뼈대·동작)
-  const npc = 'characters/char_npc_monnyang_ph.glb';
-  save(npc, await buildSkinned('char_npc_monnyang', guideCatSpec()));
-  register('char.npc.monnyang', { file: npc });
-  record(npc);
-  // 클럽 NPC: DJ 너구리, 바텐더 곰 (클럽 맵에서만 받는다)
+  // 베이스 캐릭터, 광장 안내 NPC 몬냥이, 클럽 NPC DJ·바텐더 (실제 모델이 있으면 건너뛴다)
   for (const [key, name, spec] of [
-    ['char.npc.dj', 'char_npc_dj', djRaccoonSpec()],
-    ['char.npc.bartender', 'char_npc_bartender', bartenderBearSpec()],
+    ['char.base', 'char_base', chibiCharacterSpec],
+    ['char.npc.monnyang', 'char_npc_monnyang', guideCatSpec],
+    ['char.npc.dj', 'char_npc_dj', djRaccoonSpec],
+    ['char.npc.bartender', 'char_npc_bartender', bartenderBearSpec],
   ] as const) {
+    if (hasRealAsset(key)) continue;
     const f = `characters/${name}_ph.glb`;
-    save(f, await buildSkinned(name, spec));
+    save(f, await buildSkinned(name, spec()));
     register(key, { file: f });
     record(f);
   }

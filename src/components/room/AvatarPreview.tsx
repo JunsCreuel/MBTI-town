@@ -8,35 +8,36 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { shiftLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import type { Avatar } from '@/shared/avatar';
-import { HEAD_SOCKET, TINT_MATERIAL } from '@/shared/character';
+import { useBodyModel } from './useBodyModel';
+import { attachAccessory, characterActions, cloneCharacter, faceControl, tintOutfit } from '@/lib/characterRig';
 import type { RoomAssets } from './assets';
 
 function Model({ assets, avatar }: { assets: RoomAssets; avatar: Avatar }) {
   const color = tokens.avatar[avatar.color];
-  const { model, mixer } = useMemo(() => {
-    const model = SkeletonUtils.clone(assets.avatar.scene);
-    const tint = (root: THREE.Object3D, c: string) =>
-      root.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        const mat = mesh.material as THREE.MeshStandardMaterial;
-        if (mat.name === TINT_MATERIAL) {
-          mesh.material = mat.clone();
-          (mesh.material as THREE.MeshStandardMaterial).color.set(c);
-        }
-      });
-    tint(model, color);
+  const gltf = useBodyModel(assets, avatar.body);
+  const { model, mixer, start } = useMemo(() => {
+    const model = cloneCharacter(gltf);
+    const tinted = tintOutfit(model, color);
+    const face = faceControl(model);
     const acc = assets.accessories[avatar.accessory];
     if (acc) {
       const a = acc.clone();
-      tint(a, shiftLightness(color, -0.18));
-      model.getObjectByName(HEAD_SOCKET)?.add(a);
+      tinted.push(...tintOutfit(a, shiftLightness(color, -0.18)));
+      attachAccessory(model, avatar.accessory, a);
     }
     const mixer = new THREE.AnimationMixer(model);
-    const idle = assets.avatar.animations.find((c) => c.name === 'idle');
-    if (idle) mixer.clipAction(idle).play();
-    return { model, mixer };
-  }, [assets, avatar.accessory, color]);
+    const idle = characterActions(gltf, mixer, ['idle']).idle;
+    const start = () => {
+      idle.reset().play();
+      return () => {
+        mixer.stopAllAction();
+        for (const m of tinted) m.dispose();
+        face?.dispose();
+      };
+    };
+    return { model, mixer, start };
+  }, [assets, gltf, avatar.accessory, color]);
+  useEffect(() => start(), [start]);
   useFrame(({ clock }, dt) => {
     mixer.update(Math.min(dt, 0.1));
     model.rotation.y = Math.sin(clock.elapsedTime * 0.6) * 0.5;

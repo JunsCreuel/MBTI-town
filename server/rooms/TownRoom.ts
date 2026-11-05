@@ -179,6 +179,7 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     player.district = pass.district;
     player.color = pass.color;
     player.acc = pass.acc;
+    player.body = pass.body;
     player.mbti = pass.mbti ?? '';
     player.x = spawn.x;
     player.z = spawn.z;

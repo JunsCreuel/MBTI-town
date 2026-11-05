@@ -2,7 +2,7 @@
 // 두 서버가 같은 비밀값(TOWN_TOKEN_SECRET)을 쓴다. 토큰에는 마을에서 보여 줄 것만 담는다 (계정 id는 담지 않는다).
 // node:crypto를 쓰므로 서버에서만 불러온다.
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { cleanAvatar, type AccessoryId, type AvatarColor } from './avatar';
+import { cleanAvatar, type AccessoryId, type AvatarBody, type AvatarColor } from './avatar';
 import { isDistrict, type District } from './districts';
 
 export interface TownPass {
@@ -18,6 +18,8 @@ export interface TownPass {
   hood: number;
   /** 집터 번호 (집이 없으면 -1) */
   lot: number;
+  /** 캐릭터 몸 (남자·여자) */
+  body: AvatarBody;
   color: AvatarColor;
   acc: AccessoryId;
   /** 만료 (유닉스 초) */
@@ -75,7 +77,7 @@ export function verifyTownPass(token: unknown, nowSec = Math.floor(Date.now() / 
   }
   if (typeof raw.exp !== 'number' || raw.exp < nowSec) return null;
   if (typeof raw.pid !== 'string' || !raw.pid || typeof raw.name !== 'string') return null;
-  const avatar = cleanAvatar({ color: raw.color, accessory: raw.acc });
+  const avatar = cleanAvatar({ body: raw.body, color: raw.color, accessory: raw.acc });
   return {
     pid: raw.pid.slice(0, 32),
     name: raw.name.slice(0, 40),
@@ -83,6 +85,7 @@ export function verifyTownPass(token: unknown, nowSec = Math.floor(Date.now() / 
     district: isDistrict(raw.district) ? raw.district : '',
     hood: Number.isInteger(raw.hood) && (raw.hood as number) >= 1 ? (raw.hood as number) : 1,
     lot: Number.isInteger(raw.lot) && (raw.lot as number) >= 0 ? (raw.lot as number) : -1,
+    body: avatar.body,
     color: avatar.color,
     acc: avatar.accessory,
     exp: raw.exp,

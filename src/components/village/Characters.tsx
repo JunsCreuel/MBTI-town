@@ -1,14 +1,16 @@
 'use client';
 
 import { useFrame } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
+import type { GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { townConfig } from '@/config/game';
 import { shiftLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
-import { profileTag, type AccessoryId, type AvatarColor } from '@/shared/avatar';
-import { CHARACTER_CLIPS, CHARACTER_HEIGHT, HEAD_SOCKET, TINT_MATERIAL, type ClipName } from '@/shared/character';
+import { isAvatarBody, profileTag, type AccessoryId, type AvatarBody, type AvatarColor } from '@/shared/avatar';
+import { CHARACTER_HEIGHT, HAND_SOCKET, faceFor, type ClipName } from '@/shared/character';
+import { attachAccessory, characterActions, characterRig, cloneCharacter, faceControl, tintOutfit } from '@/lib/characterRig';
 import { gesturePose, hopHeight } from '@/shared/gesture';
 import { lerpAngle, moveWithCollision, yawFromVector } from '@/shared/movement';
 import { FishingRig } from './FishingRig';
@@ -17,7 +19,7 @@ import type { FishingState } from './context';
 import { findPath, type Point } from '@/shared/pathfinding';
 import { castTarget, groundHeightAt } from '@/shared/townMap';
 import type { EmoteKind } from '@/shared/protocol';
-import { tagTexture } from './assets';
+import { loadCharacter, tagTexture } from './assets';
 import { useTown } from './context';
 import { SELF_GESTURE, now, type TownSession } from './session';
 
@@ -49,55 +51,73 @@ const EMOTE_SIZE = 0.62;
 /** 캐릭터 모습: 색과 머리 소품, 이름표 */
 interface Look {
   name: string;
+  /** 캐릭터 몸 (예전 서버가 비워 보내면 남자) */
+  body?: AvatarBody | '';
   color: AvatarColor;
   acc: AccessoryId;
   /** 이름표 둘째 줄 (MBTI) */
   mbti?: string;
 }
 
-/** 캐릭터 색을 입힐 재질만 복제해서 색을 바꾼다. 나머지 재질은 모든 캐릭터가 같이 쓴다. */
-function tint(root: THREE.Object3D, color: string) {
-  root.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    mesh.castShadow = true;
-    const mat = mesh.material as THREE.MeshStandardMaterial;
-    if (mat.name === TINT_MATERIAL) {
-      mesh.material = mat.clone();
-      (mesh.material as THREE.MeshStandardMaterial).color.set(color);
-    }
-  });
+/** 그림자를 드리운다 (얼굴 그림은 빼고) */
+function castShadows(root: THREE.Object3D) {
+  root.traverse((o) => void ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
 }
 
-function Character({ actor, look, self = false }: { actor: RefObject<Actor>; look: Look; self?: boolean }) {
+/** 몸 모델을 받아 둔 것이 있으면 바로, 없으면 받은 뒤에 그린다 (여자 캐릭터는 처음 쓸 때 받는다) */
+function Character(props: { actor: RefObject<Actor>; look: Look; self?: boolean }) {
+  const { assets } = useTown();
+  const body: AvatarBody = isAvatarBody(props.look.body) ? props.look.body : 'male';
+  const [loaded, setLoaded] = useState<Partial<Record<AvatarBody, GLTF>>>(assets.characters);
+  const gltf = loaded[body];
+  useEffect(() => {
+    if (gltf) return;
+    let live = true;
+    loadCharacter(body)
+      .then((g) => live && setLoaded((m) => ({ ...m, [body]: g })))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [body, gltf]);
+  if (!gltf) return null;
+  return <CharacterModel {...props} gltf={gltf} />;
+}
+
+function CharacterModel({ actor, look, self = false, gltf }: { actor: RefObject<Actor>; look: Look; self?: boolean; gltf: GLTF }) {
   const { assets } = useTown();
   const color = tokens.avatar[look.color] ?? tokens.avatar.mint;
-  const { model, mixer, actions, rod } = useMemo(() => {
-    const model = SkeletonUtils.clone(assets.character.scene);
-    tint(model, color);
+  const { model, mixer, actions, rod, face, tinted } = useMemo(() => {
+    const model = cloneCharacter(gltf);
+    castShadows(model);
+    const tinted = tintOutfit(model, color);
+    const face = faceControl(model);
     const acc = assets.accessories[look.acc];
     if (acc) {
       const prop = acc.clone();
-      tint(prop, shiftLightness(color, -0.18));
-      model.getObjectByName(HEAD_SOCKET)?.add(prop);
+      tinted.push(...tintOutfit(prop, shiftLightness(color, -0.18)));
+      attachAccessory(model, look.acc, prop);
     }
     const rod = assets.rod.clone();
     rod.visible = false;
-    rod.position.copy(ROD_GRIP);
-    rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ROD_DIR);
     rod.traverse((o) => void ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
-    model.getObjectByName('armR')?.add(rod);
+    const grip = characterRig(gltf).rod;
+    const hand = model.getObjectByName(HAND_SOCKET);
+    if (grip && hand) {
+      rod.position.copy(grip.position);
+      rod.quaternion.copy(grip.quaternion);
+      hand.add(rod);
+    } else {
+      // 예전 임시 모델: 팔 관절에 단다
+      rod.position.copy(ROD_GRIP);
+      rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), ROD_DIR);
+      model.getObjectByName('armR')?.add(rod);
+    }
     const mixer = new THREE.AnimationMixer(model);
-    const actions = Object.fromEntries(
-      CHARACTER_CLIPS.map((name) => {
-        const clip = assets.character.animations.find((a) => a.name === name);
-        if (!clip) throw new Error(`캐릭터 모델에 ${name} 애니메이션이 없습니다`);
-        return [name, mixer.clipAction(clip)];
-      }),
-    ) as Record<ClipName, THREE.AnimationAction>;
+    const actions = characterActions(gltf, mixer);
     actions.idle.play();
-    return { model, mixer, actions, rod };
-  }, [assets, color, look.acc]);
+    return { model, mixer, actions, rod, face, tinted };
+  }, [assets, gltf, color, look.acc]);
 
   const sub = profileTag(look.mbti);
   const tag = useMemo(() => tagTexture(self ? `나 · ${look.name}` : look.name, color, self, sub), [look.name, color, self, sub]);
@@ -106,16 +126,16 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
   const playing = useRef<ClipName>('idle');
   const playingStart = useRef(0);
 
-  useEffect(
-    () => () => {
+  // 붙을 때마다 서 있기부터 (개발 모드는 붙였다 뗐다 다시 붙인다: 떼면서 멈춘 동작을 다시 튼다)
+  useEffect(() => {
+    actions.idle.reset().play();
+    playing.current = 'idle';
+    return () => {
       mixer.stopAllAction();
-      model.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (mesh.isMesh && (mesh.material as THREE.Material).name === TINT_MATERIAL) (mesh.material as THREE.Material).dispose();
-      });
-    },
-    [mixer, model],
-  );
+      for (const m of tinted) m.dispose();
+      face?.dispose();
+    };
+  }, [actions, mixer, tinted, face]);
 
   useFrame((_, dt) => {
     const a = actor.current;
@@ -140,7 +160,10 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
 
     const em = emote.current!;
     const t = now() - a.emoteStart;
-    if (a.emote && t < townConfig.emoteDurationMs / 1000) {
+    const showing = !!a.emote && t < townConfig.emoteDurationMs / 1000;
+    // 표정: 이모티콘이 떠 있으면 그 표정, 몸짓 중이면 몸짓 표정
+    face?.set(faceFor(showing ? a.emote : null, clip));
+    if (showing && a.emote) {
       em.visible = true;
       em.material.map = assets.emotes[a.emote];
       // 톡 튀어나왔다가 살짝 떠 있는 느낌

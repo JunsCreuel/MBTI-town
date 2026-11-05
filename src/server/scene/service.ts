@@ -973,6 +973,7 @@ export class SceneService {
         district: p.district,
         hood: p.house_hood,
         lot: p.house_lot ?? -1,
+        body: avatar.body,
         color: avatar.color,
         acc: avatar.accessory,
         exp,
@@ -982,7 +983,7 @@ export class SceneService {
       };
     } else {
       pass = {
-        pid: guestPid(), name: '손님', handle: '', district: '', hood: 1, lot: -1,
+        pid: guestPid(), name: '손님', handle: '', district: '', hood: 1, lot: -1, body: 'male',
         color: AVATAR_COLORS[randomBytes(1)[0] % AVATAR_COLORS.length], acc: 'none', exp,
       };
     }

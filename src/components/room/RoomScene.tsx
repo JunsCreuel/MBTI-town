@@ -11,8 +11,10 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { roomConfig, townConfig } from '@/config/game';
 import { shiftLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
-import { profileTag, type Avatar } from '@/shared/avatar';
-import { CHARACTER_CLIPS, CHARACTER_HEIGHT, HEAD_SOCKET, TINT_MATERIAL, type ClipName } from '@/shared/character';
+import { profileTag, type Avatar, type AvatarBody } from '@/shared/avatar';
+import { useBodyModel } from './useBodyModel';
+import { CHARACTER_HEIGHT, faceFor, type ClipName } from '@/shared/character';
+import { attachAccessory, characterActions, cloneCharacter, faceControl, tintOutfit, withMeshopt } from '@/lib/characterRig';
 import { themeOf, type District } from '@/shared/districts';
 import {
   blockedCells, canPlace, findRoomPath, footprintSize, furnitureDef, itemCenter, moveInRoom,
@@ -638,44 +640,48 @@ function startSpot(blocked: Uint8Array): Point {
 }
 
 /** 캐릭터 모델: 몸 색을 입히고 머리 소품을 단다 */
-function useAvatarModel(assets: RoomAssets, colorKey: string, accessory: string) {
+function useAvatarModel(assets: RoomAssets, body: AvatarBody | '' | undefined, colorKey: string, accessory: string) {
   const color = tokens.avatar[colorKey as Avatar['color']] ?? tokens.avatar.mint;
+  const gltf = useBodyModel(assets, body);
   const built = useMemo(() => {
-    const model = SkeletonUtils.clone(assets.avatar.scene);
-    const tint = (root: THREE.Object3D, c: string) =>
-      root.traverse((o) => {
-        const mesh = o as THREE.Mesh;
-        if (!mesh.isMesh) return;
-        mesh.castShadow = true;
-        const mat = mesh.material as THREE.MeshStandardMaterial;
-        if (mat.name === TINT_MATERIAL) {
-          mesh.material = mat.clone();
-          (mesh.material as THREE.MeshStandardMaterial).color.set(c);
-        }
-      });
-    tint(model, color);
+    const model = cloneCharacter(gltf);
+    model.traverse((o) => void ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
+    const tinted = tintOutfit(model, color);
+    const face = faceControl(model);
     const acc = assets.accessories[accessory];
     if (acc) {
       const a = acc.clone();
-      tint(a, shiftLightness(color, -0.18));
-      model.getObjectByName(HEAD_SOCKET)?.add(a);
+      tinted.push(...tintOutfit(a, shiftLightness(color, -0.18)));
+      attachAccessory(model, accessory, a);
     }
     model.scale.setScalar(AVATAR_SCALE);
     const mixer = new THREE.AnimationMixer(model);
-    const actions = Object.fromEntries(
-      CHARACTER_CLIPS.map((name) => [name, mixer.clipAction(assets.avatar.animations.find((c) => c.name === name)!)]),
-    ) as Record<ClipName, THREE.AnimationAction>;
+    const actions = characterActions(gltf, mixer);
     actions.idle.play();
-    return { model, mixer, actions, clip: { current: 'idle' as ClipName } };
-  }, [assets, accessory, color]);
-  useEffect(() => () => {
-    built.mixer.stopAllAction();
+    return { model, mixer, actions, face, tinted, clip: { current: 'idle' as ClipName } };
+  }, [assets, gltf, accessory, color]);
+  // 붙을 때마다 서 있기부터 (개발 모드의 붙였다 뗐다에도 동작이 멈추지 않게)
+  useEffect(() => {
+    built.actions.idle.reset().play();
+    built.clip.current = 'idle';
+    return () => {
+      built.mixer.stopAllAction();
+      for (const m of built.tinted) m.dispose();
+      built.face?.dispose();
+    };
   }, [built]);
   return { ...built, color };
 }
 
-/** 걷기·서기 동작을 부드럽게 바꾼다 */
-function playClip(m: ReturnType<typeof useAvatarModel>, clip: ClipName) {
+/** 지금 머리 위에 떠 있는 이모티콘 (없으면 null) */
+function activeEmote(presence: HousePresence | null | undefined, gid: string): string | null {
+  const g = presence?.gestures.get(gid);
+  return g?.emote && clockNow() - g.emoteStart <= townConfig.emoteDurationMs / 1000 ? g.emote : null;
+}
+
+/** 걷기·서기 동작을 부드럽게 바꾸고, 표정을 맞춘다 */
+function playClip(m: ReturnType<typeof useAvatarModel>, clip: ClipName, emote: string | null = null) {
+  m.face?.set(faceFor(emote, clip));
   if (clip === m.clip.current) return;
   const next = m.actions[clip].reset().play();
   m.actions[m.clip.current].crossFadeTo(next, 0.18, false);
@@ -764,7 +770,7 @@ function RoomAvatar({
   together: boolean;
   emotes: EmoteTextures | null;
 }) {
-  const m = useAvatarModel(assets, avatar.color, avatar.accessory);
+  const m = useAvatarModel(assets, avatar.body, avatar.color, avatar.accessory);
   const blocked = useMemo(() => blockedCells(layout.items), [layout.items]);
   const state = useRef({ pos: startSpot(blocked), rot: 0, facing: 0, path: null as Point[] | null });
   const keys = useRef(new Set<string>());
@@ -847,7 +853,7 @@ function RoomAvatar({
       walking = true;
     }
     s.rot += Math.atan2(Math.sin(s.facing - s.rot), Math.cos(s.facing - s.rot)) * (1 - Math.exp(-dt * TURN_RATE));
-    playClip(m, clipFor(presence, SELF_GESTURE, walking));
+    playClip(m, clipFor(presence, SELF_GESTURE, walking), activeEmote(presence, SELF_GESTURE));
     m.mixer.update(dt);
     m.model.position.set(s.pos.x, 0, s.pos.z);
     m.model.rotation.y = s.rot;
@@ -909,7 +915,7 @@ function RemoteAvatar({
   emotes: EmoteTextures | null;
 }) {
   const p = presence.player(id);
-  const m = useAvatarModel(assets, p?.color ?? 'mint', p?.acc ?? 'none');
+  const m = useAvatarModel(assets, p?.body, p?.color ?? 'mint', p?.acc ?? 'none');
   const samples = useRef<{ t: number; x: number; z: number }[]>(p ? [{ t: performance.now() / 1000, x: p.x, z: p.z }] : []);
   const pose = useRef({ x: p?.x ?? W / 2, z: p?.z ?? D - 1.5, rot: p?.rot ?? 0 });
 
@@ -939,7 +945,7 @@ function RemoteAvatar({
       a.z = buf[0].z;
     }
     a.rot += Math.atan2(Math.sin(s.rot - a.rot), Math.cos(s.rot - a.rot)) * (1 - Math.exp(-dt * TURN_RATE));
-    playClip(m, clipFor(presence, id, s.moving || Math.hypot(a.x - bx, a.z - bz) > 0.002));
+    playClip(m, clipFor(presence, id, s.moving || Math.hypot(a.x - bx, a.z - bz) > 0.002), activeEmote(presence, id));
     m.mixer.update(dt);
     m.model.position.set(a.x, 0, a.z);
     m.model.rotation.y = a.rot;
@@ -980,6 +986,136 @@ function FirstFrame({ onFrame }: { onFrame?: () => void }) {
     }
   });
   return null;
+}
+
+// ───────────────────────── 펫 (강아지) ─────────────────────────
+
+/** 펫 이름표 (지금은 강아지 한 종류) */
+const PET_NAME = '강아지';
+const PET_SPEED = 1.3;
+let petModel: Promise<THREE.Object3D> | null = null;
+function loadPetModel(): Promise<THREE.Object3D> {
+  petModel ??= withMeshopt(new GLTFLoader()).loadAsync(assetUrl('pet.dog')).then((g) => g.scene);
+  petModel.catch(() => {
+    petModel = null;
+  });
+  return petModel;
+}
+
+/**
+ * 방에 사는 강아지. 빈 칸을 골라 깡총깡총 돌아다니다 잠깐 쉰다. 누르면 폴짝 뛰고 하트와 이름이 뜬다.
+ * 자리는 화면마다 따로 정한다 (서버로 맞추지 않는다). 모델은 방을 그린 뒤에 받는다.
+ */
+function PetDog({ layout }: { layout: RoomLayout }) {
+  const [model, setModel] = useState<THREE.Object3D | null>(null);
+  const [heart, setHeart] = useState<THREE.Texture | null>(null);
+  const blocked = useMemo(() => blockedCells(layout.items), [layout.items]);
+  const group = useRef<THREE.Group>(null);
+  const bubble = useRef<THREE.Group>(null);
+  const tag = useMemo(() => tagTexture(PET_NAME, tokens.color.accent, false), []);
+  const state = useRef({
+    pos: { x: W / 2 + 1, z: D - 1.2 } as Point, path: null as Point[] | null, rest: 1.5, facing: 0, rot: 0, petAt: -10, petted: false,
+  });
+
+  useEffect(() => {
+    let alive = true;
+    loadPetModel()
+      .then((src) => {
+        if (!alive) return;
+        const o = src.clone(true);
+        o.traverse((c) => void ((c as THREE.Mesh).isMesh && ((c as THREE.Mesh).castShadow = true)));
+        setModel(o);
+      })
+      .catch(() => {});
+    bubbleTexture('ui.icon.heart', tokens.scene.heart).then((t) => alive && setHeart(t)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useFrame(({ clock }, rawDt) => {
+    const g = group.current;
+    if (!g) return;
+    const dt = Math.min(rawDt, 0.1);
+    const s = state.current;
+    const t = clock.elapsedTime;
+    if (s.petted) {
+      s.petted = false;
+      s.petAt = t;
+    }
+    // 가구가 옮겨 와 갇히면 빈 칸으로 비킨다
+    if (blocked[Math.floor(s.pos.z) * W + Math.floor(s.pos.x)]) {
+      s.pos = startSpot(blocked);
+      s.path = null;
+    }
+    let moving = false;
+    if (s.path?.length) {
+      const next = s.path[0];
+      const dx = next.x - s.pos.x;
+      const dz = next.z - s.pos.z;
+      const dist = Math.hypot(dx, dz);
+      const step = PET_SPEED * dt;
+      if (dist <= step) {
+        s.pos = { ...next };
+        s.path.shift();
+      } else {
+        s.pos = { x: s.pos.x + (dx / dist) * step, z: s.pos.z + (dz / dist) * step };
+      }
+      if (dist > 1e-4) s.facing = Math.atan2(dx, dz);
+      moving = true;
+    } else {
+      s.rest -= dt;
+      if (s.rest <= 0) {
+        // 다음에 갈 빈 칸 (가까운 곳 위주)
+        const free: Point[] = [];
+        for (let z = 0; z < D; z++) for (let x = 0; x < W; x++) if (!blocked[z * W + x] && Math.hypot(x + 0.5 - s.pos.x, z + 0.5 - s.pos.z) < 3.5) free.push({ x: x + 0.5, z: z + 0.5 });
+        const goal = free[Math.floor(Math.random() * free.length)];
+        s.path = goal ? findRoomPath(blocked, s.pos, goal) : null;
+        s.rest = 2 + Math.random() * 3;
+      }
+    }
+    s.rot += Math.atan2(Math.sin(s.facing - s.rot), Math.cos(s.facing - s.rot)) * (1 - Math.exp(-dt * 8));
+    // 걸을 때는 깡총깡총, 쉴 때는 숨쉬기. 누르면 한 번 크게 뛴다
+    const petted = t - s.petAt;
+    const jump = petted < 0.5 ? Math.sin((petted / 0.5) * Math.PI) * 0.25 : 0;
+    const hop = moving ? Math.abs(Math.sin(t * 11)) * 0.06 : 0;
+    g.position.set(s.pos.x, hop + jump, s.pos.z);
+    g.rotation.y = s.rot;
+    g.scale.setScalar(1 + (moving ? 0 : Math.sin(t * 2.4) * 0.015));
+    const b = bubble.current;
+    if (b) {
+      b.visible = petted < 2.4;
+      b.position.set(s.pos.x, 0.85 + jump + Math.sin(t * 5) * 0.02, s.pos.z);
+    }
+  });
+
+  if (!model) return null;
+  return (
+    <>
+      <group
+        ref={group}
+        onClick={(e: ThreeEvent<MouseEvent>) => {
+          if (e.delta > 8) return;
+          e.stopPropagation();
+          state.current.petted = true;
+        }}
+        onPointerOver={() => (document.body.style.cursor = 'pointer')}
+        onPointerOut={() => (document.body.style.cursor = '')}
+      >
+        <primitive object={model} />
+      </group>
+      <group ref={bubble} visible={false}>
+        {heart && (
+          <sprite position-y={0.32} scale={0.42} renderOrder={1001}>
+            <spriteMaterial map={heart} depthTest={false} depthWrite={false} transparent />
+          </sprite>
+        )}
+        <sprite scale={[0.22 * tag.aspect, 0.22, 1]} renderOrder={1000}>
+          <spriteMaterial map={tag.texture} depthTest={false} depthWrite={false} transparent />
+        </sprite>
+      </group>
+    </>
+  );
 }
 
 function SceneContent(props: RoomSceneProps) {
@@ -1053,6 +1189,7 @@ function SceneContent(props: RoomSceneProps) {
         emotes={emotes}
       />
       {presence && <RemoteAvatars presence={presence} assets={assets} emotes={emotes} />}
+      {mode !== 'edit' && <PetDog layout={layout} />}
       {mode === 'edit' && <DragController drag={drag} items={itemsRef} onMove={onMoveRef} />}
       <FirstFrame onFrame={props.onReady} />
     </>

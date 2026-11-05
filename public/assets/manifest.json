@@ -1,6 +1,6 @@
 {
   "char.base": {
-    "file": "characters/char_base_ph.glb"
+    "file": "characters/char_base.glb"
   },
   "ui.icon.exit": {
     "file": "ui/ui_icon_exit_ph.svg"
@@ -616,13 +616,13 @@
     "file": "props/prop_tool_rod_ph.glb"
   },
   "char.npc.monnyang": {
-    "file": "characters/char_npc_monnyang_ph.glb"
+    "file": "characters/char_npc_monnyang.glb"
   },
   "char.npc.dj": {
-    "file": "characters/char_npc_dj_ph.glb"
+    "file": "characters/char_npc_dj.glb"
   },
   "char.npc.bartender": {
-    "file": "characters/char_npc_bartender_ph.glb"
+    "file": "characters/char_npc_bartender.glb"
   },
   "ui.icon.drink": {
     "file": "ui/ui_icon_drink_ph.svg"
@@ -810,5 +810,14 @@
       512,
       512
     ]
+  },
+  "char.base.female": {
+    "file": "characters/char_base_female.glb"
+  },
+  "char.npc.rabbit": {
+    "file": "characters/char_npc_rabbit.glb"
+  },
+  "pet.dog": {
+    "file": "pets/pet_dog.glb"
   }
 }
