@@ -143,17 +143,17 @@ export function loadResident(key: string): Promise<GLTF> {
   return p;
 }
 
-const petCache = new Map<string, Promise<THREE.Object3D>>();
+const petCache = new Map<string, Promise<GLTF>>();
 
-/** 펫 모델 (manifest 키). 누군가 펫을 데리고 다니면 받는다, 한 번만 */
-export function loadPet(key: string): Promise<THREE.Object3D> {
+/** 펫 모델 (manifest 키, 뼈대와 걷기·서 있기 동작 포함). 누군가 펫을 데리고 다니면 받는다, 한 번만 */
+export function loadPet(key: string): Promise<GLTF> {
   let p = petCache.get(key);
   if (!p) {
     p = withMeshopt(new GLTFLoader())
       .loadAsync(assetUrl(key))
       .then((g) => {
         brightenFur(g.scene);
-        return g.scene;
+        return g;
       });
     petCache.set(key, p);
     p.catch(() => petCache.delete(key));

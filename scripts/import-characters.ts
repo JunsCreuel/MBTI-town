@@ -13,7 +13,7 @@ import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from '
 import { dirname, join } from 'node:path';
 import { type Accessor, type Document, NodeIO, type Node, type Primitive } from '@gltf-transform/core';
 import { ALL_EXTENSIONS, EXTTextureWebP } from '@gltf-transform/extensions';
-import { dedup, getBounds, meshopt, prune, resample, simplify, weld } from '@gltf-transform/functions';
+import { dedup, getBounds, meshopt, prune, resample, simplify, transformMesh, weld } from '@gltf-transform/functions';
 import { MeshoptDecoder, MeshoptEncoder, MeshoptSimplifier } from 'meshoptimizer';
 import sharp from 'sharp';
 import * as THREE from 'three';
@@ -60,6 +60,8 @@ interface ModelSpec {
   texture?: number;
   /** 밝은 털을 새하얗게 (원본이 베이지·회색빛인 흰 동물). 눈·코처럼 어두운 곳은 그대로 */
   whiten?: boolean;
+  /** 네 발 동물 뼈대를 만들어 넣는다 (뼈 없는 펫 모델에 걷기·서 있기 동작) */
+  quadruped?: boolean;
   /** 예전 임시 에셋 (지운다) */
   old?: string;
 }
@@ -114,7 +116,7 @@ const MODELS: ModelSpec[] = [
   { src: 'animal_fox.glb', key: 'char.resident.fox', file: 'characters/char_resident_fox.glb', height: 1.32 },
   { src: 'animal_bear.glb', key: 'char.resident.bear', file: 'characters/char_resident_bear.glb', height: 1.38 },
   { src: 'animal_rabbit.glb', key: 'char.resident.rabbit', file: 'characters/char_resident_rabbit.glb', height: 1.3 },
-  { src: 'animal_dog_lowpoly.glb', key: 'pet.dog', file: 'pets/pet_dog.glb', height: 0.5, pet: true, simplify: 0.6, simplifyError: 0.01, texture: 1024, whiten: true },
+  { src: 'animal_dog_lowpoly.glb', key: 'pet.dog', file: 'pets/pet_dog.glb', height: 0.5, pet: true, simplify: 0.6, simplifyError: 0.01, texture: 1024, whiten: true, quadruped: true },
 ];
 
 /** 표정 그림 한 칸 (px) */
@@ -627,6 +629,177 @@ async function addFace(doc: Document, prim: Primitive, height: number, face: Fac
 
 // ───────────────────────── 모델 하나 ─────────────────────────
 
+// ───────────────────────── 네 발 동물 뼈대 (펫) ─────────────────────────
+
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * 뼈 없는 네 발 동물 모델(정면 = +Z)에 뼈대·가중치·동작을 만든다.
+ * - 다리: 바닥 가까운 정점을 앞뒤·좌우로 나눠 발 넷의 자리를 찾고, 다리마다 윗마디(몸에 붙는 곳)·아랫마디(무릎) 뼈
+ * - 몸: 엉덩이(뒤)·가슴(앞), 머리(앞 위), 꼬리(뒤 위). 가중치는 높이·앞뒤·다리 축까지 거리로 부드럽게 나눈다
+ * - 동작: walk(대각선 다리끼리 같이 걷는 종종걸음, 몸 들썩, 꼬리 흔들기), idle(숨쉬기, 고개 갸웃, 꼬리 살랑)
+ */
+function rigQuadruped(doc: Document) {
+  const root = doc.getRoot();
+  const scene = root.listScenes()[0];
+  const meshNode = root.listNodes().find((n) => n.getMesh())!;
+  // 뼈대 있는 메시는 노드 변환을 쓰지 않으므로 정점에 굽고, 장면 바로 아래로 옮긴다
+  transformMesh(meshNode.getMesh()!, meshNode.getWorldMatrix());
+  meshNode.setTranslation([0, 0, 0]).setRotation([0, 0, 0, 1]).setScale([1, 1, 1]);
+  for (const parent of meshNode.listParents()) if (parent !== scene && 'removeChild' in parent) (parent as Node).removeChild(meshNode);
+  if (!scene.listChildren().includes(meshNode)) scene.addChild(meshNode);
+  const prims = meshNode.getMesh()!.listPrimitives();
+
+  // 모든 정점 (월드 좌표)
+  const pts: number[][] = [];
+  const t: number[] = [];
+  for (const p of prims) {
+    const pos = p.getAttribute('POSITION')!;
+    for (let i = 0; i < pos.getCount(); i++) pts.push(pos.getElement(i, t).slice());
+  }
+  const min = [0, 1, 2].map((k) => Math.min(...pts.map((v) => v[k])));
+  const max = [0, 1, 2].map((k) => Math.max(...pts.map((v) => v[k])));
+  const H = max[1] - min[1];
+  const L = max[2] - min[2];
+  const yN = (y: number) => (y - min[1]) / H;
+  const zN = (z: number) => (z - min[2]) / L;
+
+  // 발 넷: 바닥에서 12% 안의 정점을 앞뒤(z)·좌우(x)로 나눈 무리의 가운데
+  const feet = pts.filter((v) => yN(v[1]) < 0.12);
+  const mid = (k: number) => feet.reduce((a, v) => a + v[k], 0) / feet.length;
+  const cx = mid(0);
+  const cz = mid(2);
+  const legNames = ['FL', 'FR', 'BL', 'BR'] as const;
+  const legAt = Object.fromEntries(
+    legNames.map((name) => {
+      const front = name[0] === 'F';
+      const right = name[1] === 'R';
+      const group = feet.filter((v) => v[2] > cz === front && v[0] > cx === right);
+      return [name, { x: group.reduce((a, v) => a + v[0], 0) / group.length, z: group.reduce((a, v) => a + v[2], 0) / group.length }];
+    }),
+  ) as Record<(typeof legNames)[number], { x: number; z: number }>;
+  const legGapX = Math.min(Math.abs(legAt.FR.x - legAt.FL.x), Math.abs(legAt.BR.x - legAt.BL.x));
+  const legGapZ = Math.min(Math.abs(legAt.FL.z - legAt.BL.z), Math.abs(legAt.FR.z - legAt.BR.z));
+  const legR = Math.max(0.1 * H, 0.6 * Math.min(legGapX, legGapZ));
+  const legTop = min[1] + 0.34 * H;
+  const knee = min[1] + 0.17 * H;
+  const frontZ = (legAt.FL.z + legAt.FR.z) / 2;
+  const backZ = (legAt.BL.z + legAt.BR.z) / 2;
+
+  // 뼈 자리 (월드 좌표, 처음 자세는 회전 없음)
+  const spots: { name: string; parent: string | null; at: number[] }[] = [
+    { name: 'root', parent: null, at: [cx, min[1], cz] },
+    { name: 'hips', parent: 'root', at: [cx, legTop + 0.06 * H, backZ] },
+    { name: 'chest', parent: 'hips', at: [cx, legTop + 0.06 * H, frontZ] },
+    { name: 'head', parent: 'chest', at: [cx, min[1] + 0.58 * H, frontZ + 0.04 * L] },
+    { name: 'tail', parent: 'hips', at: [cx, min[1] + 0.5 * H, min[2] + 0.16 * L] },
+    ...legNames.flatMap((n) => [
+      { name: `leg${n}`, parent: n[0] === 'F' ? 'chest' : 'hips', at: [legAt[n].x, legTop, legAt[n].z] },
+      { name: `knee${n}`, parent: `leg${n}`, at: [legAt[n].x, knee, legAt[n].z] },
+    ]),
+  ];
+  const index = new Map(spots.map((s, i) => [s.name, i]));
+  const joints = spots.map((s) => doc.createNode(`dog_${s.name}`));
+  spots.forEach((s, i) => {
+    const parent = s.parent ? spots[index.get(s.parent)!] : null;
+    joints[i].setTranslation(parent ? (s.at.map((v, k) => v - parent.at[k]) as [number, number, number]) : (s.at as [number, number, number]));
+    if (s.parent) joints[index.get(s.parent)!].addChild(joints[i]);
+  });
+  scene.addChild(joints[0]);
+  const buffer = root.listBuffers()[0];
+  const ibm = new Float32Array(spots.length * 16);
+  spots.forEach((s, i) => {
+    ibm.set([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, -s.at[0], -s.at[1], -s.at[2], 1], i * 16);
+  });
+  const skin = doc.createSkin('dog').setSkeleton(joints[0]).setInverseBindMatrices(doc.createAccessor().setType('MAT4').setArray(ibm).setBuffer(buffer));
+  for (const j of joints) skin.addJoint(j);
+  meshNode.setSkin(skin);
+
+  // 가중치: 다리 → (남은 몫) 머리 → 꼬리 → 몸통(엉덩이·가슴을 앞뒤로 나눈다). 가장 큰 넷만 남긴다
+  const weightsOf = ([x, y, z]: number[]) => {
+    const w = new Map<number, number>();
+    const add = (name: string, v: number) => v > 1e-4 && w.set(index.get(name)!, (w.get(index.get(name)!) ?? 0) + v);
+    let best: (typeof legNames)[number] = 'FL';
+    let bestD = Infinity;
+    for (const n of legNames) {
+      const d = Math.hypot(x - legAt[n].x, z - legAt[n].z);
+      if (d < bestD) (bestD = d), (best = n);
+    }
+    const leg = (1 - smoothstep(legTop - 0.02 * H, legTop + 0.07 * H, y)) * (1 - smoothstep(legR * 0.85, legR * 1.25, bestD));
+    const lower = 1 - smoothstep(knee - 0.03 * H, knee + 0.03 * H, y);
+    add(`knee${best}`, leg * lower);
+    add(`leg${best}`, leg * (1 - lower));
+    const body = 1 - leg;
+    const head = smoothstep(0.5, 0.62, zN(z)) * smoothstep(0.52, 0.64, yN(y));
+    add('head', body * head);
+    const tail = (1 - smoothstep(0.08, 0.2, zN(z))) * smoothstep(0.4, 0.5, yN(y));
+    add('tail', body * (1 - head) * tail);
+    const trunk = body * (1 - head) * (1 - tail);
+    const chest = smoothstep(0.3, 0.7, zN(z));
+    add('chest', trunk * chest);
+    add('hips', trunk * (1 - chest));
+    const top = [...w.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+    const sum = top.reduce((a, [, v]) => a + v, 0) || 1;
+    while (top.length < 4) top.push([0, 0]);
+    return { j: top.map(([k]) => k), v: top.map(([, v]) => v / sum) };
+  };
+  for (const p of prims) {
+    const pos = p.getAttribute('POSITION')!;
+    const J = new Uint8Array(pos.getCount() * 4);
+    const Wt = new Float32Array(pos.getCount() * 4);
+    for (let i = 0; i < pos.getCount(); i++) {
+      const { j, v } = weightsOf(pos.getElement(i, t));
+      J.set(j, i * 4);
+      Wt.set(v, i * 4);
+    }
+    p.setAttribute('JOINTS_0', doc.createAccessor().setType('VEC4').setArray(J).setBuffer(buffer));
+    p.setAttribute('WEIGHTS_0', doc.createAccessor().setType('VEC4').setArray(Wt).setBuffer(buffer));
+  }
+
+  // 동작
+  const deg = Math.PI / 180;
+  const quat = (x: number, y: number, z: number) => new THREE.Quaternion().setFromEuler(new THREE.Euler(x * deg, y * deg, z * deg)).toArray();
+  const clip = (name: string, duration: number, frames: number, tracks: [string, 'rotation' | 'translation', (phase: number) => number[]][]) => {
+    const anim = doc.createAnimation(name);
+    const times = Float32Array.from({ length: frames + 1 }, (_, k) => (k / frames) * duration);
+    const input = doc.createAccessor().setType('SCALAR').setArray(times).setBuffer(buffer);
+    for (const [joint, path, at] of tracks) {
+      const values = Float32Array.from([...times].flatMap((time) => at((time / duration) * Math.PI * 2)));
+      const sampler = doc.createAnimationSampler().setInput(input).setOutput(doc.createAccessor().setType(path === 'rotation' ? 'VEC4' : 'VEC3').setArray(values).setBuffer(buffer)).setInterpolation('LINEAR');
+      anim.addSampler(sampler).addChannel(doc.createAnimationChannel().setTargetNode(joints[index.get(joint)!]).setTargetPath(path).setSampler(sampler));
+    }
+  };
+  const hipsRest = joints[index.get('hips')!].getTranslation();
+  const legTracks = (gait: boolean): [string, 'rotation', (ph: number) => number[]][] =>
+    legNames.flatMap((n) => {
+      // 대각선 다리끼리 같이 (앞왼·뒤오른 / 앞오른·뒤왼)
+      const off = n === 'FL' || n === 'BR' ? 0 : Math.PI;
+      return [
+        [`leg${n}`, 'rotation', (ph: number) => quat(gait ? 26 * Math.sin(ph + off) : 0, 0, 0)],
+        // 다리를 앞으로 내딛는 동안(각도가 줄어드는 동안) 무릎을 굽혀 발을 든다
+        [`knee${n}`, 'rotation', (ph: number) => quat(gait ? 38 * Math.max(0, -Math.cos(ph + off)) : 0, 0, 0)],
+      ] as [string, 'rotation', (ph: number) => number[]][];
+    });
+  clip('walk', 0.6, 16, [
+    ...legTracks(true),
+    ['hips', 'translation', (ph) => [hipsRest[0], hipsRest[1] + 0.015 * H * Math.cos(2 * ph), hipsRest[2]]],
+    ['chest', 'rotation', (ph) => quat(0, 0, 2.5 * Math.sin(ph))],
+    ['head', 'rotation', (ph) => quat(3 * Math.sin(2 * ph + 0.6), 0, 0)],
+    ['tail', 'rotation', (ph) => quat(-12, 24 * Math.sin(2 * ph), 0)],
+  ]);
+  clip('idle', 2.4, 24, [
+    ...legTracks(false),
+    ['hips', 'translation', (ph) => [hipsRest[0], hipsRest[1] + 0.006 * H * Math.sin(2 * ph), hipsRest[2]]],
+    ['chest', 'rotation', (ph) => quat(1.2 * Math.sin(2 * ph), 0, 0)],
+    ['head', 'rotation', (ph) => quat(3 * Math.sin(ph), 0, 5 * Math.sin(ph + 1))],
+    ['tail', 'rotation', (ph) => quat(-12, 16 * Math.sin(3 * ph), 0)],
+  ]);
+  console.log(`  뼈대: 발 ${legNames.map((n) => `${n}(${legAt[n].x.toFixed(2)},${legAt[n].z.toFixed(2)})`).join(' ')}, 다리 반지름 ${legR.toFixed(3)}`);
+}
+
 async function convert(spec: ModelSpec) {
   console.log(`${spec.src} → ${spec.file}`);
   const doc = await io.read(join(SRC, spec.src));
@@ -636,6 +809,7 @@ async function convert(spec: ModelSpec) {
   const b = getBounds(doc.getRoot().listScenes()[0]);
   bakeScale(doc, spec.height / (b.max[1] - b.min[1]));
   await doc.transform(dedup(), prune(), weld(), simplify({ simplifier: MeshoptSimplifier, ratio: spec.simplify ?? 0.5, error: spec.simplifyError ?? 0.0008 }), resample());
+  if (spec.quadruped) rigQuadruped(doc);
 
   let headRadius = 0;
   if (!spec.pet) headRadius = await addRigParts(doc, spec, shirtLum);

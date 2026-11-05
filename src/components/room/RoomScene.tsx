@@ -15,7 +15,7 @@ import { tokens } from '@/design/tokens';
 import { profileTag, type Avatar, type AvatarBody } from '@/shared/avatar';
 import { useBodyModel } from './useBodyModel';
 import { CHARACTER_HEIGHT, faceFor, type ClipName } from '@/shared/character';
-import { attachAccessory, brightenFur, characterActions, cloneCharacter, faceControl, fitHeight, tintOutfit, withMeshopt } from '@/lib/characterRig';
+import { attachAccessory, brightenFur, characterActions, cloneCharacter, faceControl, petInstance, tintOutfit, withMeshopt } from '@/lib/characterRig';
 import { petDef } from '@/shared/pets';
 import { themeOf, type District } from '@/shared/districts';
 import {
@@ -27,7 +27,7 @@ import { bubbleTexture, loadEmoteTextures, tagTexture } from '../village/assets'
 import { SELF_GESTURE, now as clockNow } from '../village/session';
 import type { RoomAssets } from './assets';
 import type { HousePresence } from './presence';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { assetUrl } from '@/assets/manifest';
 import { floorTexture, wallTexture } from './textures';
 
@@ -1169,17 +1169,17 @@ function FirstFrame({ onFrame }: { onFrame?: () => void }) {
 
 // ───────────────────────── 펫 (강아지) ─────────────────────────
 
-/** 펫 이름표 (지금은 강아지 한 종류) */
 /** 방 강아지 키 (마을에서 데리고 다니는 강아지와 같다) */
 const PET_HEIGHT = petDef('dog')!.height;
 const PET_SPEED = 1.3;
-let petModel: Promise<THREE.Object3D> | null = null;
-function loadPetModel(): Promise<THREE.Object3D> {
+let petModel: Promise<GLTF> | null = null;
+/** 강아지 모델 (뼈대와 걷기·서 있기 동작 포함, 한 번만 받는다) */
+function loadPetModel(): Promise<GLTF> {
   petModel ??= withMeshopt(new GLTFLoader())
     .loadAsync(assetUrl('pet.dog'))
     .then((g) => {
       brightenFur(g.scene);
-      return g.scene;
+      return g;
     });
   petModel.catch(() => {
     petModel = null;
@@ -1188,11 +1188,11 @@ function loadPetModel(): Promise<THREE.Object3D> {
 }
 
 /**
- * 방에 사는 강아지. 빈 칸을 골라 깡총깡총 돌아다니다 잠깐 쉰다. 누르면 폴짝 뛰고 하트와 이름이 뜬다.
+ * 방에 사는 강아지. 빈 칸을 골라 다리로 걸어 다니다(걷기 동작) 잠깐 쉰다(서 있기 동작). 누르면 폴짝 뛰고 하트와 이름이 뜬다.
  * 자리는 화면마다 따로 정한다 (서버로 맞추지 않는다). 모델은 방을 그린 뒤에 받는다.
  */
 function PetDog({ layout, name, onTap }: { layout: RoomLayout; name: string; onTap?: () => void }) {
-  const [model, setModel] = useState<THREE.Object3D | null>(null);
+  const [inst, setInst] = useState<ReturnType<typeof petInstance> | null>(null);
   const [heart, setHeart] = useState<THREE.Texture | null>(null);
   const blocked = useMemo(() => blockedCells(layout.items), [layout.items]);
   const group = useRef<THREE.Group>(null);
@@ -1205,13 +1205,7 @@ function PetDog({ layout, name, onTap }: { layout: RoomLayout; name: string; onT
   useEffect(() => {
     let alive = true;
     loadPetModel()
-      .then((src) => {
-        if (!alive) return;
-        const o = src.clone(true);
-        fitHeight(o, PET_HEIGHT);
-        o.traverse((c) => void ((c as THREE.Mesh).isMesh && ((c as THREE.Mesh).castShadow = true)));
-        setModel(o);
-      })
+      .then((gltf) => alive && setInst(petInstance(gltf, PET_HEIGHT)))
       .catch(() => {});
     bubbleTexture('ui.icon.heart', tokens.scene.heart).then((t) => alive && setHeart(t)).catch(() => {});
     return () => {
@@ -1219,9 +1213,15 @@ function PetDog({ layout, name, onTap }: { layout: RoomLayout; name: string; onT
     };
   }, []);
 
+  useEffect(() => {
+    if (!inst) return;
+    inst.restart();
+    return () => inst.stop();
+  }, [inst]);
+
   useFrame(({ clock }, rawDt) => {
     const g = group.current;
-    if (!g) return;
+    if (!g || !inst) return;
     const dt = Math.min(rawDt, 0.1);
     const s = state.current;
     const t = clock.elapsedTime;
@@ -1261,13 +1261,13 @@ function PetDog({ layout, name, onTap }: { layout: RoomLayout; name: string; onT
       }
     }
     s.rot += Math.atan2(Math.sin(s.facing - s.rot), Math.cos(s.facing - s.rot)) * (1 - Math.exp(-dt * 8));
-    // 걸을 때는 깡총깡총, 쉴 때는 숨쉬기. 누르면 한 번 크게 뛴다
+    // 다리로 걷고 쉴 때는 서 있기 동작 (뼈대 없는 예전 모델이면 깡총깡총). 누르면 한 번 크게 뛴다
+    inst.update(dt, moving ? PET_SPEED : 0);
     const petted = t - s.petAt;
     const jump = petted < 0.5 ? Math.sin((petted / 0.5) * Math.PI) * 0.25 : 0;
-    const hop = moving ? Math.abs(Math.sin(t * 11)) * 0.06 : 0;
+    const hop = !inst.animated && moving ? Math.abs(Math.sin(t * 11)) * 0.06 : 0;
     g.position.set(s.pos.x, hop + jump, s.pos.z);
     g.rotation.y = s.rot;
-    g.scale.setScalar(1 + (moving ? 0 : Math.sin(t * 2.4) * 0.015));
     const b = bubble.current;
     if (b) {
       b.visible = petted < 2.4;
@@ -1275,7 +1275,7 @@ function PetDog({ layout, name, onTap }: { layout: RoomLayout; name: string; onT
     }
   });
 
-  if (!model) return null;
+  if (!inst) return null;
   return (
     <>
       <group
@@ -1289,7 +1289,7 @@ function PetDog({ layout, name, onTap }: { layout: RoomLayout; name: string; onT
         onPointerOver={() => (document.body.style.cursor = 'pointer')}
         onPointerOut={() => (document.body.style.cursor = '')}
       >
-        <primitive object={model} />
+        <primitive object={inst.model} />
       </group>
       <group ref={bubble} visible={false}>
         {heart && (

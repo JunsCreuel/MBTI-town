@@ -1,13 +1,13 @@
 'use client';
 
-// 데리고 다니는 펫 (3D): 주인 옆(조금 뒤)을 따라다닌다. 걸을 때는 깡총깡총, 멈추면 주인이 보는 쪽을 같이 본다.
+// 데리고 다니는 펫 (3D): 주인 옆(조금 뒤)을 따라다닌다. 걸을 때는 다리로 걷고(빠르기에 맞춰), 멈추면 주인이 보는 쪽을 같이 본다.
 // 주인이 멀리 순간이동(지도 이동)하거나 길이 막혀 처지면 주인 곁으로 옮겨 온다.
 // 내 펫과 다른 사람 펫을 똑같이 그린다 (자리는 화면마다 따로 계산한다. 서버는 누가 어떤 펫을 데리고 있는지만 안다).
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
 import { townConfig } from '@/config/game';
-import { fitHeight } from '@/lib/characterRig';
+import { petInstance } from '@/lib/characterRig';
 import { lerpAngle, moveWithCollision } from '@/shared/movement';
 import { petDef } from '@/shared/pets';
 import { groundHeightAt, isBlockedAt } from '@/shared/townMap';
@@ -29,7 +29,7 @@ export function PetFollower({ owner, petOf }: { owner: RefObject<Actor>; petOf: 
   const { map } = useTown();
   const [pet, setPet] = useState('');
   const want = useRef('');
-  const [model, setModel] = useState<THREE.Object3D | null>(null);
+  const [inst, setInst] = useState<ReturnType<typeof petInstance> | null>(null);
 
   // 주인이 펫을 바꾸거나 돌려보내면 따른다 (실시간 상태는 렌더를 부르지 않으므로 매 프레임 본다)
   useFrame(() => {
@@ -43,18 +43,12 @@ export function PetFollower({ owner, petOf }: { owner: RefObject<Actor>; petOf: 
   useEffect(() => {
     const def = pet ? petDef(pet) : undefined;
     if (!def) {
-      setModel(null);
+      setInst(null);
       return;
     }
     let live = true;
     loadPet(def.key)
-      .then((src) => {
-        if (!live) return;
-        const o = src.clone(true);
-        fitHeight(o, def.height);
-        o.traverse((c) => void ((c as THREE.Mesh).isMesh && ((c as THREE.Mesh).castShadow = true)));
-        setModel(o);
-      })
+      .then((gltf) => live && setInst(petInstance(gltf, def.height)))
       .catch(() => {});
     return () => {
       live = false;
@@ -62,15 +56,18 @@ export function PetFollower({ owner, petOf }: { owner: RefObject<Actor>; petOf: 
   }, [pet]);
 
   const group = useRef<THREE.Group>(null);
-  const st = useRef({ placed: false, x: 0, z: 0, rot: 0, born: 0, stuck: 0, t: 0 });
+  const st = useRef({ placed: false, x: 0, z: 0, rot: 0, born: 0, stuck: 0, t: 0, speed: 0 });
   useEffect(() => {
     st.current.placed = false;
-  }, [model]);
+    if (!inst) return;
+    inst.restart();
+    return () => inst.stop();
+  }, [inst]);
 
   useFrame((_, rawDt) => {
     const g = group.current;
     const a = owner.current;
-    if (!g || !a || !model) return;
+    if (!g || !a || !inst) return;
     const dt = Math.min(rawDt, 0.1);
     const s = st.current;
     s.t += dt;
@@ -99,12 +96,13 @@ export function PetFollower({ owner, petOf }: { owner: RefObject<Actor>; petOf: 
     const dz = tz - s.z;
     const d = Math.hypot(dx, dz);
     let moving = false;
+    let moved = 0;
     if (d > STOP) {
       // 멀수록 빨리 (주인보다 조금 더 빨리 따라잡는다)
       const speed = Math.min(townConfig.walkSpeed * 1.3, Math.max(0.9, d * 2.4));
       const step = Math.min(speed * dt, d - STOP * 0.5);
       const p = moveWithCollision(map, s.x, s.z, (dx / d) * step, (dz / d) * step);
-      const moved = Math.hypot(p.x - s.x, p.z - s.z);
+      moved = Math.hypot(p.x - s.x, p.z - s.z);
       // 막혀서 못 가고 처지면 잠시 뒤 주인 곁으로 옮긴다
       s.stuck = moved < step * 0.3 && d > 2 ? s.stuck + dt : 0;
       s.x = p.x;
@@ -115,19 +113,21 @@ export function PetFollower({ owner, petOf }: { owner: RefObject<Actor>; petOf: 
       s.stuck = 0;
       s.rot = lerpAngle(s.rot, a.rot, 1 - Math.exp(-dt * 4));
     }
-    // 걸을 때는 깡총깡총, 쉴 때는 숨쉬기. 불러오면 톡 커지며 나타난다
-    const hop = moving ? Math.abs(Math.sin(s.t * 13)) * 0.07 : 0;
+    // 다리로 걷는다 (걸음 빠르기를 맞춘다). 뼈대 없는 예전 모델이면 깡총깡총 튄다. 불러오면 톡 커지며 나타난다
+    s.speed += ((moving ? moved / Math.max(dt, 1e-3) : 0) - s.speed) * Math.min(1, dt * 10);
+    inst.update(dt, s.speed);
+    const hop = !inst.animated && moving ? Math.abs(Math.sin(s.t * 13)) * 0.07 : 0;
     const age = (s.t - s.born) / APPEAR;
     const grow = age >= 1 ? 1 : 1 - (1 - age) ** 3 + Math.sin(age * Math.PI) * 0.15;
     g.position.set(s.x, groundHeightAt(map, s.x, s.z) + hop, s.z);
     g.rotation.y = s.rot;
-    g.scale.setScalar(grow * (moving ? 1 : 1 + Math.sin(s.t * 2.4) * 0.015));
+    g.scale.setScalar(grow);
   });
 
-  if (!model) return null;
+  if (!inst) return null;
   return (
     <group ref={group} scale={0}>
-      <primitive object={model} />
+      <primitive object={inst.model} />
     </group>
   );
 }

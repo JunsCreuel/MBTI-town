@@ -248,6 +248,51 @@ export function fitHeight(model: THREE.Object3D, height: number) {
 }
 
 /**
+ * 펫 하나: 모델을 복제해 키(height, 칸)에 맞추고, 걷기·서 있기 동작을 건다 (뼈대 없는 모델이면 동작 없이 그대로).
+ * update(dt, speed): 움직이는 빠르기(칸/초)에 맞춰 걷기·서 있기를 고르고, 걸음 빠르기를 맞춘다.
+ */
+export function petInstance(gltf: GLTF, height: number) {
+  const model = SkeletonUtils.clone(gltf.scene);
+  fitHeight(model, height);
+  model.traverse((o) => void ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
+  const mixer = new THREE.AnimationMixer(model);
+  const clip = (name: string) => gltf.animations.find((a) => a.name === name);
+  const idleClip = clip('idle');
+  const walkClip = clip('walk');
+  const idle = idleClip ? mixer.clipAction(idleClip) : null;
+  const walk = walkClip ? mixer.clipAction(walkClip) : null;
+  let current: 'idle' | 'walk' = 'idle';
+  return {
+    model,
+    /** 다리로 걷는 동작이 있다 (없으면 화면이 통통 튀게 움직인다) */
+    animated: !!(idle && walk),
+    update(dt: number, speed: number) {
+      if (idle && walk) {
+        const want = speed > 0.15 ? 'walk' : 'idle';
+        if (want !== current) {
+          const next = want === 'walk' ? walk : idle;
+          next.reset().play();
+          (current === 'walk' ? walk : idle).crossFadeTo(next, 0.2, false);
+          current = want;
+        }
+        // 걸음 한 바퀴에 키의 0.6배쯤 나아간다 (빠를수록 다리를 빨리 놀린다)
+        walk.timeScale = Math.min(4, Math.max(0.8, speed / height));
+      }
+      mixer.update(dt);
+    },
+    /** 붙을 때마다 서 있기부터 (개발 모드의 붙였다 뗐다에도 멈추지 않게) */
+    restart() {
+      mixer.stopAllAction();
+      idle?.reset().play();
+      current = 'idle';
+    },
+    stop() {
+      mixer.stopAllAction();
+    },
+  };
+}
+
+/**
  * 펫 털을 그늘에서도 밝게: 색 텍스처를 빛나는 텍스처로도 써서 밝은 털만 조금 스스로 빛나게 한다
  * (눈·코처럼 어두운 곳은 그대로 어둡다). 받은 원본에 한 번만 (복제본은 재질을 같이 쓴다)
  */
