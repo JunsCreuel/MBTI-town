@@ -16,6 +16,7 @@ import {
 } from '../../src/shared/protocol';
 import { clubTrackSeconds, getHoodMap, getSpotMap, getTownMap } from '../assets';
 import { CLUB_TRACKS, YOUTUBE_MAX_SECONDS, advanceLine, lineFromClock, queueKey, skipLine, type ClubLine, type YoutubeSong } from '../../src/shared/clubMusic';
+import { isPetId } from '../../src/shared/pets';
 import { Player, TownState } from './TownState';
 
 export function townRoomCapacity(): number {
@@ -103,6 +104,14 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
 
     this.onMessage(MSG.warp, (client, message: unknown) => this.handleWarp(client, message));
 
+    // 펫 불러오기·돌려보내기: 집이 있는 주민만. 모두에게 Player.pet으로 알려져 주인 옆을 따라다니게 그린다
+    this.onMessage(MSG.pet, (client, message: unknown) => {
+      const player = this.state.players.get(client.sessionId);
+      const pet = (message as { pet?: unknown } | null)?.pet;
+      if (!player || (pet !== '' && !isPetId(pet))) return;
+      player.pet = this.passes.get(client.sessionId)?.district ? (pet as string) : '';
+    });
+
     // 클럽: DJ에게 신청곡. 지금 곡은 끝까지 틀고, 신청곡은 대기열에 차례로 쌓여 채널 모두가 같은 순서로 듣는다
     this.onMessage(MSG.musicRequest, (client, message: unknown) => {
       if (this.spot !== 'club') return;
@@ -180,6 +189,7 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     player.color = pass.color;
     player.acc = pass.acc;
     player.body = pass.body;
+    player.pet = pass.district && isPetId(options?.pet) ? options.pet : '';
     player.mbti = pass.mbti ?? '';
     player.x = spawn.x;
     player.z = spawn.z;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { withGwa, withIGa, withIeyo, withRo } from './josa';
+import { withEulReul, withGwa, withIGa, withIeyo, withRo } from './josa';
 
 describe('조사', () => {
   it('받침에 맞춰 로/으로', () => {
@@ -26,5 +26,11 @@ describe('이에요/예요', () => {
 describe('이/가', () => {
   it('받침이 있으면 이, 없으면 가', () => {
     expect(['꿀떡', '토리', '단풍', '나비'].map(withIGa)).toEqual(['꿀떡이', '토리가', '단풍이', '나비가']);
+  });
+});
+
+describe('을/를', () => {
+  it('받침이 있으면 을, 없으면 를', () => {
+    expect(['강아지', '곰', '고양이'].map(withEulReul)).toEqual(['강아지를', '곰을', '고양이를']);
   });
 });

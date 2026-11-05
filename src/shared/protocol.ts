@@ -64,6 +64,8 @@ export interface JoinOptions {
   at?: TownPlace;
   /** 화면이 서버를 기다리지 않고 먼저 세운 내 자리 (걸을 수 있는 곳이면 서버도 이 자리를 쓴다) */
   start?: { x: number; z: number };
+  /** 데리고 다니는 펫 (src/shared/pets.ts의 id, 없으면 ''). 집이 있는 주민만 */
+  pet?: string;
 }
 
 /** 집 안 방에 들어갈 때 보내는 값 */
@@ -125,7 +127,14 @@ export const MSG = {
   musicAdmin: 'music_admin',
   /** 서버 전체 공지 (서버 → 모두, AnnounceBroadcast) */
   announce: 'announce',
+  /** 펫 불러오기·돌려보내기 (화면 → 서버, PetMessage). 서버는 Player.pet으로 모두에게 알린다 */
+  pet: 'pet',
 } as const;
+
+/** 데리고 다닐 펫 (pets.ts의 id, 돌려보내면 '') */
+export interface PetMessage {
+  pet: string;
+}
 
 /**
  * 클럽 채널의 곡 흐름 (src/shared/clubMusic.ts의 ClubLine): 지금 곡을 startedAt(서버 시각, ms)부터 틀고,

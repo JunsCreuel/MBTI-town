@@ -1,9 +1,7 @@
 // 광장 안내 NPC 몬냥이: 서 있는 자리와 하는 말. 처음 온 사람이 헷갈리지 않게 MBTI 마을·오늘의 토론·대항전·놀거리·클럽·코인·가방·조작·집을 알려 준다.
 // 복채·값은 설정(src/config/game.ts)에서 읽어 말한다 (값을 바꿔도 말이 맞게).
 import { coinConfig, contestConfig, debateConfig, marketConfig, townConfig } from '@/config/game';
-import { withIGa } from '@/shared/josa';
 import { FISH } from '@/shared/play';
-import { RESIDENTS } from '@/shared/residents';
 import type { TownMap } from '@/shared/townMap';
 
 export const NPC_NAME = '몬냥이';
@@ -75,7 +73,7 @@ export const NPC_TOPICS: NpcTopic[] = [
       '북쪽은 분석가(NT) 은빛 언덕, 동쪽은 외교관(NF) 초록 숲, 남쪽은 관리자(SJ) 푸른 호숫가, 서쪽은 탐험가(SP) 노을 거리예요.',
       `내 MBTI 마을에 내 집이 서요. MBTI를 바꾸면 그 마을로 이사하는데, 한 번 바꾸면 ${debateConfig.mbtiChangeCooldownDays}일 동안은 다시 못 바꿔요.`,
       '위쪽 지도 버튼으로 섬 전체를 보고, 가고 싶은 마을을 누르면 바로 가요.',
-      `마을 네 곳에는 동물 주민 ${withIGa(RESIDENTS.map((r) => r.name).join('·'))} 살아요. 집에서 나와 산책하다 다시 들어가니, 가까이 가서 인사해 보세요!`,
+      '마을마다 고양이·여우·곰·토끼 주민이 한두 마리씩 살아요. 집에서 나와 산책하다 다시 들어가니, 가까이 가서 인사해 보세요!',
     ],
   },
   {
@@ -108,6 +106,7 @@ export const NPC_TOPICS: NpcTopic[] = [
       '마을마다 입구에 열매 나무가 있어요. 은빛 언덕은 배, 초록 숲은 사과, 푸른 호숫가는 포도, 노을 거리는 복숭아예요.',
       `'낚시터' 간판 옆 비콘으로 가면 낚시를 해요. 물고기 도감은 ${FISH.length}칸! 10만 번에 한 번 나오는 황금 고래도 있어요.`,
       "'CLUB' 간판 옆 비콘은 춤추는 클럽, '상가' 간판 옆 비콘은 점포 20칸이 있는 상가로 가요.",
+      '오른쪽 위 발바닥 버튼으로 펫을 불러서 같이 산책할 수 있어요. 다른 이웃에게도 내 펫이 보여요!',
     ],
   },
   {

@@ -17,3 +17,6 @@ export const withGwa = (word: string) => `${word}${jong(word.replace(/[)\]\s]+$/
 
 /** "이/가" (받침이 있으면 이): 꿀떡이, 토리가 */
 export const withIGa = (word: string) => `${word}${jong(word) === 0 ? '가' : '이'}`;
+
+/** "을/를" (받침이 있으면 을): 강아지를, 고양이를, 곰을 */
+export const withEulReul = (word: string) => `${word}${jong(word) === 0 ? '를' : '을'}`;

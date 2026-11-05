@@ -7,7 +7,6 @@ import { ACCESSORIES, bodyKey, type AvatarBody } from '@/shared/avatar';
 import { allFloraKeys } from '@/shared/flora';
 import type { TownMap } from '@/shared/townMap';
 import { EMOTES, type EmoteKind } from '@/shared/protocol';
-import { residentDef } from '@/shared/residents';
 import { withMeshopt } from '@/lib/characterRig';
 import { EMOTE_INFO } from '../app/gestures';
 import { hasClubNpcs } from './npc';
@@ -133,14 +132,28 @@ export function loadNpc(kind: NpcKind): Promise<GLTF> {
 
 const residentCache = new Map<string, Promise<GLTF>>();
 
-/** 동물 주민 모델 (그 집 가까이 가면 받는다, 한 번만) */
-export function loadResident(id: string): Promise<GLTF> {
-  let p = residentCache.get(id);
+/** 동물 주민 모델 (manifest 키, 같은 모습의 주민끼리 같이 쓴다). 그 집 가까이 가면 받는다, 한 번만 */
+export function loadResident(key: string): Promise<GLTF> {
+  let p = residentCache.get(key);
   if (!p) {
-    const def = residentDef(id);
-    p = def ? withMeshopt(new GLTFLoader()).loadAsync(assetUrl(def.key)) : Promise.reject(new Error(`주민 ${id}이 없습니다`));
-    residentCache.set(id, p);
-    p.catch(() => residentCache.delete(id));
+    p = withMeshopt(new GLTFLoader()).loadAsync(assetUrl(key));
+    residentCache.set(key, p);
+    p.catch(() => residentCache.delete(key));
+  }
+  return p;
+}
+
+const petCache = new Map<string, Promise<THREE.Object3D>>();
+
+/** 펫 모델 (manifest 키). 누군가 펫을 데리고 다니면 받는다, 한 번만 */
+export function loadPet(key: string): Promise<THREE.Object3D> {
+  let p = petCache.get(key);
+  if (!p) {
+    p = withMeshopt(new GLTFLoader())
+      .loadAsync(assetUrl(key))
+      .then((g) => g.scene);
+    petCache.set(key, p);
+    p.catch(() => petCache.delete(key));
   }
   return p;
 }

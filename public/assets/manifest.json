@@ -828,5 +828,8 @@
   },
   "char.resident.rabbit": {
     "file": "characters/char_resident_rabbit.glb"
+  },
+  "ui.icon.paw": {
+    "file": "ui/ui_icon_paw_ph.svg"
   }
 }

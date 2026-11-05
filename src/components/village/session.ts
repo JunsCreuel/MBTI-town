@@ -10,7 +10,7 @@ import type { District } from '@/shared/districts';
 import {
   MSG,
   type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type JoinOptions,
-  type MoveMessage, type MusicAdmin, type MusicResult, type MusicState, type RoomPlace, type SnapMessage, type TownPlace, type WarpMessage,
+  type MoveMessage, type MusicAdmin, type MusicResult, type MusicState, type PetMessage, type RoomPlace, type SnapMessage, type TownPlace, type WarpMessage,
 } from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
 import type { YoutubeSong } from '@/shared/clubMusic';
@@ -28,6 +28,8 @@ export interface PlayerView {
   acc: AccessoryId;
   /** 캐릭터 몸 (예전 서버면 '' → 남자로 그린다) */
   body: AvatarBody | '';
+  /** 데리고 다니는 펫 (pets.ts의 id, 없으면 ''. 예전 서버면 undefined) */
+  pet?: string;
   /** 이름표 둘째 줄 (없으면 '') */
   mbti: string;
   x: number;
@@ -137,7 +139,7 @@ export class TownSession {
     try {
       await wakeRealtime();
       if (attempt !== this.attempt) return;
-      const options: JoinOptions = { token: ticket.token, place: this.place, at: this.at, start: here() };
+      const options: JoinOptions = { token: ticket.token, place: this.place, at: this.at, start: here(), pet: this.pet };
       const room = await new Client(realtimeUrl()).joinOrCreate(townConfig.roomName, options);
       if (attempt !== this.attempt) {
         room.leave();
@@ -226,6 +228,13 @@ export class TownSession {
     return () => {
       this.snapListeners.delete(fn);
     };
+  }
+
+  /** 내가 데리고 다니는 펫 ('' = 없음). 화면은 바로 그리고, 서버에 붙어 있으면 알린다 (붙을 때도 함께 보낸다) */
+  pet = '';
+  setPet(pet: string) {
+    this.pet = pet;
+    if (this.connected) this.room!.send(MSG.pet, { pet } satisfies PetMessage);
   }
 
   /** 서버에 보냈으면 true (아직 붙지 않았으면 보내지 않는다) */

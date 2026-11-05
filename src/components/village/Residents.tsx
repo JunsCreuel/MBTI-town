@@ -1,7 +1,8 @@
 'use client';
 
-// 동물 주민 NPC (3D): MBTI 마을 네 곳의 집에서 나와 둘레를 들르고 다시 집으로 들어간다 (일과는 src/shared/residents.ts).
-// 모델은 그 집 가까이 가야 받는다. 가까이 가면 말풍선으로 인사하고, 서 있을 때는 나를 보고 손을 흔든다.
+// 동물 주민 NPC (3D): MBTI 마을마다 한두 마리가 집에서 나와 둘레를 들르고 다시 집으로 들어간다 (일과는 src/shared/residents.ts).
+// 모델은 그 집 가까이 가야 받고(같은 모습끼리 같이 쓴다), 멀리 있는 주민은 그리지 않는다.
+// 가까이 가면 말풍선으로 인사하고, 서 있을 때는 나를 보고 손을 흔든다.
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -21,6 +22,8 @@ import { now } from './session';
 
 /** 이만큼 가까워지면 모델을 받는다 (칸) */
 const LOAD_REACH = 24;
+/** 집이 이보다 멀면 주민을 그리지 않는다 (움직임도 세지 않는다) */
+const DRAW_REACH = 34;
 /** 이만큼 가까이 오면 인사한다 */
 const GREET_REACH = 3;
 /** 서 있을 때 이 거리 안이면 나를 본다 */
@@ -51,13 +54,13 @@ function Resident({ home, def }: { home: ResidentHome; def: ResidentDef }) {
   useEffect(() => {
     if (!near) return;
     let live = true;
-    loadResident(home.id)
+    loadResident(def.key)
       .then((g) => live && setGltf(g))
       .catch(() => {});
     return () => {
       live = false;
     };
-  }, [near, home.id]);
+  }, [near, def.key]);
 
   const rig = useMemo(() => {
     if (!gltf) return null;
@@ -111,6 +114,11 @@ function Resident({ home, def }: { home: ResidentHome; def: ResidentDef }) {
     const g = group.current;
     if (!rig || !g) return;
     const s = st.current;
+    if (dHome > DRAW_REACH) {
+      g.visible = false;
+      s.wasNear = false;
+      return;
+    }
     const p = residentPose(map, home, serverNowMs() / 1000);
     g.visible = !p.inside;
     if (p.inside) {

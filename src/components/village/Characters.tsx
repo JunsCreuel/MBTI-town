@@ -14,6 +14,7 @@ import { attachAccessory, characterActions, characterRig, cloneCharacter, faceCo
 import { gesturePose, hopHeight } from '@/shared/gesture';
 import { lerpAngle, moveWithCollision, yawFromVector } from '@/shared/movement';
 import { FishingRig } from './FishingRig';
+import { PetFollower } from './Pets';
 import { drunkLevel } from './drunk';
 import type { FishingState } from './context';
 import { findPath, type Point } from '@/shared/pathfinding';
@@ -316,7 +317,12 @@ export function LocalPlayer() {
     }
   });
 
-  return <Character actor={actor} look={look} self />;
+  return (
+    <>
+      <Character actor={actor} look={look} self />
+      <PetFollower owner={actor} petOf={() => session.pet} />
+    </>
+  );
 }
 
 /**
@@ -378,5 +384,10 @@ export function RemotePlayer({ id }: { id: string }) {
   });
 
   if (!p) return null;
-  return <Character actor={actor} look={p} />;
+  return (
+    <>
+      <Character actor={actor} look={p} />
+      <PetFollower owner={actor} petOf={() => session.player(id)?.pet ?? ''} />
+    </>
+  );
 }

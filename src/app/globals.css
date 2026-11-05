@@ -5225,3 +5225,12 @@ canvas {
     grid-template-columns: 1fr;
   }
 }
+
+/* 펫 불러오기 시트: 펫 칸(가방 칸과 같은 모양) + 집에 보내기 */
+.pets {
+  display: grid;
+  gap: var(--space-3);
+}
+.pets__icon {
+  color: var(--color-accent);
+}

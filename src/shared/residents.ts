@@ -1,12 +1,61 @@
-// 동물 주민 NPC (고양이·여우·곰·토끼). MBTI 마을 네 곳에 집이 하나씩 있다 (scripts/lib/town-map.ts가 마을을 무작위로 골랐다).
-// 집에서 나와 둘레 몇 군데를 들렀다가 다시 들어간다. 일과는 시각만으로 정해서 (서버 시계 기준)
-// 모든 화면에서 같은 주민이 같은 자리에 보인다. 실시간 서버는 주민을 모른다.
+// 동물 주민 NPC (고양이·여우·곰·토끼 네 가지 모습, 이름·성격이 다른 24마리). MBTI 마을마다 한두 마리가 산다
+// (scripts/lib/town-map.ts가 맵을 만들 때 무작위로 나눴다). 집에서 나와 둘레 몇 군데를 들렀다가 다시 들어간다.
+// 일과는 시각만으로 정해서 (서버 시계 기준) 모든 화면에서 같은 주민이 같은 자리에 보인다. 실시간 서버는 주민을 모른다.
 import { findPath, type Point } from './pathfinding';
 import { isBlockedTile, lotDoor, type ResidentHome, type TownMap } from './townMap';
+
+/** 주민 모습 (모델 manifest 키) */
+export const SPECIES = {
+  cat: { animal: '고양이', key: 'char.resident.cat' },
+  fox: { animal: '여우', key: 'char.resident.fox' },
+  bear: { animal: '곰', key: 'char.resident.bear' },
+  rabbit: { animal: '토끼', key: 'char.resident.rabbit' },
+} as const;
+export type Species = keyof typeof SPECIES;
+
+/** 성격별 인사말. {마을} = 사는 마을 유형 */
+const LINES = {
+  lazy: ['음냐… 낮잠 자다 잠깐 나왔어.', '햇볕 잘 드는 자리 알면 나한테만 알려 줘!', '{마을} 마을은 조용해서 낮잠 자기 딱 좋아.', '천천히 걸어도 괜찮아. 서두를 거 없잖아.'],
+  playful: ['쉿, 산책하는 척 탐험 중이야.', '{마을} 마을 골목은 내가 제일 잘 알아.', '나 잡아 봐라~ 아니다, 오늘은 그냥 걸을래.', '낚시터에 황금 고래가 있다는 소문 들었어?'],
+  kind: ['{마을} 마을에 온 걸 환영해!', '배고프지 않아? 열매 따러 같이 갈까?', '오늘 하루도 수고 많았어.', '길을 잃으면 지도 버튼을 눌러 봐. 금방 찾을 거야.'],
+  busy: ['오늘도 바쁘다 바빠! 집 청소 하고 나왔어.', '아침부터 열매를 세 바구니나 땄어!', '{마을} 마을 꽃밭은 내가 매일 물을 줘.', '바빠도 인사는 해야지! 안녕!'],
+  chatty: ['있잖아, 오늘 광장 토론 봤어? 완전 팽팽하더라!', '{마을} 마을 소식은 나한테 물어봐!', '새 이웃이 이사 왔다던데, 혹시 너야?', '클럽 DJ 너굴이 오늘 신청곡을 엄청 받았대.'],
+  stylish: ['오늘 털 손질 좀 했는데, 어때?', '{마을} 마을 노을은 사진 찍기 딱 좋아.', '클럽에서 춤 연습하고 왔어!', '모자 쓴 친구를 보면 나도 하나 갖고 싶더라.'],
+} as const;
+type Mood = keyof typeof LINES;
+
+/** 주민 명단: id는 맵에 적히므로 바꾸지 않는다 (이름·성격은 바꿔도 된다). 같은 모습마다 여섯 마리 */
+const ROSTER: { id: string; name: string; species: Species; mood: Mood }[] = [
+  { id: 'cat1', name: '나비', species: 'cat', mood: 'lazy' },
+  { id: 'cat2', name: '치즈', species: 'cat', mood: 'chatty' },
+  { id: 'cat3', name: '모모', species: 'cat', mood: 'stylish' },
+  { id: 'cat4', name: '보리', species: 'cat', mood: 'kind' },
+  { id: 'cat5', name: '까미', species: 'cat', mood: 'playful' },
+  { id: 'cat6', name: '루루', species: 'cat', mood: 'busy' },
+  { id: 'fox1', name: '단풍', species: 'fox', mood: 'playful' },
+  { id: 'fox2', name: '노을', species: 'fox', mood: 'stylish' },
+  { id: 'fox3', name: '여울', species: 'fox', mood: 'lazy' },
+  { id: 'fox4', name: '감귤', species: 'fox', mood: 'busy' },
+  { id: 'fox5', name: '호두', species: 'fox', mood: 'chatty' },
+  { id: 'fox6', name: '솔이', species: 'fox', mood: 'kind' },
+  { id: 'bear1', name: '꿀떡', species: 'bear', mood: 'kind' },
+  { id: 'bear2', name: '두부', species: 'bear', mood: 'lazy' },
+  { id: 'bear3', name: '찐빵', species: 'bear', mood: 'chatty' },
+  { id: 'bear4', name: '몽실', species: 'bear', mood: 'stylish' },
+  { id: 'bear5', name: '누룽지', species: 'bear', mood: 'busy' },
+  { id: 'bear6', name: '곰곰', species: 'bear', mood: 'playful' },
+  { id: 'rabbit1', name: '토리', species: 'rabbit', mood: 'busy' },
+  { id: 'rabbit2', name: '콩이', species: 'rabbit', mood: 'playful' },
+  { id: 'rabbit3', name: '방울', species: 'rabbit', mood: 'stylish' },
+  { id: 'rabbit4', name: '솜이', species: 'rabbit', mood: 'kind' },
+  { id: 'rabbit5', name: '하양', species: 'rabbit', mood: 'lazy' },
+  { id: 'rabbit6', name: '당근', species: 'rabbit', mood: 'chatty' },
+];
 
 export interface ResidentDef {
   id: string;
   name: string;
+  species: Species;
   animal: string;
   /** 모델 manifest 키 */
   key: string;
@@ -14,38 +63,15 @@ export interface ResidentDef {
   lines: readonly string[];
 }
 
-export const RESIDENTS = [
-  {
-    id: 'cat',
-    name: '나비',
-    animal: '고양이',
-    key: 'char.resident.cat',
-    lines: ['음냐… 낮잠 자다 잠깐 나왔어.', '햇볕 잘 드는 자리 알면 나한테만 알려 줘!', '{마을} 마을은 조용해서 낮잠 자기 딱 좋아.', '우리 집 앞 잔디가 제일 폭신해.'],
-  },
-  {
-    id: 'fox',
-    name: '단풍',
-    animal: '여우',
-    key: 'char.resident.fox',
-    lines: ['쉿, 산책하는 척 탐험 중이야.', '광장 전광판 봤어? 오늘 토론 재밌더라!', '{마을} 마을 골목은 내가 제일 잘 알아.', '낚시터에 황금 고래가 있다는 소문 들었어?'],
-  },
-  {
-    id: 'bear',
-    name: '꿀떡',
-    animal: '곰',
-    key: 'char.resident.bear',
-    lines: ['배고프다… 열매 따러 갈까?', '천천히 걸어도 괜찮아. 나도 느리거든.', '{마을} 마을에 온 걸 환영해!', '집에 꿀단지를 숨겨 뒀는데 어디 뒀더라…'],
-  },
-  {
-    id: 'rabbit',
-    name: '토리',
-    animal: '토끼',
-    key: 'char.resident.rabbit',
-    lines: ['오늘도 바쁘다 바빠! 집 청소 하고 나왔어.', '이웃이 늘어서 신나! 너도 놀러 와.', '{마을} 마을 사람들은 다 친절해.', '클럽 음악이 여기까지 들리는 것 같아!'],
-  },
-] as const satisfies readonly ResidentDef[];
+export const RESIDENTS: readonly ResidentDef[] = ROSTER.map((r) => ({
+  id: r.id,
+  name: r.name,
+  species: r.species,
+  animal: SPECIES[r.species].animal,
+  key: SPECIES[r.species].key,
+  lines: LINES[r.mood],
+}));
 
-export type ResidentId = (typeof RESIDENTS)[number]['id'];
 export const residentDef = (id: string): ResidentDef | undefined => RESIDENTS.find((r) => r.id === id);
 export const residentLine = (def: ResidentDef, home: ResidentHome, n: number) => def.lines[((n % def.lines.length) + def.lines.length) % def.lines.length].replaceAll('{마을}', home.district);
 

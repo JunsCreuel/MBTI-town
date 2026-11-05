@@ -331,6 +331,27 @@ describe('새 동네 (2동·3동…)', () => {
   });
 });
 
+describe('펫', () => {
+  it('집이 있는 주민은 펫을 데리고 들어오고 바꿀 수 있다. 손님과 모르는 펫은 받지 않는다', async () => {
+    const owner = await connect({ token: signTownPass(pass({ pid: townPid('user-pet'), name: '산책이', district: 'ENFP', lot: 0 })), place: 'market', pet: 'dog' });
+    rooms.push(owner);
+    const visitor = await connect({ token: signTownPass(pass({ name: '손님펫' })), place: 'market', pet: 'dog' });
+    rooms.push(visitor);
+    expect(visitor.roomId).toBe(owner.roomId);
+    await until(() => owner.state.players?.size === 2 && visitor.state.players?.size === 2);
+    expect(visitor.state.players.get(owner.sessionId).pet).toBe('dog');
+    expect(owner.state.players.get(visitor.sessionId).pet).toBe('');
+    owner.send(MSG.pet, { pet: '' });
+    await until(() => visitor.state.players.get(owner.sessionId).pet === '');
+    owner.send(MSG.pet, { pet: 'dragon' });
+    visitor.send(MSG.pet, { pet: 'dog' });
+    owner.send(MSG.pet, { pet: 'dog' });
+    await until(() => visitor.state.players.get(owner.sessionId).pet === 'dog');
+    await new Promise((r) => setTimeout(r, 200));
+    expect(owner.state.players.get(visitor.sessionId).pet).toBe('');
+  });
+});
+
 describe('이동 예산', () => {
   it('메시지를 잘게 쪼개 보내도 걷는 속도보다 빨리 갈 수 없다', async () => {
     const room = await join(pass({ district: 'INTJ' }));

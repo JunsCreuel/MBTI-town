@@ -14,10 +14,13 @@ import { Guide } from '@/components/app/Guide';
 import { Icon } from '@/components/app/Icon';
 import { InventorySheet, ItemIcon } from '@/components/app/Inventory';
 import { GesturePicker } from '@/components/app/GesturePicker';
+import { PetSheet } from './PetSheet';
+import { savePet, savedPet } from './petPref';
 import { TabBar } from '@/components/app/TabBar';
 import type { HouseView, TownView } from '@/server/scene/service';
 import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
-import { withRo } from '@/shared/josa';
+import { withEulReul, withGwa, withRo } from '@/shared/josa';
+import { petDef } from '@/shared/pets';
 import { shopLabel, type MarketView } from '@/shared/market';
 import { SPOT_NAME, parseRoomPlace, parseSpot, type RoomPlace, type Spot, type TownPlace } from '@/shared/protocol';
 import { castTarget, districtAt, lotDoor, nearWater, parseTownMap, randomSpawnPoint, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
@@ -114,6 +117,9 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const [play, setPlay] = useState<PlayState | null>(null);
   const [fortuneFruit, setFortuneFruit] = useState<FortuneFruit | null>(null);
   const [basketOpen, setBasketOpen] = useState(false);
+  /** 데리고 다니는 펫 ('' = 없음)과 펫 불러오기 시트 */
+  const [pet, setPet] = useState('');
+  const [petOpen, setPetOpen] = useState(false);
   const [picking, setPicking] = useState(false);
   /** 잠깐 뜨는 알림. 아이템을 얻었으면 아이콘을 함께 보인다 */
   const [toast, setToast] = useState<string | { text: string; fruit: string } | null>(null);
@@ -205,8 +211,14 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     input.self.x = p.x;
     input.self.z = p.z;
     setSpawn(p);
+    // 지난번에 데리고 다니던 펫과 함께 들어간다 (집이 있는 주민만)
+    const saved = snap.guest ? '' : savedPet();
+    if (saved) {
+      session.setPet(saved);
+      setPet(saved);
+    }
     void session.join(() => ({ x: input.self.x, z: input.self.z }));
-  }, [loaded, snap.pass, spawn, at, here, spot, input, session]);
+  }, [loaded, snap.pass, snap.guest, spawn, at, here, spot, input, session]);
   // 지금 동네에 선 집만 (본섬 = 다섯 지역의 1동)
   const houses = useMemo(
     () => new Map(town.houses.filter((h) => h.hood === hoodNo && (!here || h.district === here.district)).map((h) => [lotKey(h), h])),
@@ -610,6 +622,13 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
                     <Icon name="basket" />
                   </button>
                 )}
+                <button
+                  className={`icon-btn${pet ? ' icon-btn--accent' : ''}`}
+                  onClick={() => (guest ? setToast('집이 있는 주민만 펫과 산책할 수 있어요') : setPetOpen(true))}
+                  aria-label={pet ? '펫 (산책 중)' : '펫 불러오기'}
+                >
+                  <Icon name="paw" />
+                </button>
                 <Link className="icon-btn" href="/explore" aria-label="이웃 방 둘러보기">
                   <Icon name="friends" />
                 </Link>
@@ -846,6 +865,21 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         />
       )}
       {basketOpen && <InventorySheet state={play} onClose={() => setBasketOpen(false)} />}
+      {petOpen && (
+        <PetSheet
+          current={pet}
+          onPick={(id) => {
+            const before = petDef(pet);
+            session.setPet(id);
+            setPet(id);
+            savePet(id);
+            setPetOpen(false);
+            const def = petDef(id);
+            setToast(def ? `${withGwa(def.name)} 산책을 시작해요` : before ? `${withEulReul(before.name)} 집에 보냈어요` : null);
+          }}
+          onClose={() => setPetOpen(false)}
+        />
+      )}
       {fishing && (
         <FishingPanel
           onCast={async () => {

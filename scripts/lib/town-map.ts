@@ -558,22 +558,24 @@ export function buildTownMap(tilesetFile: string) {
     unprop((key, x, y) => /^prop\.nature\./.test(key) && Math.hypot(x - b.x, y - b.y) < 4.2);
   }
 
-  // 4-4. 동물 주민 집: 주민마다 서로 다른 기질 그룹의 MBTI 마을을 무작위로 골라, 그 마을 둥근 거리 가까운 빈 풀밭에 집을 세운다.
+  // 4-4. 동물 주민 집: 마을마다 한두 마리 (명단이 마을 수보다 많은 만큼 무작위 마을에 둘째 주민). 누가 어느 마을에 사는지도 무작위.
+  // 한 마을의 두 주민은 다른 모습(동물)이고 집은 서로 떨어져 있다. 집은 그 마을 둥근 거리 가까운 빈 풀밭에 선다.
   // 맨 나중에 놓고 따로 뽑는 난수를 써서 앞의 배치가 그대로다. 집 둘레와 문 앞을 가리는 식물은 뺀다.
   {
-    // 주민마다 다른 기질 그룹(NT·NF·SJ·SP)에서 마을 하나씩 (섬 네 쪽에 흩어진다)
     const pick = rng(20261105);
-    const groups = THEMES.map((_, k) => k);
-    for (let k = groups.length - 1; k > 0; k--) {
-      const j = Math.floor(pick() * (k + 1));
-      [groups[k], groups[j]] = [groups[j], groups[k]];
-    }
-    const order = groups.map((k) => k * 4 + Math.floor(pick() * 4));
+    const shuffle = <T,>(list: T[]) => {
+      for (let i = list.length - 1; i > 0; i--) {
+        const j = Math.floor(pick() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+      }
+      return list;
+    };
+    const queue = shuffle([...RESIDENTS]);
+    const twos = new Set(shuffle(DISTRICTS.map((_, i) => i)).slice(0, Math.max(0, Math.min(DISTRICTS.length, queue.length - DISTRICTS.length))));
     const blockedGround = (x: number, y: number) => [gid('water'), gid('path'), gid('stone'), gid('stoneEdge'), gid('hedge'), gid('flowerbed')].includes(get(ground, x, y));
-    RESIDENTS.forEach((resident, n) => {
-      const i = order[n];
+    /** 마을 i의 집 자리 후보: 둥근 거리(streetA·B)에서 2.6~4.5칸 떨어진 풀밭 (문이 거리 쪽을 본다). 집터 줄은 집터가 다 쓰고 있다 */
+    const homeSpots = (i: number) => {
       const a0 = districtAngle(i);
-      // 둥근 거리(streetA·B)에서 2.6~4.5칸 떨어진 풀밭 (문이 거리 쪽을 본다). 집터 줄은 집터 8곳이 다 쓰고 있다
       const spots: { x: number; y: number; rot: number }[] = [];
       for (const street of ['streetA', 'streetB'] as const) {
         for (const side of [-1, 1]) {
@@ -587,7 +589,7 @@ export function buildTownMap(tilesetFile: string) {
               const rot = facing(p.x, p.y, target.x, target.y);
               const yaw = (-rot * Math.PI) / 180;
               const door = { x: p.x + Math.sin(yaw) * 1.9, y: p.y + Math.cos(yaw) * 1.9 };
-              // 집터·명소·열매 나무·아치(심은 식물보다 큰 것)와 떨어지고, 집 바닥이 길·물이 아니고, 문 앞이 열려 있어야 한다
+              // 집터·명소·열매 나무·아치·다른 주민 집(심은 식물보다 큰 것)과 떨어지고, 집 바닥이 길·물이 아니고, 문 앞이 열려 있어야 한다
               if (taken.some((t) => t.r >= 1.2 && Math.hypot(t.x - p.x, t.y - p.y) < t.r + 1.2)) continue;
               if (inSpawn(p.x, p.y) || inSpawn(door.x, door.y)) continue;
               if (polar(p.x, p.y).d > shoreAt(a0 + da) - 3.5) continue;
@@ -598,12 +600,29 @@ export function buildTownMap(tilesetFile: string) {
           }
         }
       }
-      if (!spots.length) throw new Error(`${DISTRICTS[i]} 마을에 ${resident.name}의 집 자리가 없습니다`);
-      const s = spots[Math.floor(pick() * spots.length)];
-      const yaw = (-s.rot * Math.PI) / 180;
-      const door = { x: s.x + Math.sin(yaw) * 1.9, y: s.y + Math.cos(yaw) * 1.9 };
-      unprop((key, x, y) => /^prop\.nature\./.test(key) && (Math.hypot(x - s.x, y - s.y) < 2.6 || Math.hypot(x - door.x, y - door.y) < 1.8));
-      residentHome(resident.id, s.x, s.y, s.rot, DISTRICTS[i]);
+      return spots;
+    };
+    const homes: { x: number; y: number }[] = [];
+    DISTRICTS.forEach((district, i) => {
+      const placed: { x: number; y: number; species: string }[] = [];
+      for (let n = 0; n < (twos.has(i) ? 2 : 1) && queue.length; n++) {
+        // 둘째 주민은 첫째와 다른 동물로
+        let k = 0;
+        while (k < queue.length - 1 && placed.some((q) => q.species === queue[k].species)) k++;
+        const [resident] = queue.splice(k, 1);
+        // 주민 집끼리(옆 마을 집 포함)는 7칸 넘게 떨어뜨린다 (안 되면 아무 데나)
+        const all = homeSpots(i);
+        const far = all.filter((c) => homes.every((q) => Math.hypot(q.x - c.x, q.y - c.y) > 7));
+        const spots = far.length ? far : all;
+        if (!spots.length) throw new Error(`${district} 마을에 ${resident.name}의 집 자리가 없습니다`);
+        const s = spots[Math.floor(pick() * spots.length)];
+        const yaw = (-s.rot * Math.PI) / 180;
+        const door = { x: s.x + Math.sin(yaw) * 1.9, y: s.y + Math.cos(yaw) * 1.9 };
+        unprop((key, x, y) => /^prop\.nature\./.test(key) && (Math.hypot(x - s.x, y - s.y) < 2.6 || Math.hypot(x - door.x, y - door.y) < 1.8));
+        residentHome(resident.id, s.x, s.y, s.rot, district);
+        placed.push({ x: s.x, y: s.y, species: resident.species });
+        homes.push({ x: s.x, y: s.y });
+      }
     });
   }
 

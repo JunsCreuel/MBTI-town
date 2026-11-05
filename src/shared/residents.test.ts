@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { RESIDENTS, RESIDENT_CYCLE, RESIDENT_WALK_SPEED, residentArea, residentDoor, residentPose } from './residents';
+import { DISTRICTS } from './districts';
+import { RESIDENTS, RESIDENT_CYCLE, RESIDENT_WALK_SPEED, residentArea, residentDef, residentDoor, residentPose } from './residents';
 import { loadTownMapForTest } from './testMap';
 import { isBlockedAt } from './townMap';
 
 const map = loadTownMapForTest();
 
 describe('동물 주민', () => {
-  it('주민마다 서로 다른 MBTI 마을에 집이 하나씩 있다', () => {
+  it('마을마다 주민이 한두 마리 산다 (같은 마을은 다른 동물, 집끼리는 떨어져 있다)', () => {
     expect(map.residents.map((h) => h.id).sort()).toEqual(RESIDENTS.map((r) => r.id).sort());
-    expect(new Set(map.residents.map((h) => h.district)).size).toBe(RESIDENTS.length);
+    expect(new Set(RESIDENTS.map((r) => r.name)).size).toBe(RESIDENTS.length);
+    for (const d of DISTRICTS) {
+      const here = map.residents.filter((h) => h.district === d);
+      expect(here.length).toBeGreaterThanOrEqual(1);
+      expect(here.length).toBeLessThanOrEqual(2);
+      expect(new Set(here.map((h) => residentDef(h.id)!.species)).size).toBe(here.length);
+    }
+    for (const a of map.residents) for (const b of map.residents) if (a !== b) expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThan(7);
     for (const h of map.residents) {
       // 집 바닥은 막혀 있고 집 모델이 서 있다. 문 앞은 열려 있고 둘레에 돌아다닐 자리가 있다
       expect(isBlockedAt(map, h.x, h.z)).toBe(true);
