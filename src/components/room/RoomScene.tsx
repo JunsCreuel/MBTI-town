@@ -145,11 +145,14 @@ function frameFor(width: number, height: number, availH: number) {
   return { pitch, dist, center };
 }
 
-/** 1인칭 세로 시야각: 가로 시야각을 맞추되, 휴대폰 세로 화면에서 너무 휘지 않게 50~85도 */
+/** 1인칭 세로 시야각: 가로 시야각을 맞추되 50도~상한 (휴대폰 세로 화면은 상한에 걸린다) */
 function firstPersonFov(width: number, height: number) {
   const v = 2 * Math.atan(Math.tan(deg(roomConfig.firstPersonHFovDeg) / 2) / (width / height));
-  return clamp(THREE.MathUtils.radToDeg(v), 50, 85);
+  return clamp(THREE.MathUtils.radToDeg(v), 50, roomConfig.firstPersonMaxVFovDeg);
 }
+
+/** 벽에서 이만큼 안쪽까지만 카메라가 간다 (칸) */
+const EYE_MARGIN = 0.15;
 
 /**
  * 보기(1인칭): 내 캐릭터 눈높이에서 바라본다. 화면을 끌면 둘러보고, 바닥을 눌러 걸으면 걷는 쪽으로 천천히 돈다.
@@ -248,8 +251,15 @@ function CameraRig({
       v.enter = Math.min(1, v.enter + dt / roomConfig.doorEnterSec);
       v.door = smooth(0, 0.35, v.enter);
       const walkIn = smooth(0.25, 1, v.enter);
+      // 내 자리에서 바라보는 반대쪽으로 조금 뺀 자리 (방이 더 넓게 담긴다, 벽 안쪽까지만)
+      const back = roomConfig.eyeBack;
+      seat.current.set(
+        clamp(f.x - Math.sin(v.yaw) * back, EYE_MARGIN, W - EYE_MARGIN),
+        roomConfig.eyeHeight,
+        clamp(f.z - Math.cos(v.yaw) * back, EYE_MARGIN, D - EYE_MARGIN),
+      );
       const e = eye.current;
-      e.set(W / 2, roomConfig.eyeHeight, D + DOOR_OUTSIDE).lerp(seat.current.set(f.x, roomConfig.eyeHeight, f.z), walkIn);
+      e.set(W / 2, roomConfig.eyeHeight, D + DOOR_OUTSIDE).lerp(seat.current, walkIn);
       // 바닥을 눌러 걸어가면 걷는 쪽으로 천천히 돈다 (둘러보는 중이면 그대로)
       const h = heading.current;
       if (v.enter >= 1 && h.pathWalking && !v.looking) v.yaw = lerpAngle(v.yaw, h.facing, 1 - Math.exp(-dt * 3));
