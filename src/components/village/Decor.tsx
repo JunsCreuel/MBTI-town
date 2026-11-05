@@ -13,9 +13,19 @@ import { InstancedProps, buildGroup } from './Props';
 const GROUND_RATE = 0.34;
 const FLOWER_RATE = 0.1;
 const LILY_RATE = 0.28;
+/**
+ * 풀밭 칸이 이보다 많으면(넓은 본섬) 풀·꽃 비율을 그만큼 줄여 전체 개수를 묶어 둔다.
+ * 장식은 화면 밖에서도 그려지므로 섬이 넓어진 만큼 늘리면 휴대폰이 느려진다.
+ */
+const DECOR_TILE_BUDGET = 5000;
+
+const isOpenGrass = (map: TownMap, i: number) => (map.terrain[map.ground[i]] ?? 'grass').startsWith('grass') && !map.blocked[i];
 
 function scatter(map: TownMap): PropPlacement[] {
   const out: PropPlacement[] = [];
+  let grassTiles = 0;
+  for (let i = 0; i < map.width * map.height; i++) if (isOpenGrass(map, i)) grassTiles++;
+  const thin = Math.min(1, DECOR_TILE_BUDGET / Math.max(1, grassTiles));
   const at = (key: string, x: number, z: number, r: number): PropPlacement => ({ key, x, z, yaw: r * Math.PI * 2 });
   for (let z = 0; z < map.height; z++) {
     for (let x = 0; x < map.width; x++) {
@@ -30,14 +40,14 @@ function scatter(map: TownMap): PropPlacement[] {
         }
         continue;
       }
-      if (!terrain.startsWith('grass') || map.blocked[i]) continue;
+      if (!isOpenGrass(map, i)) continue;
       const d = map.districtGrid[i] >= 0 ? DISTRICTS[map.districtGrid[i]] : null;
       const flora = d ? floraOf(d) : null;
-      if (r(6) < GROUND_RATE) {
+      if (r(6) < GROUND_RATE * thin) {
         const key = pickWeighted(flora ? flora.ground : FLORA.NF.ground.slice(0, 3), r(7));
         out.push(at(key, x + 0.15 + r(8) * 0.7, z + 0.15 + r(9) * 0.7, r(10)));
       }
-      if (r(11) < FLOWER_RATE) {
+      if (r(11) < FLOWER_RATE * thin) {
         // 꽃은 두세 송이씩 모여 핀다
         const key = pickWeighted(flora ? flora.flowers : PLAZA_FLOWERS, r(12));
         const count = 2 + Math.floor(r(13) * 2);
@@ -54,7 +64,9 @@ export function Decor() {
     const byKey = new Map<string, PropPlacement[]>();
     for (const p of scatter(map)) {
       if (!assets.props[p.key]) continue;
-      byKey.set(p.key, [...(byKey.get(p.key) ?? []), p]);
+      const list = byKey.get(p.key);
+      if (list) list.push(p);
+      else byKey.set(p.key, [p]);
     }
     return [...byKey].map(([key, placements]) => buildGroup(key, placements, assets));
   }, [map, assets]);

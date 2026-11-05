@@ -54,7 +54,7 @@ export const townConfig = {
   /** 지도에서 고른 곳으로 바로 가기 재사용 대기 (ms) */
   warpCooldownMs: 1500,
   /** 유형 마을 1동(본섬) 집터 수. 마을 맵 생성기와 집터 배정이 같이 쓴다. */
-  lotsPerDistrict: 4,
+  lotsPerDistrict: 8,
   /** 2동·3동… 동네 하나의 집터 수 (동네 틀 맵 map.hood). 앞 동네가 다 차면 다음 동네가 열린다. */
   hoodLots: 16,
   /** 한 마을에서 열 수 있는 동네 번호 상한 (실시간 서버가 받는 방 이름 검사용) */

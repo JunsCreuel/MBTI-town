@@ -21,7 +21,8 @@ import { BEACH_TREES, FLORA, HILL_FLORA, PLAZA_TREES, TEMPLATE_BUSH, TEMPLATE_RO
 export const TOWN_TILES = ['grass', 'grass2', 'stone', 'path', 'water', 'flowerbed', 'hedge', 'stoneEdge', 'sand'] as const;
 type TileName = (typeof TOWN_TILES)[number];
 
-const SIZE = 88;
+/** 본섬 크기 (칸). 16개 마을이 좁지 않게 2026-11-05에 88 → 136으로 넓혔다 */
+const SIZE = 136;
 const T = 32;
 const C = SIZE / 2;
 /** 동네 틀 맵 크기 */
@@ -33,17 +34,25 @@ export const TOWN_RADII = {
   stoneEdge: 7.4,
   ringIn: 11.6,
   ringOut: 13.2,
-  /** 여기부터 바닷가까지가 지역 땅이다 */
+  /** 여기부터 바닷가까지가 마을 땅이다 */
   land: 13.2,
-  streetA: 22.5,
-  streetB: 36.2,
-  rowA: 19,
-  rowB: 26,
-  rowC: 32.8,
-  landmark: 29.5,
-  shore: 40,
-  beach: 3,
+  /** 마을을 잇는 둥근 거리 둘 */
+  streetA: 30,
+  streetB: 46,
+  /** 마을 입구 (스폰 자리)와 열매 나무 */
+  entrance: 17.5,
+  shore: 60,
+  beach: 3.5,
 } as const;
+
+/** 집터 줄: 반지름과 그 줄의 집이 바라보는 둥근 거리. 줄마다 큰길 양쪽으로 LOT_GAP 칸 간격 */
+const LOT_ROWS: { r: number; street: 'streetA' | 'streetB' }[] = [
+  { r: 34.5, street: 'streetA' },
+  { r: 42, street: 'streetB' },
+  { r: 50.5, street: 'streetB' },
+  { r: 26, street: 'streetA' },
+];
+const LOT_GAP = 3.6;
 
 /** 기질 그룹마다 명소 하나 (manifest 키). 그룹 가운데(둘째·셋째 마을 사이) 안쪽 풀밭에 선다 */
 const LANDMARK: Record<Theme, string> = {
@@ -53,20 +62,20 @@ const LANDMARK: Record<Theme, string> = {
   SP: 'prop.district.stage',
 };
 /** 명소가 서는 반지름 (집 줄 안쪽의 빈 풀밭) */
-const LANDMARK_R = 18.2;
+const LANDMARK_R = 22;
 
 /** 동네 길(본섬 ↔ 2동·3동…) 아치 */
 export const GATE_KEY = 'prop.hood.gate';
 
 /** 마을 하나에 심을 나무·덤불·큰 돌 수 (기질 그룹 풍경마다. 어떤 종류인지는 src/shared/flora.ts) */
 const PLANTING: Record<Theme, { trees: number; bushes: number; rocks: number }> = {
-  NF: { trees: 17, bushes: 7, rocks: 2 },
-  SP: { trees: 11, bushes: 5, rocks: 1 },
-  NT: { trees: 12, bushes: 3, rocks: 2 },
-  SJ: { trees: 11, bushes: 5, rocks: 1 },
+  NF: { trees: 34, bushes: 14, rocks: 4 },
+  SP: { trees: 22, bushes: 10, rocks: 3 },
+  NT: { trees: 24, bushes: 7, rocks: 4 },
+  SJ: { trees: 22, bushes: 10, rocks: 3 },
 };
 /** 바닷가 야자수 */
-const BEACH_PALMS = 26;
+const BEACH_PALMS = 40;
 /** 심은 것 둘레에 비워 둘 거리 (칸) */
 const SPACING = { tree: 0.95, bush: 0.7, rock: 0.8 } as const;
 
@@ -386,22 +395,16 @@ export function buildTownMap(tilesetFile: string) {
   // 마을마다 집터: 큰길 양쪽, 바깥쪽 두 줄
   DISTRICTS.forEach((district, i) => {
     const a0 = districtAngle(i);
-    // 집터: 줄마다 큰길을 비우고 양쪽으로 둔다
-    const rows: { r: number; outward: boolean }[] = [
-      { r: TOWN_RADII.rowA, outward: true },
-      { r: TOWN_RADII.rowB, outward: false },
-      { r: TOWN_RADII.rowC, outward: true },
-    ];
+    // 집터: 줄마다 큰길을 비우고 양쪽으로 둔다 (집은 가까운 둥근 거리를 바라본다)
     const candidates: { x: number; y: number; rot: number; row: number; off: number }[] = [];
-    rows.forEach((row, ri) => {
+    LOT_ROWS.forEach((row, ri) => {
       const half = SECTOR / 2 - 1.7 / row.r;
-      const step = 3.35 / row.r;
+      const step = LOT_GAP / row.r;
       for (let k = -Math.floor(half / step); k <= Math.floor(half / step); k++) {
         const da = k * step;
         if (Math.abs(da) * row.r < 2.6) continue; // 큰길
         const p = at(row.r, a0 + da);
-        const street = row.outward ? (ri === 0 ? TOWN_RADII.streetA : TOWN_RADII.streetB) : TOWN_RADII.streetA;
-        const target = at(street, a0 + da);
+        const target = at(TOWN_RADII[row.street], a0 + da);
         candidates.push({ x: p.x, y: p.y, rot: facing(p.x, p.y, target.x, target.y), row: ri, off: Math.abs(da) });
       }
     });
@@ -418,7 +421,7 @@ export function buildTownMap(tilesetFile: string) {
   });
 
   // 스폰 자리 (지역 입구, 동네 길 앞)는 비워 둔다
-  const spawnSpots = DISTRICTS.flatMap((_, i) => [at(16.2, districtAngle(i)), at(gateRadius(i) - 2.6, districtAngle(i))]);
+  const spawnSpots = DISTRICTS.flatMap((_, i) => [at(TOWN_RADII.entrance, districtAngle(i)), at(gateRadius(i) - 2.6, districtAngle(i))]);
   const inSpawn = (x: number, y: number) => spawnSpots.some((p) => Math.abs(p.x - x) < 2.6 && Math.abs(p.y - y) < 2.6);
   const onPathTile = (x: number, y: number) => get(ground, Math.floor(x), Math.floor(y)) === gid('path');
 
@@ -442,7 +445,7 @@ export function buildTownMap(tilesetFile: string) {
   };
   DISTRICTS.forEach((district, i) => {
     const a0 = districtAngle(i);
-    const wants: [number, number][] = [[15.4, 0.12], [15.4, -0.12], [19.5, 0.12]].slice(0, playConfig.fruitTreesPerDistrict) as [number, number][];
+    const wants: [number, number][] = [[TOWN_RADII.entrance + 1, 0.1], [TOWN_RADII.entrance + 1, -0.1], [TOWN_RADII.entrance + 5, 0.1]].slice(0, playConfig.fruitTreesPerDistrict) as [number, number][];
     for (const [r, da] of wants) {
       const s = freeSpot(r, a0 + da, 1.3);
       prop(fruitTreeKey(themeOf(district)), s.x, s.y, s.tiles, Math.round(rand() * 360), district);
@@ -545,7 +548,7 @@ export function buildTownMap(tilesetFile: string) {
   const spawns = [
     spawnRect('spawn', C - 3, C + 3, 6, 2),
     ...DISTRICTS.map((d, i) => {
-      const p = at(16.2, districtAngle(i));
+      const p = at(TOWN_RADII.entrance, districtAngle(i));
       return spawnRect(`spawn.${d}`, p.x - 1.5, p.y - 1.5, 3, 3);
     }),
     ...DISTRICTS.map((d, i) => {

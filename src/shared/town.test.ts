@@ -43,8 +43,8 @@ describe('마을 맵', () => {
   });
 
   it('레이어를 읽는다', () => {
-    expect(map.width).toBe(88);
-    expect(map.height).toBe(88);
+    expect(map.width).toBe(136);
+    expect(map.height).toBe(136);
     expect(map.tileset.key).toBe('tile.town');
     expect(map.props.some((p) => p.key === 'prop.plaza.fountain')).toBe(true);
     // 바다와 맵 바깥은 막혀 있다
@@ -253,7 +253,7 @@ describe('입체 타일', () => {
     expect(map.terrain[map.ground[1 * map.width + 1]]).toBe('water');
     expect(groundHeightAt(map, 1.5, 1.5)).toBeLessThan(-0.3);
     expect(groundHeightAt(map, C + 0.5, 1.5)).toBeLessThan(groundHeightAt(map, C + 0.5, 6.5));
-    expect(Math.abs(groundHeightAt(map, 10.2, 40.5) - groundHeightAt(map, 10.3, 40.5))).toBeLessThan(0.05);
+    expect(Math.abs(groundHeightAt(map, C - 33.8, C - 3.5) - groundHeightAt(map, C - 33.7, C - 3.5))).toBeLessThan(0.05);
   });
 
   it('소품 방향을 읽는다: 광장 벤치는 모두 분수를 본다', () => {
