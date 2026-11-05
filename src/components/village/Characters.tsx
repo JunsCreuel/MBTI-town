@@ -51,9 +51,8 @@ interface Look {
   name: string;
   color: AvatarColor;
   acc: AccessoryId;
-  /** 이름표 둘째 줄 (MBTI 태그·사주 일주) */
+  /** 이름표 둘째 줄 (MBTI) */
   mbti?: string;
-  ilju?: string;
 }
 
 /** 캐릭터 색을 입힐 재질만 복제해서 색을 바꾼다. 나머지 재질은 모든 캐릭터가 같이 쓴다. */
@@ -100,7 +99,7 @@ function Character({ actor, look, self = false }: { actor: RefObject<Actor>; loo
     return { model, mixer, actions, rod };
   }, [assets, color, look.acc]);
 
-  const sub = profileTag(look.mbti, look.ilju);
+  const sub = profileTag(look.mbti);
   const tag = useMemo(() => tagTexture(self ? `나 · ${look.name}` : look.name, color, self, sub), [look.name, color, self, sub]);
   const group = useRef<THREE.Group>(null);
   const emote = useRef<THREE.Sprite>(null);

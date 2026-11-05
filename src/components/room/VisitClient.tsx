@@ -9,8 +9,7 @@ import { tokens } from '@/design/tokens';
 import { ApiError, call, errorMessage } from '@/lib/api';
 import type { RoomView } from '@/server/scene/service';
 import { DEFAULT_AVATAR, profileTag, type Avatar } from '@/shared/avatar';
-import { petOf } from '@/shared/pet';
-import { DISTRICT } from '@/shared/districts';
+import { DEFAULT_DISTRICT, DISTRICT } from '@/shared/districts';
 import type { FurnitureAction } from '@/shared/room';
 import { RecordCard } from '../archive/RecordCard';
 import { BgmPlayer, type BgmHandle } from '../app/BgmPlayer';
@@ -126,7 +125,7 @@ export function VisitClient({ handle }: { handle: string }) {
   }
 
   const owner = view.owner;
-  const district = owner.district ?? 'earth';
+  const district = owner.district ?? owner.mbti ?? DEFAULT_DISTRICT;
 
   return (
     <main className="room-page" style={{ '--district': tokens.district[district] } as CSSProperties}>
@@ -137,9 +136,8 @@ export function VisitClient({ handle }: { handle: string }) {
             layout={view.room.layout}
             district={district}
             avatar={myAvatar}
-            pet={petOf(owner.ilju)}
             selfName={pass?.name}
-            selfTag={profileTag(pass?.mbti, pass?.ilju)}
+            selfTag={profileTag(pass?.mbti)}
             presence={presence}
             mode="view"
             onAction={onAction}
@@ -173,7 +171,7 @@ export function VisitClient({ handle }: { handle: string }) {
           <span className="district-chip">{DISTRICT[district].name}</span>
         </div>
         <div className="room-top__actions">
-          {/* 문을 나서면 이 집이 있는 지역으로 돌아간다 */}
+          {/* 문을 나서면 이 집이 있는 마을로 돌아간다 */}
           <Link className="icon-btn" href={`/village?at=${district}`} aria-label="마을로 나가기">
             <Icon name="exit" size={20} />
           </Link>

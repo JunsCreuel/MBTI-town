@@ -42,8 +42,6 @@ export function AnnounceBanner() {
       <span className="announce__icon" aria-hidden>
         {current.kind === 'golden_whale' ? (
           <ItemIcon kind="fish" id="golden_whale" size={34} />
-        ) : current.kind === 'saju_ticket' ? (
-          <ItemIcon kind="ticket" id="saju" size={34} />
         ) : current.kind === 'contest' ? (
           <Icon name="crown" size={22} />
         ) : (

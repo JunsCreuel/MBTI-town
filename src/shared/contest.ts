@@ -1,4 +1,4 @@
-// 오행 지역 대항전: 한 주(일요일 21시 ~ 다음 일요일 21시, 한국 시간) 동안 활동 점수를 내 지역에 모은다.
+// MBTI 마을 대항전: 한 주(일요일 21시 ~ 다음 일요일 21시, 한국 시간) 동안 활동 점수를 내 유형 마을에 모은다.
 // 서버(점수 기록·집계)와 화면(남은 시간·순위)이 같은 계산을 쓴다. 규칙 값은 src/config/game.ts의 contestConfig.
 import { contestConfig } from '../config/game';
 import { DISTRICTS, type District } from './districts';
@@ -44,7 +44,7 @@ export interface ContestDistrictScore {
   score: number;
   /** 이번 주 점수를 낸 주민 수 */
   people: number;
-  /** 오늘의 토론에서 이긴 횟수 (지역 점수에 contestConfig.points.debateWin씩 들어 있다) */
+  /** 오늘의 토론에서 이긴 횟수 (마을 점수에 contestConfig.points.debateWin씩 들어 있다) */
   debateWins: number;
 }
 
@@ -52,18 +52,18 @@ export interface ContestStandings {
   week: string;
   startsAt: string;
   closesAt: string;
-  /** 점수 높은 순 (같으면 참여한 사람이 많은 순, 그다음 지역 순서) */
+  /** 점수 높은 순 (같으면 참여한 사람이 많은 순, 그다음 마을 순서) */
   districts: ContestDistrictScore[];
 }
 
-/** 지역마다 점수를 채우고 순서대로 줄 세운다 (없는 지역은 0점) */
+/** 마을마다 점수를 채우고 순서대로 줄 세운다 (없는 마을은 0점) */
 export function rankDistricts(rows: Partial<Record<District, Omit<ContestDistrictScore, 'district'>>>): ContestDistrictScore[] {
   return DISTRICTS.map((d) => ({ district: d, score: 0, people: 0, debateWins: 0, ...rows[d] })).sort(
     (a, b) => b.score - a.score || b.people - a.people || DISTRICTS.indexOf(a.district) - DISTRICTS.indexOf(b.district),
   );
 }
 
-/** 1위 지역 (모두 0점이면 없음, 1위가 둘 이상이면 함께 1위라 없음) */
+/** 1위 마을 (모두 0점이면 없음, 1위가 둘 이상이면 함께 1위라 없음) */
 export function contestLeader(districts: readonly ContestDistrictScore[]): District | null {
   const [a, b] = districts;
   if (!a || a.score <= 0) return null;

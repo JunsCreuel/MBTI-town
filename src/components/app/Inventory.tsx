@@ -6,11 +6,10 @@ import { useState } from 'react';
 import { assetUrl } from '@/assets/manifest';
 import { tokens } from '@/design/tokens';
 import type { PlayState } from '@/server/scene/service';
-import { DISTRICTS } from '@/shared/districts';
-import { FISH, FORTUNE_FRUIT, FRUITS, type FishDef, type FruitDef } from '@/shared/play';
+import { ALL_FRUITS, FISH, type FishDef, type FruitDef } from '@/shared/play';
 import { Sheet } from './Sheet';
 
-export type ItemKind = 'fruit' | 'fish' | 'ticket';
+export type ItemKind = 'fruit' | 'fish';
 
 export function ItemIcon({ kind, id, size = 40, unknown = false }: { kind: ItemKind; id: string; size?: number; unknown?: boolean }) {
   return (
@@ -27,8 +26,6 @@ export const RARITY: Record<FishDef['rarity'], { label: string; color: string }>
   junk: { label: '잡동사니', color: tokens.color.lose },
 };
 
-const ALL_FRUITS: FruitDef[] = [...DISTRICTS.map((d) => FRUITS[d]), FORTUNE_FRUIT];
-
 type Pick = { kind: 'fruit'; item: FruitDef } | { kind: 'fish'; item: FishDef };
 
 const RARITY_ORDER: FishDef['rarity'][] = ['mythic', 'legend', 'rare', 'common', 'junk'];
@@ -44,11 +41,6 @@ export function BagContent({ state }: { state: PlayState }) {
     <div className="inventory">
       <p className="inventory__coins">
         코인 <b>{state.coins.toLocaleString('ko-KR')}</b>
-        {state.tickets > 0 && (
-          <>
-            {' '}· <ItemIcon kind="ticket" id="saju" size={20} /> 사주 이용권 <b>{state.tickets}</b>장
-          </>
-        )}
       </p>
       {picked && <ItemDetail pick={picked} count={(picked.kind === 'fruit' ? state.fruits : state.fish)[picked.item.id] ?? 0} />}
       {fruits.length + fish.length === 0 ? (

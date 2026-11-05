@@ -5099,3 +5099,129 @@ canvas {
     justify-content: flex-end;
   }
 }
+
+/* MBTI 고르기 (가입·예전 주민): 기질 넷 × 유형 넷, 모르면 12문항 테스트 */
+.mbti-picker {
+  display: grid;
+  gap: var(--space-4);
+}
+.mbti-groups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+.mbti-group {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  box-shadow: inset 3px 0 0 var(--g);
+}
+.mbti-group h3 {
+  margin: 0;
+  font-size: 14px;
+}
+.mbti-group h3 small {
+  margin-left: var(--space-1);
+  color: var(--color-textSub);
+  font-size: 12px;
+  font-weight: 600;
+}
+.mbti-group__types {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+.mbti-type {
+  min-height: 44px;
+  border: 2px solid transparent;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  box-shadow: inset 0 -4px 0 var(--c);
+  cursor: pointer;
+}
+.mbti-type--on {
+  border-color: var(--c);
+  background: var(--c);
+  color: var(--color-surface);
+}
+.mbti-picker__chosen {
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+}
+.mbti-test {
+  display: grid;
+  gap: var(--space-3);
+}
+.mbti-test__count {
+  margin: 0;
+  color: var(--color-textSub);
+  font-size: 13px;
+  font-weight: 700;
+}
+.mbti-test__q {
+  margin: var(--space-2) 0 0;
+  font-size: 20px;
+}
+.mbti-test__choices {
+  display: grid;
+  gap: var(--space-2);
+}
+.mbti-test__choices .choice-card {
+  font: inherit;
+  font-weight: 700;
+}
+.mbti-test__result {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg);
+  box-shadow: inset 0 0 0 2px var(--c);
+}
+.mbti-test__result p {
+  margin: 0;
+  color: var(--color-textSub);
+  font-size: 13px;
+}
+.mbti-test__result strong {
+  color: var(--c);
+  font-size: 40px;
+  letter-spacing: 0.06em;
+}
+.village-card {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-5) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: 0 2px 12px var(--color-shadow), inset 0 6px 0 var(--c);
+  text-align: center;
+}
+.village-card p {
+  margin: 0;
+}
+.village-card__type {
+  color: var(--c);
+  font-size: 44px;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+}
+.village-card__label {
+  color: var(--color-textSub);
+  font-size: 14px;
+  font-weight: 700;
+}
+@media (max-width: 380px) {
+  .mbti-groups {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,20 +1,28 @@
 // 토론 매치 규칙 (PROJECT_GUIDE.md 10장). 서버와 화면이 함께 쓰는 순수 함수만 둔다.
-// 오늘의 토론은 지역(오행) 대결이다: 하루에 두 지역이 맞붙고, 그 지역 주민이 논거를 쓰며, 나머지 세 지역 주민이 판정한다.
-// MBTI는 토론과 상관없는 프로필 태그다 (논거 옆에 보여 줄 뿐이다).
+// 오늘의 토론은 MBTI 성향 대결이다: 날마다 E·I / S·N / T·F / J·P 중 한 축이 맞붙는다.
+// 모든 주민이 어느 한쪽 편이라 모두 논거를 쓰고 모두 판정한다. 판정은 유형마다 같은 무게로 센다.
 import { debateConfig } from '../config/game';
-import { DISTRICT, DISTRICTS, type District } from './districts';
+import { MBTI_TYPES, isMbtiType, type MbtiType } from '../design/mbti';
 
 export type Side = 'a' | 'b';
 export type Phase = 'writing' | 'voting' | 'judging' | 'done';
 
+/** 성향 글자와 축 */
+export type AxisLetter = 'E' | 'I' | 'S' | 'N' | 'T' | 'F' | 'J' | 'P';
+export type Axis = 'EI' | 'SN' | 'TF' | 'JP';
+export const AXES: readonly Axis[] = ['EI', 'SN', 'TF', 'JP'];
+export const AXIS_NAME: Record<AxisLetter, string> = {
+  E: '외향', I: '내향', S: '감각', N: '직관', T: '사고', F: '감정', J: '판단', P: '인식',
+};
+
 export interface Team {
-  /** 'district' = 지역 대결. 예전(MBTI 대결) 경기 기록에는 'type'·'axis'·'group'이 남아 있다 */
-  kind: 'district' | 'type' | 'axis' | 'group';
-  /** 지역 id (예전 기록은 MBTI 코드) */
+  /** 'axis' = 성향 대결 (E팀·I팀). 예전 경기 기록에는 'district'(오행 지역)·'type'·'group'이 남아 있다 */
+  kind: 'axis' | 'district' | 'type' | 'group';
+  /** 성향 글자 (예전 기록은 지역 id·MBTI 코드) */
   id: string;
-  /** 화면 표시: '숲 지역(木)' */
+  /** 화면 표시: 'E(외향)' */
   label: string;
-  /** 출전하는 지역 (예전 기록은 MBTI 유형) */
+  /** 이 편인 MBTI 유형 */
   members: string[];
 }
 
@@ -23,18 +31,21 @@ export interface Topic {
   title: string;
   sideA: string;
   sideB: string;
+  /** 이 주제를 다투는 축과, sideA를 자연스럽게 맡는 글자 (예: T가 "해결책이 먼저다"). 없으면 예전 주제 */
+  axis?: Axis;
+  a?: AxisLetter;
 }
 
-/** 관전 판정 결과. 관전자가 대표 논거 하나를 고르면 그 논거의 팀에 한 표가 간다. */
+/** 판정 결과. 주민이 대표 논거 하나를 고르면 그 논거의 편에 한 표가 간다. */
 export interface MatchResult {
-  /** 판정 점수 (0~100, 두 팀 합 100). 판정 지역마다 같은 무게로 센다. */
+  /** 판정 점수 (0~100, 두 편 합 100). 유형마다 같은 무게로 센다. */
   vote: Record<Side, number>;
   /** 판정한 사람 수 */
   voters: number;
-  /** 판정 지역별 표 (판정한 지역만) */
-  byDistrict?: Partial<Record<District, Record<Side, number>>>;
-  /** 예전(MBTI 대결) 경기 기록의 유형별 표 */
+  /** 유형별 표 (판정한 유형만) */
   byType?: Partial<Record<string, Record<Side, number>>>;
+  /** 예전(오행 지역 대결) 경기 기록의 지역별 표 */
+  byDistrict?: Partial<Record<string, Record<Side, number>>>;
   /** 대표 논거별로 뽑힌 수 */
   picks: Record<string, number>;
   winner: Side | 'draw';
@@ -64,9 +75,7 @@ export interface Argument {
   id: string;
   matchId: string;
   authorId: string | null;
-  /** 쓴 사람의 지역 (예전 기록은 null) */
-  authorDistrict: District | null;
-  /** 쓴 사람의 MBTI 태그 (선택 입력, 없으면 null) */
+  /** 쓴 사람의 MBTI (= 사는 마을). 예전 기록은 null일 수 있다 */
   authorMbti: string | null;
   side: Side;
   body: string;
@@ -75,7 +84,8 @@ export interface Argument {
 }
 
 export interface VoteRecord {
-  voterDistrict: District;
+  /** 판정한 사람의 MBTI */
+  voterType: MbtiType;
   side: Side;
   /** 고른 대표 논거 */
   argumentId: string | null;
@@ -148,66 +158,59 @@ export function phaseOf(match: Pick<Match, 'writingEndsAt' | 'votingEndsAt' | 's
 
 // ───────────────────────── 대진 ─────────────────────────
 
-export function districtTeam(d: District): Team {
-  return { kind: 'district', id: d, label: `${DISTRICT[d].short} 지역${DISTRICT[d].element.slice(1)}`, members: [d] };
+const POS: Record<Axis, number> = { EI: 0, SN: 1, TF: 2, JP: 3 };
+
+/** 이 축에서 글자 x의 맞은편 글자 */
+export function otherLetter(x: AxisLetter): AxisLetter {
+  const axis = AXES.find((a) => a.includes(x))!;
+  return (axis[0] === x ? axis[1] : axis[0]) as AxisLetter;
+}
+
+export function axisOf(x: AxisLetter): Axis {
+  return AXES.find((a) => a.includes(x))!;
+}
+
+/** 성향 팀: 그 글자를 가진 MBTI 여덟 유형 */
+export function axisTeam(letter: AxisLetter): Team {
+  const pos = POS[axisOf(letter)];
+  return { kind: 'axis', id: letter, label: `${letter}(${AXIS_NAME[letter]})`, members: MBTI_TYPES.filter((t) => t[pos] === letter) };
+}
+
+/** seq번째 경기의 축: 네 축을 차례로 돈다 (나흘에 한 바퀴) */
+export function axisFor(seq: number): Axis {
+  return AXES[((seq % AXES.length) + AXES.length) % AXES.length];
 }
 
 /**
- * 다섯 지역의 모든 짝 (10가지). 열흘에 한 바퀴 돌고, 지역마다 네 번씩 나오며 이틀 연속으로 나오지 않는다.
- * (한 바퀴의 끝과 다음 바퀴 처음은 이어질 수 있다)
+ * 주제에 맞춘 대진: 주제의 첫 번째 입장(sideA)을 자연스럽게 맡는 글자가 A팀이다
+ * (예: T vs F 주제 "고민을 들으면 해결책이 먼저다"는 T가 A). 축만 정해진 주제면 축의 앞 글자가 A.
  */
-const DISTRICT_PAIRS: [District, District][] = [
-  ['wood', 'fire'], ['earth', 'metal'], ['water', 'wood'], ['fire', 'earth'], ['metal', 'water'],
-  ['wood', 'earth'], ['fire', 'metal'], ['earth', 'water'], ['metal', 'wood'], ['water', 'fire'],
-];
-
-/** 같은 순서가 반복되지 않게 섞되, 항상 같은 결과가 나오는 난수 */
-function seeded(seed: number) {
-  let s = seed >>> 0;
-  return () => {
-    s = (s + 0x6d2b79f5) | 0;
-    let t = Math.imul(s ^ (s >>> 15), 1 | s);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+export function teamsFor(topic: Topic, axis: Axis): { teamA: Team; teamB: Team } {
+  const a = topic.axis === axis && topic.a ? topic.a : (axis[0] as AxisLetter);
+  return { teamA: axisTeam(a), teamB: axisTeam(otherLetter(a)) };
 }
 
-/** 가능한 모든 대진. 한 바퀴를 다 돌기 전에는 같은 대진이 다시 나오지 않는다. */
-export function matchupCycle(): [Team, Team][] {
-  return DISTRICT_PAIRS.map(([x, y]) => [districtTeam(x), districtTeam(y)]);
-}
-
-/** seq번째 경기의 대진. 어느 지역이 A(주제의 첫 번째 입장)를 맡을지도 정한다. */
-export function matchupFor(seq: number): { teamA: Team; teamB: Team } {
-  const cycle = matchupCycle();
-  const [x, y] = cycle[seq % cycle.length];
-  return seeded(seq * 7919 + 1)() < 0.5 ? { teamA: x, teamB: y } : { teamA: y, teamB: x };
-}
-
-/** 가장 오래 쓰지 않은 주제 (한 번도 안 쓴 주제가 먼저, 같으면 목록 순서) */
-export function pickTopic(topics: readonly Topic[], lastUsed: ReadonlyMap<string, number>): Topic {
+/** 가장 오래 쓰지 않은 주제 (한 번도 안 쓴 주제가 먼저, 같으면 목록 순서). 그 축의 주제가 있으면 그 안에서 고른다 */
+export function pickTopic(topics: readonly Topic[], lastUsed: ReadonlyMap<string, number>, axis?: Axis): Topic {
   if (!topics.length) throw new Error('토론 주제가 없습니다');
-  return [...topics].sort((a, b) => (lastUsed.get(a.id) ?? -1) - (lastUsed.get(b.id) ?? -1))[0];
+  const own = axis ? topics.filter((t) => t.axis === axis) : [];
+  const pool = own.length ? own : topics;
+  return [...pool].sort((a, b) => (lastUsed.get(a.id) ?? -1) - (lastUsed.get(b.id) ?? -1))[0];
 }
 
 // ───────────────────────── 참여 자격 ─────────────────────────
 
-/** 이 지역 주민이 출전하는 쪽 (출전하지 않으면 null) */
-export function sideOf(match: Pick<Match, 'teamA' | 'teamB'>, district: District | null): Side | null {
-  if (!district) return null;
-  if (match.teamA.members.includes(district)) return 'a';
-  if (match.teamB.members.includes(district)) return 'b';
+/** 이 유형이 맡는 편 (MBTI가 없으면 null) */
+export function sideOf(match: Pick<Match, 'teamA' | 'teamB'>, mbti: string | null): Side | null {
+  if (!mbti || !isMbtiType(mbti)) return null;
+  if (match.teamA.members.includes(mbti)) return 'a';
+  if (match.teamB.members.includes(mbti)) return 'b';
   return null;
 }
 
-/** 판정하는 지역: 출전하지 않은 세 지역 */
-export function voterDistricts(match: Pick<Match, 'teamA' | 'teamB'>): District[] {
-  const playing = new Set([...match.teamA.members, ...match.teamB.members]);
-  return DISTRICTS.filter((d) => !playing.has(d));
-}
-
-export function canVote(match: Pick<Match, 'teamA' | 'teamB'>, district: District | null): boolean {
-  return !!district && voterDistricts(match).includes(district);
+/** 판정할 수 있는지: MBTI가 있는 주민은 모두 판정한다 (제 편 논거를 골라도 된다) */
+export function canVote(_match: Pick<Match, 'teamA' | 'teamB'>, mbti: string | null): boolean {
+  return !!mbti && isMbtiType(mbti);
 }
 
 // ───────────────────────── 집계와 점수 ─────────────────────────
@@ -221,36 +224,36 @@ export function representatives(args: readonly Argument[], side: Side, n = debat
 }
 
 /**
- * 관전 판정 점수 (A, B 합 100). byDistrict면 판정 지역마다 A 비율을 구해 평균 낸다 (주민 수가 많은 지역이 판정을 좌우하지 않게).
- * 한두 표뿐인 지역이 극단값을 만들지 않게 지역마다 양쪽에 1표씩 더해 계산한다.
+ * 판정 점수 (A, B 합 100). byType이면 유형마다 A 비율을 구해 평균 낸다 (주민 수가 많은 유형이 판정을 좌우하지 않게).
+ * 한두 표뿐인 유형이 극단값을 만들지 않게 유형마다 양쪽에 1표씩 더해 계산한다.
  */
 export function voteScore(
   votes: readonly VoteRecord[],
-  mode: 'byDistrict' | 'none' = debateConfig.voteNormalization,
+  mode: 'byType' | 'none' = debateConfig.voteNormalization,
 ): Record<Side, number> {
   if (!votes.length) return { a: 50, b: 50 };
   let shareA: number;
   if (mode === 'none') {
     shareA = votes.filter((v) => v.side === 'a').length / votes.length;
   } else {
-    const byDistrict = new Map<District, { a: number; b: number }>();
+    const byType = new Map<MbtiType, { a: number; b: number }>();
     for (const v of votes) {
-      const t = byDistrict.get(v.voterDistrict) ?? { a: 0, b: 0 };
+      const t = byType.get(v.voterType) ?? { a: 0, b: 0 };
       t[v.side]++;
-      byDistrict.set(v.voterDistrict, t);
+      byType.set(v.voterType, t);
     }
-    const shares = [...byDistrict.values()].map((t) => (t.a + 1) / (t.a + t.b + 2));
+    const shares = [...byType.values()].map((t) => (t.a + 1) / (t.a + t.b + 2));
     shareA = shares.reduce((s, x) => s + x, 0) / shares.length;
   }
   const a = round1(shareA * 100);
   return { a, b: round1(100 - a) };
 }
 
-/** 판정 지역별 표 */
-export function tallyByDistrict(votes: readonly VoteRecord[]): Partial<Record<District, Record<Side, number>>> {
-  const out: Partial<Record<District, Record<Side, number>>> = {};
+/** 유형별 표 */
+export function tallyByType(votes: readonly VoteRecord[]): Partial<Record<MbtiType, Record<Side, number>>> {
+  const out: Partial<Record<MbtiType, Record<Side, number>>> = {};
   for (const v of votes) {
-    const t = (out[v.voterDistrict] ??= { a: 0, b: 0 });
+    const t = (out[v.voterType] ??= { a: 0, b: 0 });
     t[v.side]++;
   }
   return out;

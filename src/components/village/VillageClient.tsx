@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react';
 import { assetUrl } from '@/assets/manifest';
-import { marketConfig, playConfig, sajuConfig, townConfig } from '@/config/game';
+import { marketConfig, playConfig, townConfig } from '@/config/game';
 import { call } from '@/lib/api';
-import { FORTUNE_FRUIT, FRUITS, type FortuneFruit } from '@/shared/play';
+import { FORTUNE_FRUIT, fruitOf, type FortuneFruit } from '@/shared/play';
 import { withMaxLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { Guide } from '@/components/app/Guide';
@@ -30,12 +30,10 @@ import { ClubMusic } from './ClubMusic';
 import { NpcDialog } from './NpcDialog';
 import { BarSheet, DjSheet, DrunkFx } from './ClubBar';
 import { MarketSheet, stallFront, stallsOf } from './Market';
-import { SajuSheet } from './SajuOffice';
 import { ContestChip, ContestSheet } from './ContestSheet';
-import { ElementChip, ElementSheet, elementLine, noticeElementFill, reportElement } from './ElementSheet';
 import { BARTENDER_NAME, DJ_NAME } from './ClubNpcs';
-import { clubBar, onClubResult } from './club';
-import { NPC_NAME, NPC_TALK_REACH, SAJU_NAME, clubNpcSpots, guideNpcSpot, markNpcSeen, npcSeen, sajuNpcSpot } from './npc';
+import { clubBar } from './club';
+import { NPC_NAME, NPC_TALK_REACH, clubNpcSpots, guideNpcSpot, markNpcSeen, npcSeen } from './npc';
 import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
 import { VillageMusicButton, useVillageMusic } from './VillageMusic';
 import {
@@ -55,7 +53,7 @@ const PLAZA_RADIUS = 13.2;
 const GATE_DISTANCE = 2.6;
 
 /** 동네 이름: 1동은 지역 이름, 2동부터는 번호 */
-const hoodName = (d: District, hood: number) => (hood > 1 ? `${DISTRICT[d].short} ${hood}동` : `${DISTRICT[d].short} 지역`);
+const hoodName = (d: District, hood: number) => (hood > 1 ? `${DISTRICT[d].short} ${hood}동` : DISTRICT[d].name);
 /** 동네로 가는 주소: 1동은 본섬 동네 길 앞 */
 const hoodHref = (d: District, hood: number) => (hood > 1 ? `/village?hood=${d}.${hood}` : `/village?at=gate.${d}`);
 /** 아치 앞 (아치는 마을 안쪽을 본다) */
@@ -67,7 +65,7 @@ const districtStyle = (d: District) =>
 /** 지금 서 있는 곳: 지역, 중앙광장, 바닷가 */
 function areaAt(map: TownMap, x: number, z: number): { label: string; district: District | null } {
   const d = districtAt(map, x, z);
-  if (d) return { label: `${DISTRICT[d].short} 지역`, district: d };
+  if (d) return { label: DISTRICT[d].name, district: d };
   const plaza = Math.hypot(x - map.width / 2, z - map.height / 2) < PLAZA_RADIUS;
   return { label: plaza ? '중앙광장' : '바닷가', district: null };
 }
@@ -247,13 +245,12 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const passColor = snap.pass?.color;
   const passAcc = snap.pass?.acc;
   const passMbti = snap.pass?.mbti;
-  const passIlju = snap.pass?.ilju;
   const look = useMemo(
     () =>
       passName !== undefined && passColor && passAcc
-        ? { name: passName, color: passColor, acc: passAcc, mbti: passMbti, ilju: passIlju }
+        ? { name: passName, color: passColor, acc: passAcc, mbti: passMbti }
         : null,
-    [passName, passColor, passAcc, passMbti, passIlju],
+    [passName, passColor, passAcc, passMbti],
   );
   // 상가: 점포 20칸 (주인·이름·차양 색). 상가에 있는 동안 20초마다, 점포 시트를 열 때 새로 받는다
   const [market, setMarket] = useState<MarketView | null>(null);
@@ -299,15 +296,8 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const clubSpots = useMemo(() => (loaded ? clubNpcSpots(loaded.map) : null), [loaded]);
   const [nearClub, setNearClub] = useState<'dj' | 'bar' | null>(null);
   const [contestOpen, setContestOpen] = useState(false);
-  const [elementOpen, setElementOpen] = useState(false);
-  /** 클럽 무대에서 춤춘 시간 (초, 오행 채우기: 20초 추면 화 기운) */
-  const danceSecs = useRef(0);
   const [clubSheet, setClubSheet] = useState<'dj' | 'bar' | null>(null);
   const stalls = useMemo(() => (loaded && spot === 'market' ? stallsOf(loaded.map) : []), [loaded, spot]);
-  // 광장 사주상담소의 부엉 도사
-  const sajuSpot = useMemo(() => (loaded ? sajuNpcSpot(loaded.map) : null), [loaded]);
-  const [nearSaju, setNearSaju] = useState(false);
-  const [sajuOpen, setSajuOpen] = useState(false);
   const [nearStall, setNearStall] = useState<number | null>(null);
   const villageRef = useRef<HTMLDivElement>(null);
   const [npcOpen, setNpcOpen] = useState<{ first: boolean } | null>(null);
@@ -360,8 +350,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
       const r = await call<PickResult>('POST', '/api/play/pick', { spot: t.spot });
       if (!r.already) input.drops.push({ x: t.x, z: t.z, color: r.fruit.color, at: now() });
       if (r.fortune) setFortuneFruit(r.fortune);
-      else setToast({ text: r.already ? `이 나무는 오늘 이미 땄어요 (${r.fruit.name} ${r.count}개)` : `${r.fruit.name} ${r.added}개를 땄어요! 가방에 ${r.count}개${r.earned ? ` · +${r.earned}코인` : ''}${r.contest ? ` · 대항전 +${r.contest}점` : ''}${r.element?.added ? ` · ${elementLine(r.element)}` : ''}`, fruit: r.fruit.id });
-      noticeElementFill(r.element);
+      else setToast({ text: r.already ? `이 나무는 오늘 이미 땄어요 (${r.fruit.name} ${r.count}개)` : `${r.fruit.name} ${r.added}개를 땄어요! 가방에 ${r.count}개${r.earned ? ` · +${r.earned}코인` : ''}${r.contest ? ` · 대항전 +${r.contest}점` : ''}`, fruit: r.fruit.id });
       if (!r.already) session.sendAction('jump');
       refreshPlay();
     } catch (e) {
@@ -432,7 +421,6 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         }
       }
       setNearStall(stall);
-      setNearSaju(!!sajuSpot && Math.hypot(sajuSpot.x - input.self.x, sajuSpot.z - input.self.z) < sajuConfig.reach);
       // 낚시터 물가
       setCanFish(spot === 'fishing' && nearWater(loaded.map, input.self.x, input.self.z));
       // 클럽 무대에 서 있으면 저절로 춤춘다 (2초마다, 걷는 중에는 걷기가 먼저)
@@ -443,29 +431,11 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
           lastDance.current = t;
           session.sendAction('dance');
         }
-        // 무대에서 20초 넘게 춤추면 오행 채우기 (화 기운, 하루 한 번)
-        if (onFloor && !snap.guest && danceSecs.current >= 0) {
-          danceSecs.current += 0.3;
-          if (danceSecs.current >= 20) {
-            danceSecs.current = -1;
-            void reportElement('fire', 'dance').then((f) => f && setToast(`무대에서 신나게 춤췄어요! ${elementLine(f)}`));
-          }
-        }
         setOnFloor(onFloor);
       }
     }, 300);
     return () => clearInterval(t);
-  }, [loaded, input, here, trees, beacons, spot, session, npcSpot, clubSpots, stalls, sajuSpot]);
-
-  // 오행 채우기: 신청곡이 받아지면 화 기운, 상가에 들르면 토 기운 (하루 한 번씩)
-  useEffect(() => {
-    if (isGuest || !snap.pass) return;
-    if (spot === 'market') void reportElement('earth', 'market').then((f) => f && setToast(`상가에 들렀어요. ${elementLine(f)}`));
-    if (spot !== 'club') return;
-    return onClubResult((r) => {
-      if (r.ok) void reportElement('fire', 'request').then((f) => f && setToast(elementLine(f)));
-    });
-  }, [spot, isGuest, snap.pass]);
+  }, [loaded, input, here, trees, beacons, spot, session, npcSpot, clubSpots, stalls]);
 
   const openMap = useCallback(
     (open: boolean) => {
@@ -583,9 +553,9 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
               style={districtStyle(d)}
               onClick={() => goTo(d)}
               tabIndex={view === 'map' ? 0 : -1}
-              aria-label={`${DISTRICT[d].short} 지역으로 가기, 1동 집 ${counts[d].get(1) ?? 0}채`}
+              aria-label={`${DISTRICT[d].name}로 가기, 1동 집 ${counts[d].get(1) ?? 0}채`}
             >
-              <span className="map-label__code">{DISTRICT[d].short} 지역</span>
+              <span className="map-label__code">{DISTRICT[d].short}</span>
             </button>
           ))}
           {homeHere && (
@@ -618,7 +588,6 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
                 <span className="debate-link__label">오늘의 토론</span> ›
               </Link>
               {spot !== 'club' && <ContestChip onOpen={() => setContestOpen(true)} />}
-              {spot !== 'club' && !guest && <ElementChip onOpen={() => setElementOpen(true)} />}
             </div>
             <div className="hud__right hud__right--stack">
               <div className="hud__icons">
@@ -660,7 +629,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
           {showWelcome && (
             <div className="village-welcome">
               <Guide who="monnyang">
-                {hoodName(pass?.district || 'wood', pass?.hood ?? 1)}에 내 집이 생겼어요! 문 앞에서 &lsquo;들어가기&rsquo;를 누르면 나의 방이에요.
+                {pass?.district ? hoodName(pass.district, pass.hood ?? 1) : '마을'}에 내 집이 생겼어요! 문 앞에서 &lsquo;들어가기&rsquo;를 누르면 나의 방이에요.
               </Guide>
               <button className="icon-btn icon-btn--plain" onClick={() => setShowWelcome(false)} aria-label="안내 닫기">
                 <Icon name="close" size={18} />
@@ -766,13 +735,6 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
               </button>
             )}
 
-            {nearSaju && !sajuOpen && !picked && !nearBeacon && (
-              <button className="door-btn" onClick={() => (guest ? setToast('집이 있는 주민만 사주와 타로를 볼 수 있어요') : setSajuOpen(true))}>
-                <Icon name="sparkle" size={20} />
-                {SAJU_NAME}에게 사주·타로 보기
-              </button>
-            )}
-
             {nearStall !== null && stallOpen === null && !nearBeacon && (
               <button className="door-btn" onClick={() => onStall(nearStall)}>
                 <Icon name="basket" size={20} />
@@ -794,14 +756,14 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
 
             {nearTree && !picked && !gateFor && !showDoor && !nearGate && (
               <button className="door-btn" onClick={() => pickTree(nearTree)} disabled={picking}>
-                <ItemIcon kind="fruit" id={nearTree.kind === 'fortune' ? FORTUNE_FRUIT.id : FRUITS[nearTree.district!].id} size={24} />
+                <ItemIcon kind="fruit" id={nearTree.kind === 'fortune' ? FORTUNE_FRUIT.id : fruitOf(nearTree.district!).id} size={24} />
                 {nearTree.kind === 'fortune'
                   ? play?.pickedTrees.includes('fortune')
                     ? '오늘의 운세 다시 보기'
                     : '운세 열매 따기'
                   : play?.pickedTrees.includes(nearTree.spot)
-                    ? `${FRUITS[nearTree.district!].name} 나무 (오늘은 다 땄어요)`
-                    : `${FRUITS[nearTree.district!].name} 따기`}
+                    ? `${fruitOf(nearTree.district!).name} 나무 (오늘은 다 땄어요)`
+                    : `${fruitOf(nearTree.district!).name} 따기`}
               </button>
             )}
 
@@ -846,19 +808,19 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
             </div>
             {here ? (
               <>
-                <p className="map-card__sub">본섬 {DISTRICT[here.district].short} 지역 큰길 끝 동네 길과 이어져 있어요.</p>
+                <p className="map-card__sub">본섬 {DISTRICT[here.district].name} 큰길 끝 동네 길과 이어져 있어요.</p>
                 <button className="btn-secondary map-card__action" onClick={() => router.push(hoodHref(here.district, 1))}>
                   본섬으로 나가기
                 </button>
               </>
             ) : (
               <p className="map-card__sub">
-                다섯 지역이 중앙광장을 둘러싸고 있어요. 지역마다 1동 집터 {townConfig.lotsPerDistrict}곳이 다 차면 큰길 끝 동네 길 너머에 2동이 열려요.
+                MBTI 16개 마을이 중앙광장을 둘러싸고 있어요. 북쪽 분석가, 동쪽 외교관, 남쪽 관리자, 서쪽 탐험가 구역이에요. 마을마다 1동 집터 {townConfig.lotsPerDistrict}곳이 다 차면 큰길 끝 동네 길 너머에 2동이 열려요.
               </p>
             )}
           </div>
           <div className="hud__bottom">
-            <div className="hud__hint">{here ? '이름표를 누르면 동네 입구로 가요' : '가고 싶은 지역이나 광장을 누르세요'}</div>
+            <div className="hud__hint">{here ? '이름표를 누르면 동네 입구로 가요' : '가고 싶은 마을이나 광장을 누르세요'}</div>
           </div>
         </div>
       )}
@@ -904,12 +866,10 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
             if (input.fishing) input.fishing.biteAt = now();
           }}
           onCaught={(r) => {
-            noticeElementFill(r.element);
             if (input.fishing) Object.assign(input.fishing, { caughtAt: now(), fishId: r.fish?.id });
             // 잡은 물고기를 머리 위로 들어 보인 뒤에 이모티콘 (꽝이면 바로 시무룩)
             const f = r.fish;
-            if (r.ticket) setTimeout(() => session.sendEmote('sparkle'), 900);
-            else if (!f) session.sendEmote('sad');
+            if (!f) session.sendEmote('sad');
             else setTimeout(() => session.sendEmote(f.rarity === 'legend' ? 'sparkle' : f.rarity === 'junk' ? 'question' : 'joy'), 2600);
           }}
           onClose={() => {
@@ -920,9 +880,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         />
       )}
       {npcOpen && <NpcDialog guest={isGuest} first={npcOpen.first} onClose={closeNpc} />}
-      {sajuOpen && <SajuSheet onClose={() => setSajuOpen(false)} />}
       {contestOpen && <ContestSheet guest={isGuest} onClose={() => setContestOpen(false)} />}
-      {elementOpen && <ElementSheet onClose={() => setElementOpen(false)} />}
       {stallOpen !== null && <MarketSheet slot={stallOpen} view={market} onChanged={setMarket} onClose={() => setStallOpen(null)} />}
       {clubSheet === 'dj' && (
         <DjSheet
@@ -940,8 +898,6 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
             clubBar.servedAt = now();
             // 잔을 들어 건배 (물은 그냥)
             if (d.units > 0) session.sendAction('cheer');
-            // 오행 채우기: 바에서 한 잔 (화 기운, 하루 한 번)
-            if (!isGuest) void reportElement('fire', 'drink').then((f) => f && setToast(elementLine(f)));
           }}
           onClose={() => setClubSheet(null)}
         />

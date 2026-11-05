@@ -35,13 +35,35 @@ export const tokens = {
     shadow: 'rgb(40 50 64 / 0.1)',
     scrim: 'rgb(40 50 64 / 0.72)',
   },
-  /** 다섯 거주 지역 색 */
+  /** 16유형 마을 색: 기질 그룹 색(groupNT·NF·SJ·SP)에서 명도만 바꾼다 (src/design/mbti.ts mbtiColor와 같은 값) */
   district: {
-    wood: '#6DBB7E',
-    fire: '#F08A6C',
-    earth: '#D9B57C',
-    metal: '#9EABBD',
-    water: '#6F9BDB',
+    INTJ: '#4834EA',
+    INTP: '#6959EE',
+    ENTJ: '#8B7FF2',
+    ENTP: '#A89FF5',
+    INFJ: '#309169',
+    INFP: '#3AB07F',
+    ENFJ: '#4EC593',
+    ENFP: '#69CDA4',
+    ISTJ: '#216FBE',
+    ISFJ: '#2D84DB',
+    ESTJ: '#4F98E1',
+    ESFJ: '#6EAAE6',
+    ISTP: '#E3990F',
+    ISFP: '#F1AC2A',
+    ESTP: '#F3BA50',
+    ESFP: '#F6C872',
+  },
+  /** 오늘의 토론 성향 팀 색 (축마다 서로 잘 구분되는 두 색) */
+  axis: {
+    E: '#F08A6C',
+    I: '#5B7FD6',
+    S: '#D9A54C',
+    N: '#9B7BE0',
+    T: '#3E8EDE',
+    F: '#F27E9C',
+    J: '#3FAF7F',
+    P: '#F2B33D',
   },
   /** 감정 아이콘 색 (감정에 따라 점수나 보상을 다르게 주지 않는다) */
   emotion: {
@@ -106,8 +128,6 @@ export const tokens = {
     floorLine: 'rgb(60 40 20 / 0.12)',
     /** 벽 윗면과 걸레받이 */
     trim: '#FFFFFF',
-    /** 일주 동물 펫 몸 색: 천간 오행의 전통 색 (청·적·황·백·흑) */
-    pet: { wood: '#4FAE8C', fire: '#E86F5E', earth: '#E9BC4E', metal: '#F1EFE8', water: '#46507A' },
     /** 집 안에서 벽 너머(방 밖)의 어둠. 방이 무대처럼 떠 보이게 따뜻한 어두운 색 */
     outside: '#2B2731',
     /** 방 밖 배경 */

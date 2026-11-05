@@ -10,7 +10,6 @@ import { parseSpot, type Spot } from '@/shared/protocol';
 import type { TownMap } from '@/shared/townMap';
 import { CARD_H, CARD_W, blankCard, canvasToBlob, cardFont, shareImage, wrapText } from '@/lib/shareCard';
 import { ItemIcon, RARITY } from '../app/Inventory';
-import { elementLine } from './ElementSheet';
 import { Sheet } from '../app/Sheet';
 
 export interface TreeInfo {
@@ -76,8 +75,8 @@ export function FishingPanel({
     try {
       const [r] = await Promise.all([onCast(), new Promise((res) => setTimeout(res, wait))]);
       if (my !== round.current) return;
-      // 꽝: 입질 없이 그대로 감아올린다 (사주 이용권은 입질이 온다)
-      if (!r.fish && !r.ticket) {
+      // 꽝: 입질 없이 그대로 감아올린다
+      if (!r.fish) {
         setResult(r);
         setStage('caught');
         onCaught(r);
@@ -117,30 +116,14 @@ export function FishingPanel({
         </>
       )}
       {stage === 'bite' && <p className="fishing__text fishing__text--bite">앗! 물었다!</p>}
-      {stage === 'caught' && result?.ticket && (
-        <div className="fishing__result fishing__result--mythic">
-          <span className="fishing__fish" aria-hidden>
-            <ItemIcon kind="ticket" id="saju" size={56} />
-          </span>
-          <div className="fishing__info">
-            <p className="fishing__name">사주 이용권!</p>
-            <p className="fishing__meta fishing__mythic">
-              {result.announced ? '마을 모두에게 소식이 퍼졌어요! ' : ''}광장 사주상담소에서 상세 풀이를 볼 수 있어요.
-            </p>
-          </div>
-        </div>
-      )}
-      {stage === 'caught' && result && !result.fish && !result.ticket && (
+      {stage === 'caught' && result && !result.fish && (
         <div className="fishing__result">
           <span className="fishing__miss" aria-hidden>
             ✕
           </span>
           <div className="fishing__info">
             <p className="fishing__name">꽝!</p>
-            <p className="fishing__meta">
-              아무것도 안 걸렸어요. 다시 던져 볼까요?
-              {result.element?.added && <> · {elementLine(result.element)}</>}
-            </p>
+            <p className="fishing__meta">아무것도 안 걸렸어요. 다시 던져 볼까요?</p>
           </div>
         </div>
       )}
@@ -158,7 +141,6 @@ export function FishingPanel({
               <span style={{ color: RARITY[result.fish.rarity].color }}>{RARITY[result.fish.rarity].label}</span> · 도감 {result.count}마리째
               {result.earned > 0 && <> · +{result.earned.toLocaleString('ko-KR')}코인</>}
               {!!result.contest && <> · 대항전 +{result.contest}점</>}
-              {result.element?.added && <> · {elementLine(result.element)}</>}
             </p>
             {result.fish.rarity === 'mythic' && (
               <p className="fishing__meta fishing__mythic">{result.announced ? '마을 모두에게 소식이 퍼졌어요!' : '10만 번에 한 번 나오는 꿈의 고래예요!'}</p>

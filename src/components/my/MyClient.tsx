@@ -1,25 +1,21 @@
 'use client';
 
-// MY: 설정 (PROJECT_GUIDE.md 4, 9, 11장). 프로필, 나의 사주(생일 고치기 → 사는 동네 다시 정하기), 공개 범위, 친구·차단, 기록 내보내기·삭제.
+// MY: 설정 (PROJECT_GUIDE.md 4, 9, 11장). 프로필, 나의 MBTI(바꾸면 그 마을로 이사), 공개 범위, 친구·차단, 기록 내보내기·삭제.
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { socialConfig } from '@/config/game';
-import { MBTI_TYPES } from '@/design/mbti';
+import { MBTI, MBTI_TYPES, isMbtiType } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { call, errorMessage } from '@/lib/api';
 import type { MyProfile, PlayState, RoomCard } from '@/server/scene/service';
 import { DISTRICT } from '@/shared/districts';
-import type { SajuReading } from '@/shared/saju';
 import { VISIBILITY_LABEL, type Visibility } from '@/shared/records';
 import { ResidentCard } from '../app/ResidentCard';
 import { InventorySheet, ItemIcon } from '../app/Inventory';
-import { FISH, FORTUNE_FRUIT, FRUITS } from '@/shared/play';
-import { DISTRICTS } from '@/shared/districts';
+import { ALL_FRUITS, FISH } from '@/shared/play';
 import { Icon } from '../app/Icon';
 import { TabBar } from '../app/TabBar';
 import { useMe } from '../app/useMe';
-import { BirthForm, birthFromDraft, draftFromBirth, type BirthDraft } from '../saju/BirthForm';
-import { SajuCard } from '../saju/SajuCard';
 
 interface Friends {
   friends: RoomCard[];
@@ -53,9 +49,6 @@ export function MyClient() {
   const [toast, setToast] = useState<string | null>(null);
   const [play, setPlay] = useState<PlayState | null>(null);
   const [bagOpen, setBagOpen] = useState(false);
-  /** 생일 고치기: 고친 값과 미리 본 사주 */
-  const [birthEdit, setBirthEdit] = useState<BirthDraft | null>(null);
-  const [birthPreview, setBirthPreview] = useState<SajuReading | null>(null);
 
   useEffect(() => {
     if (!me?.profile) return;
@@ -95,27 +88,6 @@ export function MyClient() {
     }
   }
 
-  async function previewBirth() {
-    const b = birthEdit && birthFromDraft(birthEdit);
-    if (!b) return;
-    try {
-      setBirthPreview(await call<SajuReading>('POST', '/api/saju/preview', b));
-    } catch (e) {
-      setToast(errorMessage(e));
-    }
-  }
-
-  async function saveBirth() {
-    const b = birthEdit && birthFromDraft(birthEdit);
-    if (!b || !birthPreview || !profile) return;
-    const moving = birthPreview.district !== profile.district;
-    const to = `${DISTRICT[birthPreview.district].short} 지역`;
-    if (moving && !confirm(`사주가 바뀌어 ${to}으로 이사해요. 집이 그 지역의 빈 집터로 옮겨져요. 저장할까요?`)) return;
-    await patch({ birth: b }, moving ? `${to}으로 이사했어요` : '생일 정보를 고쳤어요');
-    setBirthEdit(null);
-    setBirthPreview(null);
-  }
-
   async function friendAction(h: string, action: 'request' | 'accept' | 'remove') {
     try {
       await call('POST', '/api/friends', { handle: h, action });
@@ -130,10 +102,12 @@ export function MyClient() {
   }
 
   async function setMbti(mbti: string) {
+    if (!isMbtiType(mbti) || mbti === me?.mbti) return;
+    if (!confirm(`${mbti} 마을로 이사해요. 집이 그 마을의 빈 집터로 옮겨지고, 방과 기록은 그대로예요. 바꾼 뒤 일주일 동안은 다시 바꿀 수 없어요. 바꿀까요?`)) return;
     try {
       await call('POST', '/api/me', { mbti });
       await reload();
-      setToast('MBTI를 저장했어요');
+      setToast(`${mbti} 마을로 이사했어요`);
     } catch (e) {
       setToast(errorMessage(e));
     }
@@ -228,46 +202,23 @@ export function MyClient() {
       </section>
 
       <section className="section card">
-        <h2 className="section-title">나의 사주와 동네</h2>
+        <h2 className="section-title">나의 MBTI와 마을</h2>
         {profile.district && profile.houseLot !== null && (
           <p>
-            내 집: <b>{DISTRICT[profile.district].short} {profile.houseHood > 1 ? `${profile.houseHood}동` : '지역 1동'} {profile.houseLot + 1}번지</b>
+            내 집: <b>{DISTRICT[profile.district].name} {profile.houseHood > 1 ? `${profile.houseHood}동` : '1동'} {profile.houseLot + 1}번지</b>
           </p>
         )}
-        {profile.saju ? (
-          <SajuCard reading={profile.saju} compact />
-        ) : (
-          <p className="muted">생일을 넣으면 사주를 풀어 사는 동네를 다시 정해요. (사주로 동네를 정하기 전에 가입한 주민이에요)</p>
-        )}
-        {!birthEdit ? (
-          <button className="btn-secondary" onClick={() => setBirthEdit(draftFromBirth(profile.birth))}>
-            {profile.birth ? '생일 정보 고치기' : '생일 넣고 사주 보기'}
-          </button>
-        ) : (
-          <div className="birth-edit">
-            <BirthForm value={birthEdit} onChange={(b) => { setBirthEdit(b); setBirthPreview(null); }} />
-            {birthPreview && <SajuCard reading={birthPreview} compact />}
-            <div className="field__row">
-              <button className="btn-ghost" onClick={() => { setBirthEdit(null); setBirthPreview(null); }}>취소</button>
-              {birthPreview ? (
-                <button className="btn-primary btn-primary--inline" onClick={saveBirth}>저장</button>
-              ) : (
-                <button className="btn-primary btn-primary--inline" onClick={previewBirth} disabled={!birthFromDraft(birthEdit)}>사주 다시 보기</button>
-              )}
-            </div>
-          </div>
-        )}
-        <p className="muted">사는 동네는 사주의 일간 오행으로 정해져서 직접 고르지 않아요. 생일을 고쳐 동네가 바뀌면 집이 새 동네 빈 집터로 옮겨지고, 방과 기록은 그대로예요.</p>
         <label className="field">
-          <span>MBTI (오늘의 토론 참여용, 선택)</span>
+          <span>MBTI (= 사는 마을, 오늘의 토론에서 내 편)</span>
           <select value={me.mbti ?? ''} disabled={!!changeable} onChange={(e) => e.target.value && setMbti(e.target.value)}>
-            <option value="">입력하지 않기</option>
+            {!me.mbti && <option value="">MBTI를 골라 주세요</option>}
             {MBTI_TYPES.map((t) => (
-              <option key={t} value={t}>{t}</option>
+              <option key={t} value={t}>{t} · {MBTI[t].label}</option>
             ))}
           </select>
-          {changeable && <small className="muted">{changeable.toLocaleDateString('ko-KR')} 이후에 바꿀 수 있어요 (7일에 한 번)</small>}
+          {changeable && <small className="muted">{changeable.toLocaleDateString('ko-KR')} 이후에 바꿀 수 있어요 (일주일에 한 번)</small>}
         </label>
+        <p className="muted">MBTI를 바꾸면 그 유형 마을로 이사해요. 집이 새 마을 빈 집터로 옮겨지고, 방과 기록은 그대로예요.</p>
       </section>
 
       <section className="section card">
@@ -392,7 +343,7 @@ export function MyClient() {
 function BagPreview({ play }: { play: PlayState | null }) {
   if (!play) return <div className="loader" aria-hidden />;
   const items = [
-    ...[...DISTRICTS.map((d) => FRUITS[d]), FORTUNE_FRUIT].map((f) => ({ kind: 'fruit' as const, id: f.id, name: f.name, n: play.fruits[f.id] ?? 0 })),
+    ...ALL_FRUITS.map((f) => ({ kind: 'fruit' as const, id: f.id, name: f.name, n: play.fruits[f.id] ?? 0 })),
     ...FISH.map((f) => ({ kind: 'fish' as const, id: f.id, name: f.name, n: play.fish[f.id] ?? 0 })),
   ].filter((i) => i.n > 0);
   if (!items.length) return <p className="muted">아직 모은 게 없어요. 마을에서 열매를 따고 낚시를 해 봐요!</p>;

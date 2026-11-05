@@ -7,20 +7,17 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { tokens } from '../src/design/tokens';
 import { BGM_TRACKS } from '../src/shared/bgm';
-import { DISTRICTS, type District } from '../src/shared/districts';
+import { THEMES, type Theme } from '../src/shared/districts';
 import { EMOTIONS } from '../src/shared/records';
 import { FURNITURE } from '../src/shared/room';
 import { encodeTrack, TRACKS } from './lib/bgm';
 import { Bitmap, hex, type RGBA } from './lib/bitmap';
 import { FURNITURE_MATERIALS, FURNITURE_PARTS } from './lib/furniture';
 import { buildSkinned, buildStatic, chibiCharacterSpec, groupPropParts, type Part } from './lib/models';
-import { petParts } from './lib/pets';
-import { fishIcons, fruitIcons, ticketIcons } from './lib/item-icons';
-import { tarotCards } from './lib/tarot-cards';
-import { bartenderBearSpec, djRaccoonSpec, guideCatSpec, sajuOwlSpec } from './lib/npc';
-import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, marketStallParts, plazaScreenParts, sajuTentParts, speakerParts } from './lib/play-props';
-import { FRUITS } from '../src/shared/play';
-import { PET_ANIMALS } from '../src/shared/pet';
+import { fishIcons, fruitIcons } from './lib/item-icons';
+import { bartenderBearSpec, djRaccoonSpec, guideCatSpec } from './lib/npc';
+import { rodParts, beaconParts, clubBarParts, clubDoorParts, clubSofaParts, clubWallParts, djBoothParts, fortuneTreeParts, fruitTreeParts, marketStallParts, plazaScreenParts, speakerParts } from './lib/play-props';
+import { FRUITS, fruitTreeKey } from '../src/shared/play';
 import { TOWN_TILES, buildHoodMap, buildSpotMap, buildTownMap } from './lib/town-map';
 import {
   PROP_MATERIALS, benchParts, boardParts, flagParts, fountainParts, gateParts, greenhouseParts, houseParts, lampParts, lotParts,
@@ -74,7 +71,6 @@ async function genAvatar() {
   for (const [key, name, spec] of [
     ['char.npc.dj', 'char_npc_dj', djRaccoonSpec()],
     ['char.npc.bartender', 'char_npc_bartender', bartenderBearSpec()],
-    ['char.npc.saju', 'char_npc_saju', sajuOwlSpec()],
   ] as const) {
     const f = `characters/${name}_ph.glb`;
     save(f, await buildSkinned(name, spec));
@@ -86,17 +82,6 @@ async function genAvatar() {
     const f = `characters/char_acc_${name}_ph.glb`;
     save(f, await buildStatic(`acc_${name}`, groupPropParts(group), { base: { roughness: 0.6 }, outfit: { roughness: 0.7 } }));
     register(`char.acc.${name}`, { file: f });
-    record(f);
-  }
-}
-
-// ───────────────────────── 일주 동물 펫 (띠 동물 12종) ─────────────────────────
-
-async function genPets() {
-  for (const animal of PET_ANIMALS) {
-    const f = `pets/pet_${animal}_ph.glb`;
-    save(f, await buildStatic(`pet_${animal}`, petParts(animal), { base: { roughness: 0.6 }, outfit: { roughness: 0.75 } }));
-    register(`pet.${animal}`, { file: f });
     record(f);
   }
 }
@@ -164,14 +149,13 @@ async function genTownProps() {
     ['prop.district.workshop', 'prop_district_workshop', workshopParts()],
     ['prop.district.pier', 'prop_district_pier', pierParts()],
     ['prop.hood.gate', 'prop_hood_gate', gateParts()],
-    // 놀거리: 지역 열매 나무, 광장 운세 나무, 낚시터·클럽 비콘, 클럽 소품
-    ...DISTRICTS.map((d): [string, string, Part[]] => [`prop.fruit.${d}`, `prop_fruit_${d}`, fruitTreeParts(FRUITS[d].color)]),
+    // 놀거리: 기질 그룹마다 열매 나무, 광장 운세 나무, 낚시터·클럽 비콘, 클럽 소품
+    ...THEMES.map((t): [string, string, Part[]] => [fruitTreeKey(t), `prop_fruit_${t.toLowerCase()}`, fruitTreeParts(FRUITS[t].color)]),
     ['prop.plaza.fortune_tree', 'prop_plaza_fortune_tree', fortuneTreeParts()],
     ['prop.plaza.beacon_fishing', 'prop_plaza_beacon_fishing', beaconParts('#5BB6E8', 'fish')],
     ['prop.plaza.beacon_club', 'prop_plaza_beacon_club', beaconParts('#C77DFF', 'club')],
     ['prop.plaza.beacon_market', 'prop_plaza_beacon_market', beaconParts('#F2A23A', 'shop')],
     ['prop.market.stall', 'prop_market_stall', marketStallParts()],
-    ['prop.plaza.saju', 'prop_plaza_saju', sajuTentParts()],
     ['prop.plaza.screen', 'prop_plaza_screen', plazaScreenParts()],
     ['prop.club.booth', 'prop_club_booth', djBoothParts()],
     ['prop.club.speaker', 'prop_club_speaker', speakerParts()],
@@ -268,8 +252,9 @@ function house(b: Bitmap, x: number, y: number, w: number, h: number, wall: stri
   if (light) b.fillRect(x + w * 0.12, y + h * 0.2, w * 0.18, h * 0.2, hex(light));
 }
 
-const VIEWS: Record<District, (b: Bitmap) => void> = {
-  wood: (b) => {
+/** 방 창밖 풍경: 사는 마을의 기질 그룹 풍경 */
+const VIEWS: Record<Theme, (b: Bitmap) => void> = {
+  NF: (b) => {
     gradient(b, '#9FD6F5', '#E7F7FF', 0, 330);
     cloud(b, 140, 90, 1.1, hex('#FFFFFF', 230));
     cloud(b, 380, 140, 0.8, hex('#FFFFFF', 210));
@@ -284,7 +269,7 @@ const VIEWS: Record<District, (b: Bitmap) => void> = {
       tree(b, x, y, s, '#8ED39A', '#5FAE6E');
     }
   },
-  fire: (b) => {
+  SP: (b) => {
     gradient(b, '#F7A27E', '#FFE0B5', 0, 360);
     b.fillEllipse(256, 300, 70, 70, hex('#FFF3C9', 230));
     cloud(b, 120, 110, 0.9, hex('#FFC6B0', 200));
@@ -298,19 +283,7 @@ const VIEWS: Record<District, (b: Bitmap) => void> = {
     }
     for (let i = 0; i < 18; i++) b.fillEllipse(20 + i * 28, 470 + (i % 2) * 6, 4, 4, hex('#FFE58A'));
   },
-  earth: (b) => {
-    gradient(b, '#BFE3F3', '#FFF5E3', 0, 320);
-    cloud(b, 360, 100, 1.1, hex('#FFFFFF', 230));
-    b.fillEllipse(110, 360, 260, 130, hex('#E9D8A6'));
-    b.fillEllipse(420, 380, 260, 130, hex('#DCC793'));
-    b.fillRect(0, 380, 512, 132, hex('#DCC793'));
-    b.fillPolygon([[220, 512], [300, 512], [280, 380], [262, 380]], hex('#C9B8A0'));
-    for (let i = 0; i < 6; i++) b.fillEllipse(268 + (i % 2) * 8, 400 + i * 20, 10, 6, hex('#B7A48A'));
-    house(b, 70, 300, 80, 70, '#FFF6EA', '#C98B6B', '#FFE7A3');
-    house(b, 360, 320, 90, 76, '#FFF2DE', '#B98A64', '#FFE7A3');
-    house(b, 180, 270, 60, 54, '#FFF6EA', '#D9A07B');
-  },
-  metal: (b) => {
+  NT: (b) => {
     gradient(b, '#C9D6E6', '#F4F7FB', 0, 512);
     cloud(b, 130, 80, 0.9, hex('#FFFFFF', 220));
     const towers: [number, number, number][] = [[20, 150, 90], [120, 90, 110], [240, 180, 80], [330, 60, 120], [450, 140, 80]];
@@ -322,7 +295,7 @@ const VIEWS: Record<District, (b: Bitmap) => void> = {
     }
     b.fillRect(0, 470, 512, 42, hex('#BCC7D6'));
   },
-  water: (b) => {
+  SJ: (b) => {
     gradient(b, '#1E2B57', '#5A6FA8', 0, 300);
     const r = (k: number) => {
       const v = Math.sin(k * 12.9898) * 43758.5453;
@@ -341,12 +314,12 @@ const VIEWS: Record<District, (b: Bitmap) => void> = {
 };
 
 function genViews() {
-  for (const d of DISTRICTS) {
+  for (const t of THEMES) {
     const b = new Bitmap(512, 512);
-    VIEWS[d](b);
-    const file = `room/room_view_${d}_ph.png`;
+    VIEWS[t](b);
+    const file = `room/room_view_${t.toLowerCase()}_ph.png`;
     save(file, b.toPngUpFilter());
-    register(`room.view.${d}`, { file, size: [512, 512] });
+    register(`room.view.${t.toLowerCase()}`, { file, size: [512, 512] });
     record(file);
   }
 }
@@ -441,7 +414,7 @@ function genIcons() {
 // ───────────────────────── 가방 아이템 아이콘 (열매·물고기) ─────────────────────────
 
 function genItems() {
-  for (const [kind, list] of [['fruit', fruitIcons()], ['fish', fishIcons()], ['ticket', ticketIcons()], ['tarot', tarotCards()]] as const) {
+  for (const [kind, list] of [['fruit', fruitIcons()], ['fish', fishIcons()]] as const) {
     for (const { id, svg: body } of list) {
       const file = `items/item_${kind}_${id}_ph.svg`;
       save(file, body);
@@ -521,7 +494,6 @@ function writeLicenses() {
 
 cleanManifest();
 await genAvatar();
-await genPets();
 genGuides();
 await genFurniture();
 await genTownProps();

@@ -1,13 +1,12 @@
 'use client';
 
-// 주민증: 지역 배정을 받고 집이 생기면 나온다. 닉네임 · 사는 지역 · 가입한 날짜 · MBTI · 취미.
+// 주민증: MBTI 마을에 집이 생기면 나온다. 닉네임 · 사는 마을 · 가입한 날짜 · MBTI · 취미.
 // 1080×1350 그림으로 만들어 인스타·스레드에 공유한다 (휴대폰 공유 창, 안 되면 저장).
 import { useEffect, useState } from 'react';
 import { withMaxLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import type { AvatarColor } from '@/shared/avatar';
-import { DISTRICT, type District } from '@/shared/districts';
-import { ELEMENT_INFO } from '@/shared/saju';
+import { DISTRICT, type District, THEME, themeOf } from '@/shared/districts';
 import { CARD_H, CARD_W, blankCard, canvasToBlob, cardFont, shareImage, threadsIntent } from '@/lib/shareCard';
 
 export interface ResidentInfo {
@@ -24,12 +23,12 @@ export interface ResidentInfo {
   handle?: string;
 }
 
-const placeLabel = (r: ResidentInfo) => `${DISTRICT[r.district].short} 지역${r.hood > 1 ? ` ${r.hood}동` : ''}`;
+const placeLabel = (r: ResidentInfo) => `${DISTRICT[r.district].name}${r.hood > 1 ? ` ${r.hood}동` : ''}`;
 const dateLabel = (d: string) => `${d.slice(0, 4)}. ${Number(d.slice(5, 7))}. ${Number(d.slice(8, 10))}.`;
 
 async function drawResidentCard(r: ResidentInfo, site: string): Promise<HTMLCanvasElement> {
   const { canvas, ctx } = await blankCard();
-  // 밝은 지역 색(은빛 등)은 흰 바탕·흰 글자와 대비가 약해 진하게 쓴다
+  // 밝은 마을 색(탐험가 노랑 등)은 흰 바탕·흰 글자와 대비가 약해 진하게 쓴다
   const dc = withMaxLightness(tokens.district[r.district], 0.5);
   const ink = withMaxLightness(tokens.district[r.district], 0.4);
   // 카드 판
@@ -44,7 +43,7 @@ async function drawResidentCard(r: ResidentInfo, site: string): Promise<HTMLCanv
   ctx.roundRect(x0, y0, w, h, 44);
   ctx.fill();
   ctx.shadowBlur = 0;
-  // 머리띠 (지역 색)
+  // 머리띠 (마을 색)
   ctx.save();
   ctx.beginPath();
   ctx.roundRect(x0, y0, w, h, 44);
@@ -58,7 +57,7 @@ async function drawResidentCard(r: ResidentInfo, site: string): Promise<HTMLCanv
   ctx.fillText('SCENE 주민증', x0 + 56, y0 + 95);
   ctx.font = cardFont(600, 30);
   ctx.textAlign = 'right';
-  ctx.fillText(`${ELEMENT_INFO[r.district].ko}(${ELEMENT_INFO[r.district].hanja}) · ${DISTRICT[r.district].name}`, x0 + w - 56, y0 + 92);
+  ctx.fillText(`${THEME[themeOf(r.district)].name} · ${THEME[themeOf(r.district)].place}`, x0 + w - 56, y0 + 92);
 
   // 얼굴 (캐릭터 몸 색)
   const fx = x0 + 190;
@@ -91,7 +90,7 @@ async function drawResidentCard(r: ResidentInfo, site: string): Promise<HTMLCanv
   // 항목
   const rows: [string, string][] = [
     ['닉네임', r.name],
-    ['사는 지역', placeLabel(r)],
+    ['사는 마을', placeLabel(r)],
     ['가입한 날짜', dateLabel(r.joinedAt)],
     ['MBTI', r.mbti || '아직 몰라요'],
     ['취미', r.hobby || '찾는 중'],
@@ -104,7 +103,7 @@ async function drawResidentCard(r: ResidentInfo, site: string): Promise<HTMLCanv
     ctx.fillStyle = tokens.color.textSub;
     ctx.font = cardFont(600, 28);
     ctx.fillText(k, lx, y);
-    ctx.fillStyle = k === '사는 지역' ? ink : tokens.color.text;
+    ctx.fillStyle = k === '사는 마을' ? ink : tokens.color.text;
     // 길면 글자를 줄이고, 그래도 넘치면 말줄임
     let size = 44;
     ctx.font = cardFont(800, size);
@@ -125,7 +124,7 @@ async function drawResidentCard(r: ResidentInfo, site: string): Promise<HTMLCanv
   ctx.fillStyle = tokens.color.textSub;
   ctx.font = cardFont(600, 30);
   ctx.textAlign = 'center';
-  ctx.fillText('사주로 사는 동네가 정해지는 마을', CARD_W / 2, y0 + h - 52);
+  ctx.fillText('MBTI 16개 마을이 모인 섬', CARD_W / 2, y0 + h - 52);
 
   ctx.fillStyle = tokens.color.text;
   ctx.font = cardFont(800, 40);

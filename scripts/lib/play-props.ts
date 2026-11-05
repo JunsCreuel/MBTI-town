@@ -250,48 +250,6 @@ export function marketStallParts(): Part[] {
   return parts;
 }
 
-// ───────────────────────── 사주상담소 ─────────────────────────
-
-/**
- * 사주상담소 천막 (지름 약 2.6): 남색 천막에 금빛 별, 앞쪽이 열린 입구, 등불 둘.
- * 앞(+Z) 1.5칸에 작은 상담 탁자와 빛나는 수정 구슬. 부엉 도사는 입구와 탁자 사이(앞 0.8)에 선다.
- */
-export function sajuTentParts(): Part[] {
-  const cloth = '#3B3A6B';
-  const clothLight = '#5A58A0';
-  const gold = C.gold;
-  // 천막 몸통은 뒤로(z = -0.75), 입구는 z ≈ 0.53, 상담 탁자는 앞 1.5. 도사는 입구와 탁자 사이(0.8)에 선다
-  const back = -0.75;
-  const R = 1.28;
-  const wallZ = (x: number) => back + Math.sqrt(R * R - x * x);
-  const parts: Part[] = [
-    // 벽(팔각 기둥)과 지붕(팔각 뿔)
-    part(cyl(1.25, 1.3, 1.3, 8), cloth, { pos: [0, 0.65, back] }),
-    part(new THREE.ConeGeometry(1.5, 1.2, 8), clothLight, { pos: [0, 1.9, back] }),
-    part(cyl(0.05, 0.05, 0.5, 6), gold, { pos: [0, 2.7, back] }),
-    part(new THREE.OctahedronGeometry(0.13, 0), gold, { pos: [0, 3.0, back], mat: 'glow' }),
-    // 지붕 둘레 금빛 띠
-    part(new THREE.TorusGeometry(1.42, 0.035, 6, 8), gold, { pos: [0, 1.32, back], rot: [90, 0, 22.5] }),
-    // 입구: 열린 휘장 (어둡게 비치는 안쪽)
-    part(box(0.9, 1.1, 0.04), '#14122A', { pos: [0, 0.55, wallZ(0) + 0.02] }),
-    ...[-1, 1].map((s) => part(box(0.22, 1.15, 0.06), clothLight, { pos: [0.55 * s, 0.6, wallZ(0.55) + 0.05], rot: [0, 18 * s, 0] })),
-    // 벽의 금빛 별 (앞쪽에 보이게)
-    ...([[-0.85, 0.9], [0.85, 0.75], [-1.0, 0.35], [1.0, 0.3]] as [number, number][]).map(([x, y]) =>
-      part(new THREE.OctahedronGeometry(0.06, 0), gold, { pos: [x, y, wallZ(x) + 0.03], scale: [1, 1, 0.4] }),
-    ),
-    // 등불 둘 (밤에 켜짐)
-    ...[-1, 1].map((s) => part(cyl(0.02, 0.02, 0.35, 6), C.dark, { pos: [0.78 * s, 1.35, wallZ(0.78) + 0.15] })),
-    ...[-1, 1].map((s) => part(sphere(0.11, 12, 10), '#FF9E5A', { pos: [0.78 * s, 1.12, wallZ(0.78) + 0.15], scale: [1, 1.25, 1], mat: 'glow' })),
-    // 상담 탁자와 수정 구슬
-    part(cyl(0.42, 0.42, 0.05, 20), '#7A4B2E', { pos: [0, 0.62, 1.5] }),
-    part(cyl(0.06, 0.12, 0.6, 10), '#5B371F', { pos: [0, 0.3, 1.5] }),
-    part(cyl(0.44, 0.44, 0.02, 20), '#9C2F4E', { pos: [0, 0.655, 1.5] }),
-    part(cyl(0.09, 0.11, 0.05, 12), gold, { pos: [0, 0.69, 1.5] }),
-    part(sphere(0.13, 18, 14), '#9EE7FF', { pos: [0, 0.82, 1.5], mat: 'glow' }),
-  ];
-  return parts;
-}
-
 /**
  * 광장 전광판 (폭 7.2, 화면 높이 0.65~3.25): 두 기둥 위 넓은 화면 틀. 화면 글·그림은 마을 화면(PlazaScreen)이 캔버스로 그린다.
  * 정면(+Z)이 광장 쪽. 화면 판은 z = 0.16 앞에 붙는다 (PLAZA_SCREEN 값과 맞춘다).

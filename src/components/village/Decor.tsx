@@ -4,7 +4,7 @@
 // 맵에는 넣지 않고 칸 위치로 정해지는 난수로 늘 같은 자리에 놓는다. 지역마다 그 지역 식물을 쓴다.
 import { useMemo } from 'react';
 import { DISTRICTS } from '@/shared/districts';
-import { FLORA, LILIES, PLAZA_FLOWERS, hash01, pickWeighted } from '@/shared/flora';
+import { FLORA, floraOf, hash01, LILIES, pickWeighted, PLAZA_FLOWERS } from '@/shared/flora';
 import { WATER_LEVEL, type PropPlacement, type TownMap } from '@/shared/townMap';
 import { useTown } from './context';
 import { InstancedProps, buildGroup } from './Props';
@@ -32,9 +32,9 @@ function scatter(map: TownMap): PropPlacement[] {
       }
       if (!terrain.startsWith('grass') || map.blocked[i]) continue;
       const d = map.districtGrid[i] >= 0 ? DISTRICTS[map.districtGrid[i]] : null;
-      const flora = d ? FLORA[d] : null;
+      const flora = d ? floraOf(d) : null;
       if (r(6) < GROUND_RATE) {
-        const key = pickWeighted(flora ? flora.ground : FLORA.wood.ground.slice(0, 3), r(7));
+        const key = pickWeighted(flora ? flora.ground : FLORA.NF.ground.slice(0, 3), r(7));
         out.push(at(key, x + 0.15 + r(8) * 0.7, z + 0.15 + r(9) * 0.7, r(10)));
       }
       if (r(11) < FLOWER_RATE) {

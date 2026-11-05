@@ -1,7 +1,6 @@
 // 광장 전광판과 대항전 화면에 쓰는 것: 대항전 순위(지난주 결과를 정하는 일 포함)와 오늘의 토론 한 줄.
 import 'server-only';
-import { phaseOf, type Phase } from '@/shared/debate';
-import { isDistrict, type District } from '@/shared/districts';
+import { phaseOf, type Phase, type Team } from '@/shared/debate';
 import { getDebateService } from './debate';
 import { getSceneService } from './scene';
 import type { ContestView } from './scene/service';
@@ -17,8 +16,9 @@ export async function settleContestIfDue() {
 }
 
 export interface BoardDebate {
-  a: { district: District | null; label: string };
-  b: { district: District | null; label: string };
+  /** 두 편 (성향 대결이면 kind 'axis', id = 글자) */
+  a: Pick<Team, 'kind' | 'id' | 'label'>;
+  b: Pick<Team, 'kind' | 'id' | 'label'>;
   topic: string;
   phase: Phase;
   writingEndsAt: string;
@@ -41,7 +41,7 @@ export async function plazaBoard(): Promise<PlazaBoard> {
 async function boardDebate(): Promise<BoardDebate> {
   const service = await getDebateService();
   const match = await service.withResult(await service.currentMatch());
-  const team = (t: { id: string; label: string }) => ({ district: isDistrict(t.id) ? t.id : null, label: t.label });
+  const team = (t: Team) => ({ kind: t.kind, id: t.id, label: t.label });
   return {
     a: team(match.teamA),
     b: team(match.teamB),

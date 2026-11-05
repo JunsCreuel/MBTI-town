@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sajuConfig } from '@/config/game';
+import { contestConfig } from '@/config/game';
 import { NPC_GREETING, NPC_TOPICS } from './npc';
 
 describe('몬냥이 안내', () => {
@@ -14,15 +14,14 @@ describe('몬냥이 안내', () => {
     }
   });
 
-  it('새 기능(사주상담소·타로·클럽·코인·가방)을 안내하고, 복채는 설정 값으로 말한다', () => {
+  it('MBTI 마을·토론·대항전·놀거리를 안내하고, 사주 이야기는 하지 않는다', () => {
     const ids = NPC_TOPICS.map((t) => t.id);
-    for (const id of ['saju', 'club', 'coins', 'bag', 'contest', 'elements']) expect(ids).toContain(id);
-    const saju = NPC_TOPICS.find((t) => t.id === 'saju')!.lines(false).join(' ');
-    expect(saju).toContain(`${sajuConfig.tarotFee.one}코인`);
-    expect(saju).toContain(`${sajuConfig.fee.month}코인`);
-    expect(saju).toContain('타로');
+    for (const id of ['town', 'debate', 'contest', 'club', 'coins', 'bag']) expect(ids).toContain(id);
+    const all = [...NPC_GREETING, ...NPC_TOPICS.flatMap((t) => [...t.lines(true), ...t.lines(false)])].join(' ');
+    expect(all).not.toMatch(/사주|오행|타로|일주/);
+    expect(NPC_TOPICS.find((t) => t.id === 'contest')!.lines(false).join(' ')).toContain(`${contestConfig.points.debateWin}점`);
     // 집이 없는 손님에게는 집부터 지으라고 한다
-    expect(NPC_TOPICS.find((t) => t.id === 'saju')!.lines(true).at(-1)).toContain('나도 집 짓기');
-    expect(NPC_GREETING.join(' ')).toContain('사주상담소');
+    expect(NPC_TOPICS.find((t) => t.id === 'debate')!.lines(true).at(-1)).toContain('나도 집 짓기');
+    expect(NPC_GREETING.join(' ')).toContain('MBTI');
   });
 });

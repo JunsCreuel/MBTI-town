@@ -1,21 +1,22 @@
 // 마을 전체 초기 맵(Tiled JSON)을 만든다. 한 번 만든 뒤에는 Tiled에서 직접 고친다.
-// 구조: 가운데 중앙광장 → 둘레 길 → 다섯 지역(오행, 북쪽부터 시계 방향 목·화·토·금·수) → 모래사장 → 바다
+// 구조: 가운데 중앙광장 → 둘레 길 → 16유형 마을(북쪽부터 시계 방향, 기질 그룹 NT·NF·SJ·SP가 한 사분면씩) → 모래사장 → 바다
 //
 // 레이어
 //   ground    (타일) 땅 종류. 타일셋 타일 속성 terrain(string), height(float)
 //   deco      (오브젝트) 소품. name = manifest 키, type = "prop", (x, y) = 바닥 가운데 px, rotation = 방향(도, 시계 방향)
-//             지역 소품은 사용자 속성 district = 지역 id (그 지역 색으로 칠한다)
+//             마을 소품은 사용자 속성 district = 유형 코드 (그 마을 색으로 칠한다)
 //   collision (타일) 0이 아니면 막힘 (바다, 소품, 집터)
-//   spawn     (사각형) "spawn" = 중앙광장, "spawn.wood" 등 = 지역 입구, "gate.wood" 등 = 동네 길 앞
-//   lots      (점) 집터. name = "지역.번호", rotation = 집이 바라보는 방향(도). 집터는 늘 막혀 있다(빈 집터는 울타리).
-//   districts (타일) 지역 땅: 1~5 = DISTRICTS 순서, 0 = 광장·길·바닷가
+//   spawn     (사각형) "spawn" = 중앙광장, "spawn.ENFP" 등 = 마을 입구, "gate.ENFP" 등 = 동네 길 앞
+//   lots      (점) 집터. name = "유형.번호", rotation = 집이 바라보는 방향(도). 집터는 늘 막혀 있다(빈 집터는 울타리).
+//   districts (타일) 마을 땅: 1~16 = DISTRICTS 순서, 0 = 광장·길·바닷가
 //
-// 동네 틀 맵(buildHoodMap): 지역 1동(본섬) 집터가 다 차면 열리는 2동·3동…이 함께 쓰는 작은 섬.
-//   지역은 정해 두지 않는다. 화면과 서버가 그 동네의 지역을 입힌다 (townMap.ts withDistrict).
-//   lots 이름은 "hood.번호", districts 레이어는 땅 전체가 1, 지역 색 소품은 district 속성(아무 지역)만 표시해 둔다.
+// 동네 틀 맵(buildHoodMap): 마을 1동(본섬) 집터가 다 차면 열리는 2동·3동…이 함께 쓰는 작은 섬.
+//   마을은 정해 두지 않는다. 화면과 서버가 그 동네의 마을을 입힌다 (townMap.ts withDistrict).
+//   lots 이름은 "hood.번호", districts 레이어는 땅 전체가 1, 마을 색 소품은 district 속성(아무 마을)만 표시해 둔다.
 import { playConfig, townConfig } from '../../src/config/game';
-import { DISTRICTS, type District } from '../../src/shared/districts';
-import { BEACH_TREES, FLORA, PLAZA_TREES, TEMPLATE_BUSH, TEMPLATE_ROCK, TEMPLATE_TREE, pickWeighted } from '../../src/shared/flora';
+import { DISTRICTS, THEMES, THEME_DISTRICT, themeOf, type District, type Theme } from '../../src/shared/districts';
+import { fruitTreeKey } from '../../src/shared/play';
+import { BEACH_TREES, FLORA, HILL_FLORA, PLAZA_TREES, TEMPLATE_BUSH, TEMPLATE_ROCK, TEMPLATE_TREE, pickWeighted } from '../../src/shared/flora';
 
 export const TOWN_TILES = ['grass', 'grass2', 'stone', 'path', 'water', 'flowerbed', 'hedge', 'stoneEdge', 'sand'] as const;
 type TileName = (typeof TOWN_TILES)[number];
@@ -44,25 +45,25 @@ export const TOWN_RADII = {
   beach: 3,
 } as const;
 
-/** 지역마다 명소 (manifest 키) */
-const LANDMARK: Record<District, string> = {
-  wood: 'prop.district.greenhouse',
-  fire: 'prop.district.stage',
-  earth: 'prop.district.shop',
-  metal: 'prop.district.workshop',
-  water: 'prop.district.pier',
+/** 기질 그룹마다 명소 하나 (manifest 키). 그룹 가운데(둘째·셋째 마을 사이) 안쪽 풀밭에 선다 */
+const LANDMARK: Record<Theme, string> = {
+  NT: 'prop.district.workshop',
+  NF: 'prop.district.greenhouse',
+  SJ: 'prop.district.pier',
+  SP: 'prop.district.stage',
 };
+/** 명소가 서는 반지름 (집 줄 안쪽의 빈 풀밭) */
+const LANDMARK_R = 18.2;
 
 /** 동네 길(본섬 ↔ 2동·3동…) 아치 */
 export const GATE_KEY = 'prop.hood.gate';
 
-/** 지역마다 심을 나무·덤불·큰 돌 수 (어떤 종류인지는 src/shared/flora.ts) */
-const PLANTING: Record<District, { trees: number; bushes: number; rocks: number }> = {
-  wood: { trees: 85, bushes: 35, rocks: 10 },
-  fire: { trees: 55, bushes: 25, rocks: 6 },
-  earth: { trees: 45, bushes: 25, rocks: 12 },
-  metal: { trees: 60, bushes: 15, rocks: 10 },
-  water: { trees: 55, bushes: 25, rocks: 6 },
+/** 마을 하나에 심을 나무·덤불·큰 돌 수 (기질 그룹 풍경마다. 어떤 종류인지는 src/shared/flora.ts) */
+const PLANTING: Record<Theme, { trees: number; bushes: number; rocks: number }> = {
+  NF: { trees: 17, bushes: 7, rocks: 2 },
+  SP: { trees: 11, bushes: 5, rocks: 1 },
+  NT: { trees: 12, bushes: 3, rocks: 2 },
+  SJ: { trees: 11, bushes: 5, rocks: 1 },
 };
 /** 바닷가 야자수 */
 const BEACH_PALMS = 26;
@@ -83,9 +84,24 @@ function rng(seed: number) {
   };
 }
 
-/** 지역 i의 가운데 방향 (라디안). 북쪽에서 시계 방향. */
+/** 마을 i의 가운데 방향 (라디안). 북쪽에서 시계 방향. */
 export function districtAngle(i: number): number {
   return -Math.PI / 2 + i * SECTOR;
+}
+
+/** 기질 그룹 k(0~3)의 가운데 방향: 둘째·셋째 마을 사이 */
+function themeAngle(k: number): number {
+  return districtAngle(k * 4 + 1.5);
+}
+
+/** 중앙광장 장식 방향 (광장 안 길 다섯 갈래, 예전 배치를 그대로 쓴다) */
+const PLAZA_SPOKES = 5;
+function plazaAngle(k: number): number {
+  return -Math.PI / 2 + (k * 2 * Math.PI) / PLAZA_SPOKES;
+}
+function plazaSpokeAt(angle: number): number {
+  const step = (2 * Math.PI) / PLAZA_SPOKES;
+  return ((Math.round(wrap(angle - plazaAngle(0)) / step) % PLAZA_SPOKES) + PLAZA_SPOKES) % PLAZA_SPOKES;
 }
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -99,7 +115,7 @@ function shoreAt(angle: number): number {
   return TOWN_RADII.shore + Math.sin(angle * 4 + 0.7) * 1.0 + Math.sin(angle * 9 + 2.1) * 0.5;
 }
 
-/** 지역 i의 동네 길 아치 자리 (큰길 끝, 바닷가 조금 안쪽) */
+/** 마을 i의 동네 길 아치 자리 (큰길 끝, 바닷가 조금 안쪽) */
 function gateRadius(i: number): number {
   return shoreAt(districtAngle(i)) - 1.6;
 }
@@ -274,32 +290,32 @@ export function buildTownMap(tilesetFile: string) {
     }
   }
 
-  // 2. 길: 중앙광장 돌바닥, 둘레 길, 지역으로 가는 큰길 다섯(바닷가 동네 길까지), 지역을 잇는 둥근 거리 둘
+  // 2. 길: 중앙광장 돌바닥, 광장 안 길 다섯 갈래, 둘레 길, 마을마다 큰길 하나(바닷가 동네 길까지), 마을을 잇는 둥근 거리 둘
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
       const { d, a } = polar(x, y);
       const i = districtIndexAt(a);
       const across = Math.abs(Math.sin(wrap(a - districtAngle(i))) * d);
       const toward = Math.cos(wrap(a - districtAngle(i))) > 0;
+      const k = plazaSpokeAt(a);
+      const plazaAcross = Math.abs(Math.sin(wrap(a - plazaAngle(k))) * d);
       if (d <= TOWN_RADII.stone) set(ground, x, y, gid('stone'));
       else if (d <= TOWN_RADII.stoneEdge) set(ground, x, y, gid('stoneEdge'));
       else if (d >= TOWN_RADII.ringIn && d < TOWN_RADII.ringOut) set(ground, x, y, gid('path'));
-      else if (toward && across < 1.2 && d < gateRadius(i) + 0.6) set(ground, x, y, gid('path'));
+      else if (d < TOWN_RADII.ringIn && plazaAcross < 1.2) set(ground, x, y, gid('path'));
+      else if (d >= TOWN_RADII.ringOut && toward && across < 1.2 && d < gateRadius(i) + 0.6) set(ground, x, y, gid('path'));
       else if (Math.abs(d - TOWN_RADII.streetA) < 0.95 || Math.abs(d - TOWN_RADII.streetB) < 0.85) {
         if (d < shoreAt(a) - 0.5) set(ground, x, y, gid('path'));
       }
     }
   }
 
-  // 3. 지역 경계: 낮은 산울타리 (둥근 거리가 지나는 자리는 열어 둔다)
+  // 3. 기질 그룹 경계: 낮은 산울타리 (같은 그룹 네 마을 사이는 막지 않는다. 둥근 거리가 지나는 자리는 열어 둔다)
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
       const { d, a } = polar(x, y);
       if (d < TOWN_RADII.ringOut + 1.5 || d > shoreAt(a) - 0.6) continue;
-      const i = districtIndexAt(a);
-      const offset = Math.abs(wrap(a - (districtAngle(i) + SECTOR / 2)));
-      const offset2 = Math.abs(wrap(a - (districtAngle(i) - SECTOR / 2)));
-      const nearBoundary = Math.min(offset, offset2) * d < 0.72;
+      const nearBoundary = THEMES.some((_, k) => Math.abs(wrap(a - (districtAngle(k * 4) - SECTOR / 2))) * d < 0.72);
       const onStreet = Math.abs(d - TOWN_RADII.streetA) < 1.4 || Math.abs(d - TOWN_RADII.streetB) < 1.3;
       if (nearBoundary && !onStreet) {
         set(ground, x, y, gid('hedge'));
@@ -311,7 +327,7 @@ export function buildTownMap(tilesetFile: string) {
   // 4. 소품
   // 중앙광장: 분수, 게시판(오늘의 토론), 깃발, 벤치, 가로등, 화단, 나무. 큰길 사이 방향에 둔다.
   prop('prop.plaza.fountain', C, C, square(C - 1, C - 1, 3, 3));
-  const between = (k: number) => districtAngle(k) + SECTOR / 2;
+  const between = (k: number) => plazaAngle(k) + Math.PI / PLAZA_SPOKES;
   {
     const a = between(0);
     const b = at(5.4, a);
@@ -322,13 +338,13 @@ export function buildTownMap(tilesetFile: string) {
       prop('prop.plaza.flag', snap(f.x), snap(f.y), [[Math.floor(f.x), Math.floor(f.y)]]);
     }
   }
-  for (let k = 1; k < DISTRICTS.length; k++) {
+  for (let k = 1; k < PLAZA_SPOKES; k++) {
     const b = at(4.6, between(k));
     const rot = facing(b.x, b.y, C, C);
     prop('prop.plaza.bench', b.x, b.y, rectTiles(b.x, b.y, 0.9, 0.3, rot), rot);
   }
-  for (let k = 0; k < DISTRICTS.length; k++) {
-    const l = at(6.4, districtAngle(k) + 0.32);
+  for (let k = 0; k < PLAZA_SPOKES; k++) {
+    const l = at(6.4, plazaAngle(k) + 0.32);
     prop('prop.plaza.lamp', snap(l.x), snap(l.y), [[Math.floor(l.x), Math.floor(l.y)]]);
     const fb = at(9.4, between(k));
     const fx = Math.floor(fb.x - 1);
@@ -345,21 +361,14 @@ export function buildTownMap(tilesetFile: string) {
     }
   }
 
-  // 지역: 집터 3줄, 명소, 호수
-  DISTRICTS.forEach((district, i) => {
-    const a0 = districtAngle(i);
-    // 명소: 큰길 오른쪽, 2번째와 3번째 집 줄 사이
-    const lm = at(TOWN_RADII.landmark, a0 + 4.2 / TOWN_RADII.landmark);
-    const lmRot = facing(lm.x, lm.y, C, C);
-    const lmSize = district === 'water' ? [0.7, 1.2] : [1.65, 1.25];
-    prop(LANDMARK[district], lm.x, lm.y, rectTiles(lm.x, lm.y, lmSize[0], lmSize[1], lmRot), lmRot, district);
-    taken.push({ x: lm.x, y: lm.y, r: 1.9 });
-    if (district === 'water') {
-      // 호수: 명소(부두) 옆 작은 못
-      const p = at(TOWN_RADII.landmark, a0 + 7.6 / TOWN_RADII.landmark);
+  // 기질 그룹마다 명소 하나: 둘째·셋째 마을 사이 안쪽 풀밭. 관리자(SJ)는 작은 못과 부두
+  THEMES.forEach((theme, k) => {
+    const a0 = themeAngle(k);
+    if (theme === 'SJ') {
+      const p = at(LANDMARK_R - 2.4, a0);
       for (let y = Math.floor(p.y - 3); y <= Math.ceil(p.y + 3); y++) {
         for (let x = Math.floor(p.x - 3); x <= Math.ceil(p.x + 3); x++) {
-          if (Math.hypot((x + 0.5 - p.x) / 2.1, (y + 0.5 - p.y) / 1.6) <= 1 && get(ground, x, y) !== gid('path')) {
+          if (Math.hypot((x + 0.5 - p.x) / 1.9, (y + 0.5 - p.y) / 1.5) <= 1 && get(ground, x, y) !== gid('path')) {
             set(ground, x, y, gid('water'));
             block(x, y);
           }
@@ -367,6 +376,16 @@ export function buildTownMap(tilesetFile: string) {
       }
       taken.push({ x: p.x, y: p.y, r: 1.9 });
     }
+    const lm = at(LANDMARK_R + (theme === 'SJ' ? 0.6 : 0), a0);
+    const lmRot = facing(lm.x, lm.y, C, C);
+    const lmSize = theme === 'SJ' ? [0.7, 1.2] : [1.65, 1.25];
+    prop(LANDMARK[theme], lm.x, lm.y, rectTiles(lm.x, lm.y, lmSize[0], lmSize[1], lmRot), lmRot, THEME_DISTRICT[theme]);
+    taken.push({ x: lm.x, y: lm.y, r: 1.9 });
+  });
+
+  // 마을마다 집터: 큰길 양쪽, 바깥쪽 두 줄
+  DISTRICTS.forEach((district, i) => {
+    const a0 = districtAngle(i);
     // 집터: 줄마다 큰길을 비우고 양쪽으로 둔다
     const rows: { r: number; outward: boolean }[] = [
       { r: TOWN_RADII.rowA, outward: true },
@@ -388,7 +407,7 @@ export function buildTownMap(tilesetFile: string) {
     });
     candidates.sort((p, q) => p.row - q.row || p.off - q.off);
     const usable = candidates.filter((c) => !taken.some((t) => Math.hypot(t.x - c.x, t.y - c.y) < t.r + 1.2));
-    if (usable.length < townConfig.lotsPerDistrict) throw new Error(`${district} 지역 집터가 ${usable.length}개뿐입니다`);
+    if (usable.length < townConfig.lotsPerDistrict) throw new Error(`${district} 마을 집터가 ${usable.length}개뿐입니다`);
     usable.slice(0, townConfig.lotsPerDistrict).forEach((c, n) => lot(`${district}.${n}`, c.x, c.y, c.rot));
   });
 
@@ -423,25 +442,23 @@ export function buildTownMap(tilesetFile: string) {
   };
   DISTRICTS.forEach((district, i) => {
     const a0 = districtAngle(i);
-    const wants: [number, number][] = [[15.4, 0.34], [15.4, -0.34], [17.8, 0.62]].slice(0, playConfig.fruitTreesPerDistrict) as [number, number][];
+    const wants: [number, number][] = [[15.4, 0.12], [15.4, -0.12], [19.5, 0.12]].slice(0, playConfig.fruitTreesPerDistrict) as [number, number][];
     for (const [r, da] of wants) {
       const s = freeSpot(r, a0 + da, 1.3);
-      prop(`prop.fruit.${district}`, s.x, s.y, s.tiles, Math.round(rand() * 360), district);
+      prop(fruitTreeKey(themeOf(district)), s.x, s.y, s.tiles, Math.round(rand() * 360), district);
       taken.push({ x: s.x, y: s.y, r: 1.3 });
     }
   });
   {
     // 운세 나무: 광장 북서쪽 풀밭 (돌 화단 2×2)
-    const s = freeSpot(8.6, districtAngle(0) + 0.36, 1.2, 2);
+    const s = freeSpot(8.6, plazaAngle(0) + 0.36, 1.2, 2);
     prop('prop.plaza.fortune_tree', s.x, s.y, s.tiles, facing(s.x, s.y, C, C));
     taken.push({ x: s.x, y: s.y, r: 1.6 });
-    // 비콘: 낚시터는 호수 지역 쪽, 클럽은 노을 지역 쪽 광장 가장자리
-    const water = DISTRICTS.indexOf('water');
-    const fire = DISTRICTS.indexOf('fire');
-    const bf = freeSpot(8.4, districtAngle(water) + 0.36, 1.0);
+    // 비콘: 광장 가장자리 (예전 배치 그대로)
+    const bf = freeSpot(8.4, plazaAngle(4) + 0.36, 1.0);
     prop('prop.plaza.beacon_fishing', bf.x, bf.y, bf.tiles, facing(bf.x, bf.y, C, C));
     taken.push({ x: bf.x, y: bf.y, r: 1.2 });
-    const bc = freeSpot(8.4, districtAngle(fire) + 0.36, 1.0);
+    const bc = freeSpot(8.4, plazaAngle(1) + 0.36, 1.0);
     prop('prop.plaza.beacon_club', bc.x, bc.y, bc.tiles, facing(bc.x, bc.y, C, C));
     taken.push({ x: bc.x, y: bc.y, r: 1.2 });
   }
@@ -449,50 +466,11 @@ export function buildTownMap(tilesetFile: string) {
   /** 식물을 심지 않는 네모 (명소를 가리지 않게) */
   const keepClear: { x0: number; x1: number; y0: number; y1: number }[] = [];
 
-  // 4-2. 사주상담소 천막 (부엉 도사): 호수 지역 쪽 광장 가장자리 풀밭, 광장을 본다 (천막 2×2칸, 앞 탁자는 장식)
-  {
-    // 광장 둘레(반지름 7.5~13칸)를 모두 훑어 비어 있는 2×2칸 중 원하는 자리에 가장 가까운 곳을 고른다 (나무는 이 뒤에 심어 천막을 비켜 간다)
-    const want = { r: 9.6, a: districtAngle(DISTRICTS.indexOf('water')) - 0.42 };
-    let sj: { x: number; y: number; tiles: [number, number][] } | null = null;
-    let best = Infinity;
-    for (let ty = Math.floor(C - 15); ty <= C + 15; ty++) {
-      for (let tx = Math.floor(C - 15); tx <= C + 15; tx++) {
-        // 2×2칸의 가운데 (칸 경계)
-        const x = tx;
-        const y = ty;
-        const r = Math.hypot(x - C, y - C);
-        if (r < 7.5 || r > 13) continue;
-        const tiles = square(tx - 1, ty - 1, 2, 2);
-        // 광장 돌바닥 가장자리도 된다 (길과 물만 피한다)
-        if (tiles.some(([qx, qy]) => isBlocked(qx + 0.5, qy + 0.5) || [gid('path'), gid('water')].includes(get(ground, qx, qy)))) continue;
-        if (inSpawn(x, y) || taken.some((q) => Math.hypot(q.x - x, q.y - y) < q.r + 0.5)) continue;
-        const da = Math.abs(Math.atan2(Math.sin(Math.atan2(y - C, x - C) - want.a), Math.cos(Math.atan2(y - C, x - C) - want.a)));
-        const score = da * 3 + Math.abs(r - want.r) * 1.5;
-        if (score < best) {
-          best = score;
-          sj = { x, y, tiles };
-        }
-      }
-    }
-    if (!sj) throw new Error('사주상담소 자리를 찾지 못했습니다');
-    // 앞의 상담 탁자 칸도 막는다 (천막은 광장 가운데를 본다)
-    const len = Math.hypot(C - sj.x, C - sj.y);
-    const table: [number, number] = [Math.floor(sj.x + ((C - sj.x) / len) * 1.5), Math.floor(sj.y + ((C - sj.y) / len) * 1.5)];
-    prop('prop.plaza.saju', sj.x, sj.y, [...sj.tiles, table], facing(sj.x, sj.y, C, C));
-    taken.push({ x: sj.x, y: sj.y, r: 2.8 });
-    // 카메라는 남쪽에서 북쪽을 본다: 천막 앞(남쪽)과 양옆에 큰 나무가 서면 천막을 가린다. 그 넓이는 비워 둔다
-    const zone = { x0: sj.x - 3.6, x1: sj.x + 3.6, y0: sj.y - 2.4, y1: sj.y + 6 };
-    keepClear.push(zone);
-    // 먼저 심은 광장 둘레 나무도 이 넓이에 있으면 뺀다
-    const plazaTreeKeys = new Set(PLAZA_TREES.map(([k]) => k));
-    unprop((key, x, y) => plazaTreeKeys.has(key) && x > zone.x0 && x < zone.x1 && y > zone.y0 && y < zone.y1);
-  }
-
-  // 나무·덤불·큰 돌: 지역마다 그 지역 식물을 정해진 수만큼 흩어 심는다 (길·집터·명소와 떨어뜨린다)
+  // 나무·덤불·큰 돌: 마을마다 그 기질 풍경 식물을 정해진 수만큼 흩어 심는다 (길·집터·명소와 떨어뜨린다)
   DISTRICTS.forEach((district, i) => {
-    const f = FLORA[district];
+    const f = FLORA[themeOf(district)];
     for (const kind of ['tree', 'bush', 'rock'] as const) {
-      const want = PLANTING[district][kind === 'tree' ? 'trees' : kind === 'bush' ? 'bushes' : 'rocks'];
+      const want = PLANTING[themeOf(district)][kind === 'tree' ? 'trees' : kind === 'bush' ? 'bushes' : 'rocks'];
       const list = kind === 'tree' ? f.trees : kind === 'bush' ? f.bushes : f.rocks;
       let planted = 0;
       for (let tries = 0; tries < 6000 && planted < want; tries++) {
@@ -527,14 +505,14 @@ export function buildTownMap(tilesetFile: string) {
     }
   }
 
-  // 4-1. 상가 비콘: 언덕 지역 쪽 광장 가장자리 (맨 나중에 놓아서 앞의 배치가 그대로다)
+  // 4-1. 상가 비콘: 광장 가장자리 (맨 나중에 놓아서 앞의 배치가 그대로다)
   {
-    const bm = freeSpot(8.4, districtAngle(DISTRICTS.indexOf('earth')) + 0.36, 1.0);
+    const bm = freeSpot(8.4, plazaAngle(2) + 0.36, 1.0);
     prop('prop.plaza.beacon_market', bm.x, bm.y, bm.tiles, facing(bm.x, bm.y, C, C));
     taken.push({ x: bm.x, y: bm.y, r: 1.2 });
   }
 
-  // 4-3. 광장 전광판 (오행 대항전 순위·오늘의 토론·소식): 분수 북서쪽 광장 가장자리, 스폰 쪽을 본다.
+  // 4-3. 광장 전광판 (MBTI 마을 대항전 순위·오늘의 토론·소식): 분수 북서쪽 광장 가장자리, 스폰 쪽을 본다.
   // 맨 나중에 놓아서 앞의 배치가 그대로다. 폭 7칸쯤을 막는다 (화면 아래로 지나가지 않게)
   {
     const want = { x: C - 3, y: C - 6.3 };
@@ -563,7 +541,7 @@ export function buildTownMap(tilesetFile: string) {
     unprop((key, x, y) => /^prop\.nature\./.test(key) && Math.hypot(x - b.x, y - b.y) < 4.2);
   }
 
-  // 5. 스폰: 광장은 분수 남쪽, 지역은 큰길 입구, 동네 길은 아치 앞
+  // 5. 스폰: 광장은 분수 남쪽, 마을은 큰길 입구, 동네 길은 아치 앞
   const spawns = [
     spawnRect('spawn', C - 3, C + 3, 6, 2),
     ...DISTRICTS.map((d, i) => {
@@ -748,7 +726,7 @@ export function buildSpotMap(kind: 'fishing' | 'club' | 'market', tilesetFile: s
   // 3. 소품: 부두, 연못 둘레 벤치·가로등
   // 부두: 연못 남쪽 가장자리에서 연못 쪽을 본다
   const pier = { x: c + 3.5, y: pond.y + pond.ry - 0.6 };
-  prop('prop.district.pier', pier.x, pier.y, [], 180, 'water');
+  prop('prop.district.pier', pier.x, pier.y, [], 180, THEME_DISTRICT.SJ);
   taken.push({ x: pier.x, y: pier.y, r: 1.8 });
   // 연못 둘레 벤치·가로등
   for (let k = 0; k < 8; k++) {
@@ -771,8 +749,8 @@ export function buildSpotMap(kind: 'fishing' | 'club' | 'market', tilesetFile: s
     taken.push({ x, y, r: 1.4 });
   }
 
-  // 4. 나무: 길·연못·무대와 떨어진 곳 (낚시터는 호수 지역, 클럽은 노을 지역 식물)
-  const flora = FLORA[kind === 'fishing' ? 'water' : 'fire'];
+  // 4. 나무: 길·연못·무대와 떨어진 곳 (낚시터는 호숫가(SJ), 클럽은 노을 거리(SP) 식물)
+  const flora = FLORA[kind === 'fishing' ? 'SJ' : 'SP'];
   const spawnAt = at(beaconR - 1.2, SOUTH);
   for (const [kindKey, list, want] of [
     ['tree', flora.trees, kind === 'fishing' ? 40 : 28],
@@ -790,7 +768,7 @@ export function buildSpotMap(kind: 'fishing' | 'club' | 'market', tilesetFile: s
       if (kind === 'fishing' && inPond(x, y, 1.45)) continue;
       if (Math.hypot(x - spawnAt.x, y - spawnAt.y) < 3) continue;
       if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + SPACING[kindKey])) continue;
-      prop(pickWeighted(list, rand()), x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360), kind === 'fishing' ? 'water' : 'fire');
+      prop(pickWeighted(list, rand()), x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360), THEME_DISTRICT[kind === 'fishing' ? 'SJ' : 'SP']);
       taken.push({ x, y, r: SPACING[kindKey] });
       planted++;
     }
@@ -959,8 +937,8 @@ function buildMarketMap(tilesetFile: string) {
     taken.push({ x, y, r: 1.4 });
   }
 
-  // 5. 나무: 광장 밖 풀밭 (언덕 지역 식물)
-  const flora = FLORA.earth;
+  // 5. 나무: 광장 밖 풀밭 (언덕 풍경 식물)
+  const flora = HILL_FLORA;
   const spawnAt = at(beaconR - 1.2, SOUTH);
   for (const [kindKey, list, want] of [
     ['tree', flora.trees, 30],
@@ -976,7 +954,7 @@ function buildMarketMap(tilesetFile: string) {
       if (isBlocked(x, y) || onPath(x, y) || inPlaza(Math.floor(x), Math.floor(y))) continue;
       if (Math.hypot(x - spawnAt.x, y - spawnAt.y) < 3) continue;
       if (taken.some((t) => Math.hypot(t.x - x, t.y - y) < t.r + SPACING[kindKey])) continue;
-      prop(pickWeighted(list, rand()), x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360), 'earth');
+      prop(pickWeighted(list, rand()), x, y, [[Math.floor(x), Math.floor(y)]], Math.round(rand() * 360));
       taken.push({ x, y, r: SPACING[kindKey] });
       planted++;
     }

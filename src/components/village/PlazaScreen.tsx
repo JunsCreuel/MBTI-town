@@ -1,6 +1,6 @@
 'use client';
 
-// 광장 전광판: 분수 북서쪽의 넓은 화면. 오행 대항전 순위 → 오늘의 토론 → 소식(서버 전체 공지·사주상담소)을 차례로 보여 준다.
+// 광장 전광판: 분수 북서쪽의 넓은 화면. MBTI 마을 대항전 순위(상위 5개 마을) → 오늘의 토론 → 소식(서버 전체 공지)을 차례로 보여 준다.
 // 서버 전체 공지가 오면 바로 소식 칸으로 넘어가 잠깐 띄운다. 글은 바뀔 때와 10초마다만 다시 그린다.
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
@@ -9,6 +9,7 @@ import { tokens } from '@/design/tokens';
 import type { AnnounceBroadcast } from '@/shared/announce';
 import { contestLeader, timeLeftLabel } from '@/shared/contest';
 import { DISTRICT } from '@/shared/districts';
+import { teamColor } from '../debate/teamColor';
 import { groundHeightAt } from '@/shared/townMap';
 import { cardFont, wrapText } from '@/lib/shareCard';
 import { useTown } from './context';
@@ -59,8 +60,9 @@ function header(ctx: CanvasRenderingContext2D, title: string, right: string, col
 
 function drawContest(ctx: CanvasRenderingContext2D, b: PlazaBoard) {
   const now = boardNow();
-  header(ctx, '오행 지역 대항전', `일요일 밤 9시 발표 · ${timeLeftLabel(new Date(b.standings.closesAt), now)} 남음`, tokens.color.gold);
-  const rows = b.standings.districts;
+  header(ctx, 'MBTI 마을 대항전', `일요일 밤 9시 발표 · ${timeLeftLabel(new Date(b.standings.closesAt), now)} 남음`, tokens.color.gold);
+  // 화면에는 상위 다섯 마을 (전체 순위는 위쪽 대항전 버튼)
+  const rows = b.standings.districts.slice(0, 5);
   const top = Math.max(1, rows[0]?.score ?? 0);
   const leader = contestLeader(rows);
   const x0 = 56;
@@ -105,31 +107,31 @@ function drawContest(ctx: CanvasRenderingContext2D, b: PlazaBoard) {
   ctx.fillStyle = sub;
   ctx.font = cardFont(600, 26);
   const lastWinner = b.last.winner ? `지난주 우승 ${DISTRICT[b.last.winner].short}` : '';
-  const hint = rows.every((r) => r.score === 0) ? '낚시·열매·토론·출석·상가로 우리 지역 점수를 올려요!' : '낚시·열매·토론·출석·상가로 점수를 올려요';
+  const hint = rows.every((r) => r.score === 0) ? '낚시·열매·토론·출석·상가로 우리 마을 점수를 올려요!' : '전체 순위는 위쪽 대항전 버튼에서';
   ctx.fillText(fit(ctx, [hint, lastWinner].filter(Boolean).join('   ·   '), CW - 112), 56, CH - 28);
 }
 
 const PHASE_LINE: Record<string, (b: NonNullable<PlazaBoard['debate']>) => string> = {
   writing: () => '논거 쓰는 중 · 저녁 6시 마감',
-  voting: () => '관전 판정 중 · 밤 9시 발표',
+  voting: () => '판정 중 · 밤 9시 발표',
   judging: () => '결과를 모으는 중',
   done: (d) => (d.winner === 'draw' ? '오늘은 비겼어요' : d.winner === 'a' ? `${d.a.label} 승!` : d.winner === 'b' ? `${d.b.label} 승!` : '결과 발표'),
 };
 
 function drawDebate(ctx: CanvasRenderingContext2D, b: PlazaBoard) {
   const d = b.debate;
-  header(ctx, '오늘의 토론', '이긴 지역 +30점', tokens.color.sky);
+  header(ctx, '오늘의 토론', '이긴 편 마을마다 +30점', tokens.color.sky);
   if (!d) {
     ctx.fillStyle = ink;
     ctx.font = cardFont(800, 48);
     ctx.fillText('광장 게시판에서 오늘의 토론에 참여해요', 56, 240);
     return;
   }
-  // 두 지역
+  // 두 편
   const half = CW / 2;
   for (const [t, x] of [[d.a, half - 60], [d.b, half + 60]] as const) {
     ctx.textAlign = x < half ? 'right' : 'left';
-    ctx.fillStyle = t.district ? tokens.district[t.district] : ink;
+    ctx.fillStyle = teamColor({ ...t, members: [] }, x < half ? 'a' : 'b');
     ctx.font = cardFont(800, 58);
     ctx.fillText(t.label, x, 178);
   }
@@ -147,7 +149,7 @@ function drawDebate(ctx: CanvasRenderingContext2D, b: PlazaBoard) {
 }
 
 function drawNews(ctx: CanvasRenderingContext2D, news: AnnounceBroadcast | null) {
-  header(ctx, news ? '방금 들어온 소식' : '광장 소식', '', news ? tokens.color.goldBright : tokens.district.water);
+  header(ctx, news ? '방금 들어온 소식' : '광장 소식', '', news ? tokens.color.goldBright : tokens.color.sky);
   ctx.textAlign = 'center';
   if (news) {
     ctx.fillStyle = ink;
@@ -156,10 +158,10 @@ function drawNews(ctx: CanvasRenderingContext2D, news: AnnounceBroadcast | null)
   } else {
     ctx.fillStyle = ink;
     ctx.font = cardFont(800, 52);
-    ctx.fillText('부엉 도사의 사주·타로', CW / 2, 210);
+    ctx.fillText('MBTI 16개 마을이 모인 섬', CW / 2, 210);
     ctx.fillStyle = sub;
     ctx.font = cardFont(700, 34);
-    ctx.fillText('광장 서쪽 보라색 천막 · 오늘의 카드 한 장 10코인', CW / 2, 280);
+    ctx.fillText('매일 E·I, S·N, T·F, J·P 중 한 판 · 광장 게시판에서 토론', CW / 2, 280);
     ctx.fillText('낚시터에서 10만 번에 한 번, 황금 고래를 낚아 보세요', CW / 2, 340);
   }
   ctx.textAlign = 'left';

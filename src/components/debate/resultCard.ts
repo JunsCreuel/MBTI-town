@@ -123,7 +123,7 @@ export async function drawResultCard(view: DebateView, siteAddress: string): Pro
 
   ctx.fillStyle = tokens.color.textSub;
   ctx.font = font(500, 32);
-  const judging = r.byDistrict ? `관전 지역 ${Object.keys(r.byDistrict).length}곳` : `관전 유형 ${Object.keys(r.byType ?? {}).length}개`;
+  const judging = r.byType ? `${Object.keys(r.byType).length}개 유형` : `${Object.keys(r.byDistrict ?? {}).length}개 지역`;
   ctx.fillText(`${judging} · ${r.voters}명이 판정했어요`, cx, py + 975);
 
   // 서비스 주소

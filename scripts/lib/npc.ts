@@ -162,26 +162,3 @@ export function bartenderBearSpec(): SkinnedSpec {
   return { ...base, sockets: {}, parts };
 }
 
-/** 사주상담소 부엉 도사: 갈색 깃털, 크림색 얼굴판, 커다란 눈테, 주황 부리, 남색 도포에 금빛 띠, 검은 갓 */
-export function sajuOwlSpec(): SkinnedSpec {
-  const base = chibiCharacterSpec();
-  const fur = '#8B6B4E';
-  const parts = animalBody({ fur, belly: '#F1E2C6', outfit: '#3B3A6B', outfitDark: '#2A2950', ear: 'pointy', earIn: '#6E5238' });
-  parts.push(
-    // 얼굴판과 눈테
-    part(sphere(1, 18, 12), '#F1E2C6', { pos: [0, 0.97, 0.235], scale: [0.27, 0.21, 0.09], joint: 'head' }),
-    ...[-1, 1].map((s) => part(new THREE.TorusGeometry(0.068, 0.014, 6, 18), '#C9A36A', { pos: [0.12 * s, 0.99, 0.296], joint: 'head' })),
-    // 부리
-    part(new THREE.ConeGeometry(0.035, 0.08, 8), '#F2A23A', { pos: [0, 0.925, 0.315], rot: [160, 0, 0], joint: 'head' }),
-    // 도포 금빛 띠와 옷고름
-    part(new THREE.TorusGeometry(0.17, 0.016, 6, 20), '#F2C14E', { pos: [0, 0.42, 0], rot: [90, 0, 0], scale: [1.18, 0.95, 1], joint: 'body' }),
-    part(new THREE.BoxGeometry(0.03, 0.14, 0.02), '#E2483D', { pos: [0.04, 0.5, 0.17], rot: [0, 0, 12], joint: 'body' }),
-    // 갓: 넓은 챙과 둥근 대우 (깃털 귀가 챙 위로 쏙)
-    part(new THREE.CylinderGeometry(0.44, 0.44, 0.012, 28), '#1C1A22', { pos: [0, 1.3, -0.01], joint: 'head' }),
-    part(new THREE.CylinderGeometry(0.14, 0.16, 0.2, 18), '#1C1A22', { pos: [0, 1.41, -0.01], joint: 'head' }),
-    ...[-1, 1].map((s) => part(new THREE.CylinderGeometry(0.006, 0.006, 0.32, 4), '#1C1A22', { pos: [0.24 * s, 1.15, 0.12], rot: [0, 0, 8 * s], joint: 'head' })),
-    // 짧은 꽁지깃
-    part(new THREE.ConeGeometry(0.07, 0.16, 6), fur, { pos: [0, 0.28, -0.19], rot: [-120, 0, 0], joint: 'hips' }),
-  );
-  return { ...base, sockets: {}, parts };
-}

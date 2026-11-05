@@ -123,7 +123,7 @@ export default function ExploreMap({
               aria-pressed={selected === d}
               aria-label={`${DISTRICT[d].name}, 주민 ${counts[d] ?? 0}명`}
             >
-              <span className="map-label__code">{DISTRICT[d].short} 지역</span>
+              <span className="map-label__code">{DISTRICT[d].short}</span>
             </button>
           ))}
         </div>

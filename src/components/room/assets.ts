@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { assetUrl } from '@/assets/manifest';
 import { ACCESSORIES } from '@/shared/avatar';
-import { DISTRICTS, type District } from '@/shared/districts';
+import { THEMES, type Theme } from '@/shared/districts';
 import { FURNITURE } from '@/shared/room';
 
 export interface RoomAssets {
@@ -12,7 +12,8 @@ export interface RoomAssets {
   accessories: Record<string, THREE.Object3D>;
   /** 소품 키 → 방 소품 모델 */
   furniture: Record<string, THREE.Object3D>;
-  views: Record<District, THREE.Texture>;
+  /** 창밖 풍경: 기질 그룹(풍경 테마)마다 */
+  views: Record<Theme, THREE.Texture>;
 }
 
 let cache: Promise<RoomAssets> | null = null;
@@ -22,7 +23,7 @@ export function loadRoomAssets(onProgress?: (ratio: number) => void): Promise<Ro
     const gltf = new GLTFLoader();
     const tex = new THREE.TextureLoader();
     const accessoryKeys = ACCESSORIES.filter((a) => a.key).map((a) => [a.id, a.key!] as const);
-    const jobs = 1 + accessoryKeys.length + FURNITURE.length + DISTRICTS.length;
+    const jobs = 1 + accessoryKeys.length + FURNITURE.length + THEMES.length;
     let done = 0;
     const tick = <T,>(p: Promise<T>) => p.then((v) => (onProgress?.(++done / jobs), v));
     const [avatar, accessories, furniture, views] = await Promise.all([
@@ -30,10 +31,10 @@ export function loadRoomAssets(onProgress?: (ratio: number) => void): Promise<Ro
       Promise.all(accessoryKeys.map(([id, key]) => tick(gltf.loadAsync(assetUrl(key))).then((g) => [id, g.scene] as const))),
       Promise.all(FURNITURE.map((f) => tick(gltf.loadAsync(assetUrl(f.key))).then((g) => [f.key, g.scene] as const))),
       Promise.all(
-        DISTRICTS.map((d) =>
-          tick(tex.loadAsync(assetUrl(`room.view.${d}`))).then((t) => {
+        THEMES.map((th) =>
+          tick(tex.loadAsync(assetUrl(`room.view.${th.toLowerCase()}`))).then((t) => {
             t.colorSpace = THREE.SRGBColorSpace;
-            return [d, t] as const;
+            return [th, t] as const;
           }),
         ),
       ),
@@ -42,7 +43,7 @@ export function loadRoomAssets(onProgress?: (ratio: number) => void): Promise<Ro
       avatar,
       accessories: Object.fromEntries(accessories),
       furniture: Object.fromEntries(furniture),
-      views: Object.fromEntries(views) as Record<District, THREE.Texture>,
+      views: Object.fromEntries(views) as Record<Theme, THREE.Texture>,
     };
   })();
   cache.catch(() => {

@@ -4,10 +4,12 @@ import { useEffect, useState, type CSSProperties } from 'react';
 import { MBTI_TYPES, mbtiColor } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import type { Side } from '@/shared/debate';
-import { DISTRICT, DISTRICTS } from '@/shared/districts';
 import type { DebateView } from './api';
 import { canvasToBlob, drawResultCard } from './resultCard';
 import { teamInk, teamVars } from './teamColor';
+
+/** 예전(오행 지역 대결) 경기 기록의 지역 이름 */
+const OLD_DISTRICT_NAME: Record<string, string> = { wood: '숲 지역', fire: '노을 지역', earth: '언덕 지역', metal: '은빛 지역', water: '호수 지역' };
 
 export function ResultSection({ view }: { view: DebateView }) {
   const r = view.result!;
@@ -15,17 +17,15 @@ export function ResultSection({ view }: { view: DebateView }) {
   const team = (s: Side) => (s === 'a' ? m.teamA : m.teamB);
   const color = (s: Side) => teamInk(team(s), s);
   const label = (s: Side) => team(s).label;
-  // 판정한 무리: 지역 대결은 관전 지역, 예전 MBTI 대결 기록은 관전 유형
-  const groups: { id: string; name: string; color: string; v: Record<Side, number> }[] = r.byDistrict
-    ? DISTRICTS.filter((d) => r.byDistrict![d]).map((d) => ({
-        id: d, name: `${DISTRICT[d].short} 지역`, color: tokens.district[d], v: r.byDistrict![d]!,
-      }))
-    : MBTI_TYPES.filter((t) => r.byType?.[t]).map((t) => ({ id: t, name: t, color: mbtiColor(t), v: r.byType![t]! }));
-  const unit = r.byDistrict ? '지역' : '유형';
+  // 판정한 무리: 유형별 (예전 오행 지역 대결 기록은 지역별)
+  const groups: { id: string; name: string; color: string; v: Record<Side, number> }[] = r.byType
+    ? MBTI_TYPES.filter((t) => r.byType?.[t]).map((t) => ({ id: t, name: t, color: mbtiColor(t), v: r.byType![t]! }))
+    : Object.entries(r.byDistrict ?? {}).map(([d, v]) => ({ id: d, name: OLD_DISTRICT_NAME[d] ?? d, color: tokens.color.textSub, v: v! }));
+  const unit = r.byType ? '유형' : '지역';
 
   return (
     <section className="panel result-panel" aria-label="결과 발표">
-      <p className="eyebrow">결과 발표 · 관전 판정</p>
+      <p className="eyebrow">결과 발표 · 판정</p>
       <h2 className="winner" style={r.winner === 'draw' ? undefined : ({ color: color(r.winner) } as CSSProperties)}>
         {r.winner === 'draw' ? '무승부' : `${label(r.winner)} 승리!`}
       </h2>
@@ -51,7 +51,7 @@ export function ResultSection({ view }: { view: DebateView }) {
 
       {groups.length > 0 && (
         <div className="verdicts">
-          <h3 className="section-title">관전 {unit}별 판정</h3>
+          <h3 className="section-title">{unit}별 판정</h3>
           <p className="muted">{unit}마다 같은 무게로 셌어요. 사람이 많은 {unit}이 결과를 좌우하지 않아요.</p>
           <ul className="verdict-grid">
             {groups.map(({ id, name, color: dot, v }) => {

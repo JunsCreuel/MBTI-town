@@ -7,8 +7,6 @@ import { isMbtiType, type MbtiType } from '@/design/mbti';
 import { NOTICE_MAX, parseAnnouncement, type Announcement } from '@/shared/announce';
 import { AVATAR_COLORS, cleanAvatar, type Avatar } from '@/shared/avatar';
 import { isShopColor, isShopSlot, refundFor, shopLabel, type MarketView, type ShopColor } from '@/shared/market';
-import { SAJU_KINDS, periodReading, premiumReading, weekReading, type SajuKind, type SajuResult } from '@/shared/sajuReading';
-import { TAROT_TOPICS, drawTarot, tarotReading, validPicks, type TarotResult, type TarotSpread, type TarotTopic } from '@/shared/tarot';
 import { bgmTrack } from '@/shared/bgm';
 import { cleanTaste, isDistrict, type District, type Taste } from '@/shared/districts';
 import { moderate } from '@/shared/moderation';
@@ -18,16 +16,13 @@ import {
 } from '@/shared/records';
 import { framedPhotoIds, starterLayout, validateLayout, type RoomLayout } from '@/shared/room';
 import { guestPid, signTownPass, townPid, type TownPass } from '@/shared/townToken';
-import { SajuError, cleanBirthInput, computeSaju, dayPillarOn, monthYearPillarsOn, type BirthInput, type SajuReading } from '../saju';
 import { localDate } from '@/shared/debate';
-import { dailyFortune, type DailyFortune } from '@/shared/fortune';
 import {
-  FORTUNE_FRUIT, FRUITS, GOLDEN_WHALE_ID, fishDef, fortuneFor, parseTreeSpot, rollCatch, treeSpotId,
+  FORTUNE_FRUIT, GOLDEN_WHALE_ID, fishDef, fortuneFor, fruitOf, parseTreeSpot, rollCatch, treeSpotId,
   type FishDef, type FortuneFruit,
 } from '@/shared/play';
 import { youtubeIdOf } from '@/shared/clubMusic';
-import { CLIENT_SOURCES, type Element, type ElementFill, type ElementSource, type ElementsView } from '@/shared/elements';
-import { coinConfig, contestConfig, marketConfig, playConfig, sajuConfig } from '@/config/game';
+import { coinConfig, contestConfig, debateConfig, marketConfig, playConfig } from '@/config/game';
 import { contestLeader, previousContestWeek, type ContestDistrictScore, type ContestKind, type ContestStandings } from '@/shared/contest';
 import type { AdminCounts, ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
 
@@ -67,9 +62,8 @@ export interface PublicProfile {
   bio: string;
   district: District | null;
   avatar: Avatar;
+  /** MBTI = 사는 마을 */
   mbti: MbtiType | null;
-  /** 사주 일주 한글 (예: 갑자). 이름표와 일주 동물 펫에 쓴다. 생일·다른 기둥은 담지 않는다 */
-  ilju: string | null;
 }
 
 /** 운영자 화면: 신고 하나 */
@@ -99,13 +93,12 @@ export interface AdminUser {
   lastSeenAt: string | null;
   admin: boolean;
   records: number;
-  /** 가진 코인과 사주 이용권 */
+  /** 가진 코인 */
   coins: number;
-  tickets: number;
 }
 
-/** 운영자가 한 번에 주거나 뺄 수 있는 코인·이용권 한도 */
-export const ADMIN_WALLET_MAX = { coins: 1_000_000, tickets: 100 };
+/** 운영자가 한 번에 주거나 뺄 수 있는 코인 한도 */
+export const ADMIN_WALLET_MAX = { coins: 1_000_000 };
 
 /** 내 프로필 (설정 화면용) */
 export interface MyProfile extends PublicProfile {
@@ -117,10 +110,8 @@ export interface MyProfile extends PublicProfile {
   /** 주민증 취미 한 줄 (선택) */
   hobby: string;
   taste: Taste;
-  /** 넣은 생일 그대로 (본인만 본다) */
-  birth: BirthInput | null;
-  /** 사주 네 기둥과 오행. 거주 지역은 일간 오행이다 */
-  saju: SajuReading | null;
+  /** MBTI를 다시 바꿀 수 있는 때 (지금 바꿀 수 있으면 null). 바꾸면 그 유형 마을로 이사한다 */
+  mbtiChangeableAt: string | null;
   roomVisibility: Visibility;
   showVisits: boolean;
   discoverable: boolean;
@@ -169,10 +160,8 @@ export interface PickResult {
   fortune: FortuneFruit | null;
   /** 이번에 받은 코인 */
   earned: number;
-  /** 이번에 내 지역에 올린 대항전 점수 */
+  /** 이번에 내 마을에 올린 대항전 점수 */
   contest?: number;
-  /** 오행 채우기 (목 기운) */
-  element?: ElementFill | null;
 }
 
 export interface FishResult {
@@ -188,17 +177,13 @@ export interface FishResult {
   announced?: boolean;
   /** 이번에 받은 코인 (꽝이면 0) */
   earned: number;
-  /** 사주 이용권을 낚았는지 (그때 fish는 null) */
-  ticket?: boolean;
-  /** 이번에 내 지역에 올린 대항전 점수 */
+  /** 이번에 내 마을에 올린 대항전 점수 */
   contest?: number;
-  /** 오행 채우기 (수 기운) */
-  element?: ElementFill | null;
 }
 
 export interface PlayState {
   day: string;
-  /** 오늘 딴 나무 자리 ("fruit.wood.0", "fortune") */
+  /** 오늘 딴 나무 자리 ("fruit.ENFP.0", "fortune") */
   pickedTrees: string[];
   fishLeft: number;
   /** 열매 id → 개수 */
@@ -207,8 +192,6 @@ export interface PlayState {
   fish: Record<string, number>;
   /** 게임 코인 */
   coins: number;
-  /** 사주 이용권 */
-  tickets: number;
 }
 
 /** 집 안 입장 토큰: 그 방을 볼 수 있는 사람에게만 준다 */
@@ -265,10 +248,9 @@ export interface RoomView {
 }
 
 export interface OnboardingInput {
-  /** 생일 (양력·음력, 시간은 모르면 null). 거주 지역은 여기서 계산한 사주로 정해진다 */
-  birth: unknown;
+  /** MBTI (직접 고르거나 간단 테스트로). 사는 마을이 이 유형 마을이다 */
+  mbti: unknown;
   taste?: unknown;
-  mbti?: unknown;
   avatar: unknown;
   starter: unknown;
   wallpaper?: unknown;
@@ -292,7 +274,6 @@ function toPublic(p: ProfileRow): PublicProfile {
     district: p.district,
     avatar: cleanAvatar(p.avatar),
     mbti: p.mbti,
-    ilju: p.saju?.day?.ko ?? null,
   };
 }
 
@@ -345,15 +326,11 @@ function cleanText(v: unknown, max: number, what: string, required = false): str
   return s;
 }
 
-/** 생일로 사주를 푼다. 입력이 틀리면 화면에 그대로 보여 줄 말로 알려 준다 */
-function readSaju(v: unknown, now: Date): { birth: BirthInput; saju: SajuReading } {
-  const birth = cleanBirthInput(v);
-  try {
-    return { birth, saju: computeSaju(birth, now) };
-  } catch (e) {
-    if (e instanceof SajuError) throw new SceneError('bad_request', e.message);
-    throw e;
-  }
+/** MBTI를 다시 바꿀 수 있는 때 (처음 정한 MBTI는 바로 한 번 바꿀 수 있다). 지금 바꿀 수 있으면 null */
+export function mbtiChangeableAt(p: Pick<ProfileRow, 'mbti' | 'mbti_changed_at'>, now: Date): Date | null {
+  if (!p.mbti || !p.mbti_changed_at) return null;
+  const at = new Date(new Date(p.mbti_changed_at).getTime() + debateConfig.mbtiChangeCooldownDays * 86_400_000);
+  return at > now ? at : null;
 }
 
 /** 이미지 파일 앞부분으로 형식을 확인한다 (보낸 사람이 적은 형식을 믿지 않는다) */
@@ -377,60 +354,6 @@ export interface ContestView {
   last: { week: string; winner: District | null; districts: ContestDistrictScore[] };
   /** 내 지역과 이번 주 내가 올린 점수 (주민이 아니면 null) */
   me: { district: District; week: number; today: Record<ContestKind, number> } | null;
-}
-
-/** 사주상담소 화면 */
-export interface SajuOffice {
-  coins: number;
-  tickets: number;
-  fee: typeof sajuConfig.fee;
-  /** 지금 기간의 풀이를 이미 봤는지 (다시 보면 무료) */
-  seen: Record<SajuKind | 'premium', boolean>;
-  premiumPriceLabel: string;
-  /** 타로 복채와 오늘 이미 본 점 (한 장, 세 장은 주제마다) */
-  tarotFee: typeof sajuConfig.tarotFee;
-  tarotSeen: { one: boolean; three: Record<TarotTopic, boolean> };
-}
-
-/** 타로 저장 키: 종류(kind)와 기간(period: 한 장은 날짜, 세 장은 날짜:주제) */
-const tarotKey = (spread: TarotSpread, topic: TarotTopic, today: string) =>
-  spread === 'one' ? { kind: 'tarot_one', period: today } : { kind: 'tarot_three', period: `${today}:${topic}` };
-
-const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
-/** YYYY-MM-DD에 날짜를 더한다 */
-function addDays(date: string, n: number): string {
-  const [y, m, d] = date.split('-').map(Number);
-  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
-}
-const dayLabel = (date: string) => {
-  const [y, m, d] = date.split('-').map(Number);
-  return `${m}월 ${d}일 ${WEEKDAY[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}요일`;
-};
-const shortDay = (date: string) => `${Number(date.slice(5, 7))}월 ${Number(date.slice(8, 10))}일`;
-
-/** 풀이 기간: 저장 키와 화면 이름 (한국 날짜 기준, 한 주는 월~일) */
-function sajuPeriods(today: string): Record<SajuKind | 'premium', { key: string; label: string; days?: string[] }> {
-  const [y, m, d] = today.split('-').map(Number);
-  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  const monday = addDays(today, -((dow + 6) % 7));
-  const days = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-  const tomorrow = addDays(today, 1);
-  return {
-    today: { key: today, label: dayLabel(today) },
-    tomorrow: { key: tomorrow, label: dayLabel(tomorrow) },
-    week: { key: monday, label: `${shortDay(days[0])} ~ ${shortDay(days[6])}`, days },
-    month: { key: today.slice(0, 7), label: `${y}년 ${m}월` },
-    premium: { key: String(y), label: `${y}년 상세 풀이` },
-  };
-}
-
-function makeReading(userId: string, saju: SajuReading, kind: SajuKind | 'premium', today: string, period: { key: string; label: string; days?: string[] }): SajuResult {
-  const seed = `${userId}:${kind}:${period.key}`;
-  if (kind === 'today' || kind === 'tomorrow') return periodReading(saju, kind, dayPillarOn(period.key), period.label, seed);
-  if (kind === 'week') return weekReading(saju, period.days!.map((d) => ({ label: dayLabel(d), pillar: dayPillarOn(d) })), period.label, seed);
-  if (kind === 'month') return periodReading(saju, 'month', monthYearPillarsOn(`${period.key}-15`).month, period.label, seed);
-  const { year, month } = monthYearPillarsOn(today);
-  return premiumReading(saju, year, month, period.label);
 }
 
 /** 서버 전체 공지를 보내는 길 (웹 서버에서는 실시간 서버로, 테스트에서는 기록만). 보냈으면 true */
@@ -460,10 +383,13 @@ export class SceneService {
     return !!viewer && (await this.store.isAdmin(viewer.id));
   }
 
-  /** 가입을 마쳤는데 집이 없으면 (예전에 집터가 다 찼던 지역) 지금 빈 집터를 준다 */
+  /**
+   * 가입을 마쳤는데 내 MBTI 마을에 집이 없으면 (예전 오행 지역에 살던 주민, 집터가 다 찼던 마을) 지금 빈 집터를 준다.
+   * MBTI가 없는 예전 주민은 그대로 둔다 (화면이 MBTI를 먼저 고르게 한다).
+   */
   private async ensureHouse(p: ProfileRow): Promise<ProfileRow> {
-    if (!p.onboarded_at || !p.district || p.house_lot !== null) return p;
-    await this.store.moveHouse(p.id, p.district, townConfig.lotsPerDistrict, townConfig.hoodLots);
+    if (!p.onboarded_at || !p.mbti || (p.district === p.mbti && p.house_lot !== null)) return p;
+    await this.store.moveHouse(p.id, p.mbti, townConfig.lotsPerDistrict, townConfig.hoodLots);
     return (await this.store.getProfile(p.id))!;
   }
 
@@ -475,8 +401,7 @@ export class SceneService {
       joinedAt: p.onboarded_at ? localDate(new Date(p.onboarded_at)) : null,
       hobby: p.hobby ?? '',
       taste: cleanTaste(p.taste),
-      birth: p.birth,
-      saju: p.saju,
+      mbtiChangeableAt: mbtiChangeableAt(p, this.now())?.toISOString() ?? null,
       roomVisibility: p.room_visibility,
       showVisits: p.show_visits,
       discoverable: p.discoverable,
@@ -506,8 +431,9 @@ export class SceneService {
     await this.store.ensureProfile(viewer.id);
     const p = (await this.store.getProfile(viewer.id))!;
     const now = this.now();
-    // 거주 지역은 사주(일간 오행)로 정해진다. 화면이 보낸 지역은 쓰지 않는다.
-    const { birth, saju } = readSaju(input.birth, now);
+    // 사는 마을은 MBTI 유형 마을이다
+    if (!isMbtiType(input.mbti)) throw new SceneError('bad_request', 'MBTI를 골라 주세요. 모르면 간단 테스트로 정할 수 있어요.');
+    const mbti = input.mbti;
     const bgm = bgmTrack(typeof input.bgm === 'string' ? input.bgm : null);
     if (!bgm) throw new SceneError('bad_request', '대표 BGM을 골라 주세요.');
     const displayName = cleanText(input.displayName, socialConfig.displayNameMax, '이름', true);
@@ -518,20 +444,17 @@ export class SceneService {
       handle: p.handle ?? (await this.newHandle(viewer.id)),
       display_name: displayName,
       bio,
-      birth_date: saju.solarDate,
-      birth,
-      saju,
       taste: cleanTaste(input.taste),
       avatar: cleanAvatar(input.avatar),
       hobby,
       onboarded_at: p.onboarded_at ?? now,
     });
-    // 사주로 정해진 지역의 빈 집터에 집이 선다 (1동이 다 찼으면 2동, 3동… 새 동네가 열린다)
-    if (p.district !== saju.district || p.house_lot === null) {
-      await this.store.moveHouse(viewer.id, saju.district, townConfig.lotsPerDistrict, townConfig.hoodLots);
+    // 처음 정한 MBTI는 바꾸기 대기 시간을 세지 않는다 (테스트 결과가 마음에 안 들면 한 번은 바로 고칠 수 있게)
+    if (p.mbti !== mbti) await this.store.setMbti(viewer.id, mbti, p.mbti ? now : null);
+    // 그 유형 마을의 빈 집터에 집이 선다 (1동이 다 찼으면 2동, 3동… 새 동네가 열린다)
+    if (p.district !== mbti || p.house_lot === null) {
+      await this.store.moveHouse(viewer.id, mbti, townConfig.lotsPerDistrict, townConfig.hoodLots);
     }
-    // MBTI는 선택 입력. 처음 정할 때만 여기서 저장한다 (바꾸기는 7일에 한 번, 설정 화면에서)
-    if (input.mbti && isMbtiType(input.mbti) && !p.mbti) await this.store.setMbti(viewer.id, input.mbti, now);
     if (!(await this.store.getRoom(viewer.id))) await this.store.saveRoom(viewer.id, layout, bgm.key, now);
     return this.toMine((await this.store.getProfile(viewer.id))!);
   }
@@ -550,18 +473,9 @@ export class SceneService {
       if (await this.store.handleTaken(h, id)) throw new SceneError('conflict', '이미 쓰는 주소예요.');
       next.handle = h;
     }
-    // 거주 지역은 직접 고르지 않는다. 생일을 고치면 사주를 다시 풀고, 지역이 바뀌면 새 지역 빈 집터로 이사한다.
+    // 사는 마을은 따로 고르지 않는다. MBTI를 바꾸면 그 유형 마을로 이사한다 (changeMbti)
     if ('district' in patch) {
-      throw new SceneError('bad_request', '거주 지역은 사주로 정해져요. 생일 정보를 고치면 다시 정해져요.');
-    }
-    if ('birth' in patch) {
-      const { birth, saju } = readSaju(patch.birth, this.now());
-      next.birth = birth;
-      next.saju = saju;
-      next.birth_date = saju.solarDate;
-      if (saju.district !== p.district || p.house_lot === null) {
-        await this.store.moveHouse(id, saju.district, townConfig.lotsPerDistrict, townConfig.hoodLots);
-      }
+      throw new SceneError('bad_request', '사는 마을은 MBTI로 정해져요. MBTI를 바꾸면 그 마을로 이사해요.');
     }
     if ('avatar' in patch) next.avatar = cleanAvatar(patch.avatar);
     if ('taste' in patch) next.taste = cleanTaste(patch.taste);
@@ -573,6 +487,28 @@ export class SceneService {
     if ('discoverable' in patch) next.discoverable = patch.discoverable === true;
     await this.store.updateProfile(id, next);
     return this.toMine((await this.store.getProfile(id))!);
+  }
+
+  /**
+   * MBTI 바꾸기 = 그 유형 마을로 이사. 바꾼 뒤 debateConfig.mbtiChangeCooldownDays일 동안은 다시 못 바꾼다
+   * (토론 편을 옮겨 다니지 못하게). 가입 때 처음 정한 MBTI는 한 번 바로 고칠 수 있다.
+   */
+  async changeMbti(viewer: Viewer | null, mbti: unknown): Promise<MyProfile> {
+    if (!viewer) throw new SceneError('login_required', '로그인이 필요해요.');
+    const p = await this.store.getProfile(viewer.id);
+    if (!p?.onboarded_at) throw new SceneError('onboarding_required', '먼저 가입을 마쳐 주세요.');
+    if (!isMbtiType(mbti)) throw new SceneError('bad_request', 'MBTI 유형이 올바르지 않아요.');
+    if (p.mbti !== mbti) {
+      if (mbtiChangeableAt(p, this.now())) {
+        throw new SceneError('conflict', `MBTI는 ${debateConfig.mbtiChangeCooldownDays}일에 한 번 바꿀 수 있어요.`);
+      }
+      // 기존 주민(예전에 MBTI 없이 가입한 사람)이 처음 정하는 것도 바로 고칠 수 있게 처음 한 번은 세지 않는다
+      await this.store.setMbti(p.id, mbti, p.mbti ? this.now() : null);
+    }
+    if (p.district !== mbti || p.house_lot === null) {
+      await this.store.moveHouse(p.id, mbti, townConfig.lotsPerDistrict, townConfig.hoodLots);
+    }
+    return this.toMine((await this.store.getProfile(p.id))!, await this.store.isAdmin(p.id));
   }
 
   // ───────────────────────── 나의 방 ─────────────────────────
@@ -594,7 +530,6 @@ export class SceneService {
       bgm = t?.key ?? null;
     }
     await this.store.saveRoom(p.id, check.layout, bgm, this.now());
-    await this.element(p.id, 'earth', 'room');
     return { layout: check.layout, bgm };
   }
 
@@ -932,12 +867,11 @@ export class SceneService {
       admin: u.is_admin,
       records: Number(u.records),
       coins: Number(u.coins ?? 0),
-      tickets: Number(u.saju_tickets ?? 0),
     }));
   }
 
-  /** 운영자: 주민에게 코인·사주 이용권을 주거나 뺀다 (음수면 뺀다, 0 밑으로는 안 내려간다). 새 잔액 */
-  async adminAdjustWallet(viewer: Viewer | null, userId: unknown, input: Record<string, unknown>): Promise<{ coins: number; tickets: number }> {
+  /** 운영자: 주민에게 코인을 주거나 뺀다 (음수면 뺀다, 0 밑으로는 안 내려간다). 새 잔액 */
+  async adminAdjustWallet(viewer: Viewer | null, userId: unknown, input: Record<string, unknown>): Promise<{ coins: number }> {
     await this.requireAdmin(viewer);
     const int = (v: unknown, max: number) => {
       if (v === undefined || v === null || v === '') return 0;
@@ -946,10 +880,9 @@ export class SceneService {
       return n;
     };
     const coins = int(input.coins, ADMIN_WALLET_MAX.coins);
-    const tickets = int(input.tickets, ADMIN_WALLET_MAX.tickets);
-    if (!coins && !tickets) throw new SceneError('bad_request', '줄 코인이나 이용권 수를 적어 주세요.');
+    if (!coins) throw new SceneError('bad_request', '줄 코인을 적어 주세요.');
     if (typeof userId !== 'string' || !/^[0-9a-f-]{36}$/i.test(userId)) throw new SceneError('not_found', '주민을 찾지 못했어요.');
-    const r = await this.store.adjustWallet(userId, coins, tickets);
+    const r = await this.store.adjustWallet(userId, coins);
     if (!r) throw new SceneError('not_found', '주민을 찾지 못했어요.');
     return r;
   }
@@ -987,13 +920,6 @@ export class SceneService {
       this.store.districtCounts(),
     ]);
     return { rooms: rooms.map(toCard), newcomers: newcomers.map(toCard), counts };
-  }
-
-  // ───────────────────────── 사주 ─────────────────────────
-
-  /** 가입 화면 미리 보기: 생일로 사주와 거주 지역을 보여 준다 (저장하지 않는다) */
-  previewSaju(input: unknown): SajuReading {
-    return readSaju(input, this.now()).saju;
   }
 
   // ───────────────────────── 마을 ─────────────────────────
@@ -1038,7 +964,7 @@ export class SceneService {
     // 만료는 실시간 서버 시계와 맞춰야 하므로 개발용 시계가 아니라 실제 시각으로 정한다
     const exp = Math.floor(Date.now() / 1000) + townConfig.tokenTtlSeconds;
     let pass: TownPass;
-    if (p?.onboarded_at && p.district) {
+    if (p?.onboarded_at && p.mbti && p.district === p.mbti) {
       const avatar = cleanAvatar(p.avatar);
       pass = {
         pid: townPid(p.id),
@@ -1050,9 +976,8 @@ export class SceneService {
         color: avatar.color,
         acc: avatar.accessory,
         exp,
-        // 이름표 둘째 줄: MBTI 태그와 일주만 (생일·다른 기둥은 담지 않는다)
+        // 이름표 둘째 줄: MBTI
         ...(p.mbti ? { mbti: p.mbti } : {}),
-        ...(p.saju?.day?.ko ? { ilju: p.saju.day.ko } : {}),
         ...((await this.isAdmin(viewer)) ? { admin: true as const } : {}),
       };
     } else {
@@ -1062,7 +987,7 @@ export class SceneService {
       };
     }
     // 하루 첫 방문: 대항전 출석 점수 (하루 상한이 한 번 값이라 여러 번 들어와도 한 번)
-    if (p?.onboarded_at && p.district) await this.contest(p, 'checkin', contestConfig.points.checkin);
+    if (p?.onboarded_at && p.mbti && p.district === p.mbti) await this.contest(p, 'checkin', contestConfig.points.checkin);
     return { token: signTownPass(pass), pass, guest: pass.district === '' };
   }
 
@@ -1080,14 +1005,6 @@ export class SceneService {
     return { token: signTownPass(pass), pass, guest: base.guest, house: pass.house!, hidden };
   }
 
-  /** 오늘의 일진 편지 (내 일간과 오늘 일진, 한국 날짜 기준). 가입을 마친 주민만 */
-  async fortune(viewer: Viewer | null): Promise<DailyFortune> {
-    const p = await this.requireOnboarded(viewer);
-    if (!p.saju) throw new SceneError('not_found', '사주가 없어요. MY에서 생일을 넣어 주세요.');
-    const date = localDate(this.now());
-    return dailyFortune(p.saju.dayMaster, dayPillarOn(date), date);
-  }
-
   // ───────────────────────── 놀거리: 열매·운세 열매·낚시 ─────────────────────────
 
   /**
@@ -1100,15 +1017,14 @@ export class SceneService {
     if (!spot) throw new SceneError('bad_request', '나무를 찾지 못했어요.');
     const day = localDate(this.now());
     const fortune = spot.kind === 'fortune' ? fortuneFor(`${p.id}:${day}`) : null;
-    const fruit = spot.kind === 'fortune' ? FORTUNE_FRUIT : FRUITS[spot.district];
+    const fruit = spot.kind === 'fortune' ? FORTUNE_FRUIT : fruitOf(spot.district);
     const n = spot.kind === 'fortune' ? 1 : playConfig.fruitsPerTree;
     const fresh = await this.store.takeDailySpot(p.id, day, `tree:${treeSpotId(spot)}`, fruit.id);
     const count = fresh ? await this.store.addToCollection(p.id, 'fruit', fruit.id, n) : await this.countOf(p.id, 'fruit', fruit.id);
     const earned = fresh ? (spot.kind === 'fortune' ? coinConfig.fortune : coinConfig.fruit * n) : 0;
     if (earned) await this.store.addCoins(p.id, earned);
     const contest = fresh ? await this.contest(p, 'fruit', spot.kind === 'fortune' ? contestConfig.points.fortune : contestConfig.points.fruit) : 0;
-    const element = fresh ? await this.element(p.id, 'wood', 'fruit') : null;
-    return { already: !fresh, fruit: { id: fruit.id, name: fruit.name, color: fruit.color }, added: fresh ? n : 0, count, fortune, earned, contest, element };
+    return { already: !fresh, fruit: { id: fruit.id, name: fruit.name, color: fruit.color }, added: fresh ? n : 0, count, fortune, earned, contest };
   }
 
   /** 낚시 한 번. 하루 playConfig.fishPerDay번 */
@@ -1119,23 +1035,13 @@ export class SceneService {
       const used = (await this.store.dailySpots(p.id, day, 'fish:')).length;
       // 화면에는 횟수를 보여 주지 않는다. 자동으로 계속 던지는 것만 막는 넉넉한 상한
       if (used >= playConfig.fishPerDay) throw new SceneError('conflict', '물고기들이 오늘은 쉬고 싶대요. 내일 또 와요!');
-      // 황금 고래(rWhale) → 사주 이용권(rTicket) → 꽝·물고기 순서로 본다
+      // 황금 고래(rWhale) → 꽝·물고기 순서로 본다
       const rWhale = Math.random();
-      const rTicket = Math.random();
-      const ticket = rWhale >= playConfig.goldenWhaleChance && rTicket < sajuConfig.ticketChance;
-      const caught = ticket ? null : rollCatch(Math.random(), Math.random(), Math.random(), rWhale);
+      const caught = rollCatch(Math.random(), Math.random(), Math.random(), rWhale);
       // 같은 번호를 동시에 쓰면 다시 센다
-      if (!(await this.store.takeDailySpot(p.id, day, `fish:${used + 1}`, ticket ? 'saju_ticket' : (caught?.fish.id ?? null)))) continue;
+      if (!(await this.store.takeDailySpot(p.id, day, `fish:${used + 1}`, caught?.fish.id ?? null))) continue;
       const left = playConfig.fishPerDay - used - 1;
-      // 낚싯대를 던지면 (꽝이어도) 수 기운 한 칸
-      const element = await this.element(p.id, 'water', 'fish');
-      if (ticket) {
-        await this.store.addTickets(p.id, 1);
-        const contest = await this.contest(p, 'fish', contestConfig.points.ticket);
-        const announced = await this.announce({ kind: 'saju_ticket', name: displayNameOf(p) }).catch(() => false);
-        return { fish: null, size: 0, count: 0, left, earned: 0, ticket: true, announced, contest, element };
-      }
-      if (!caught) return { fish: null, size: 0, count: 0, left, earned: 0, contest: 0, element };
+      if (!caught) return { fish: null, size: 0, count: 0, left, earned: 0, contest: 0 };
       const count = await this.store.addToCollection(p.id, 'fish', caught.fish.id, 1);
       const earned = coinConfig.fish[caught.fish.rarity];
       await this.store.addCoins(p.id, earned);
@@ -1143,9 +1049,9 @@ export class SceneService {
       // 황금 고래: 마을 모두에게 알린다
       if (caught.fish.id === GOLDEN_WHALE_ID) {
         const announced = await this.announce({ kind: 'golden_whale', name: displayNameOf(p) }).catch(() => false);
-        return { fish: caught.fish, size: caught.size, count, left, announced, earned, contest, element };
+        return { fish: caught.fish, size: caught.size, count, left, announced, earned, contest };
       }
-      return { fish: caught.fish, size: caught.size, count, left, earned, contest, element };
+      return { fish: caught.fish, size: caught.size, count, left, earned, contest };
     }
     throw new SceneError('conflict', '잠깐 뒤에 다시 던져 주세요.');
   }
@@ -1154,12 +1060,11 @@ export class SceneService {
   async playState(viewer: Viewer | null): Promise<PlayState> {
     const p = await this.requireOnboarded(viewer);
     const day = localDate(this.now());
-    const [trees, fish, items, coins, tickets] = await Promise.all([
+    const [trees, fish, items, coins] = await Promise.all([
       this.store.dailySpots(p.id, day, 'tree:'),
       this.store.dailySpots(p.id, day, 'fish:'),
       this.store.collection(p.id),
       this.store.coinsOf(p.id),
-      this.store.ticketsOf(p.id),
     ]);
     return {
       day,
@@ -1168,127 +1073,7 @@ export class SceneService {
       fruits: Object.fromEntries(items.filter((i) => i.kind === 'fruit').map((i) => [i.item, i.count])),
       fish: Object.fromEntries(items.filter((i) => i.kind === 'fish' && fishDef(i.item)).map((i) => [i.item, i.count])),
       coins,
-      tickets,
     };
-  }
-
-  // ───────────────────────── 사주상담소 ─────────────────────────
-
-  /** 상담소: 내 코인·이용권, 복채, 지금 기간에 이미 본 풀이 */
-  async sajuOffice(viewer: Viewer | null): Promise<SajuOffice> {
-    const p = await this.requireOnboarded(viewer);
-    const periods = sajuPeriods(localDate(this.now()));
-    const keys = (['premium', ...SAJU_KINDS] as const).map((kind) => ({ kind, period: periods[kind].key }));
-    const today = localDate(this.now());
-    const tarotKeys = [tarotKey('one', 'general', today), ...TAROT_TOPICS.map((t) => tarotKey('three', t, today))];
-    const [coins, tickets, seen] = await Promise.all([this.store.coinsOf(p.id), this.store.ticketsOf(p.id), this.store.sajuReadingKeys(p.id, [...keys, ...tarotKeys])]);
-    const has = (k: { kind: string; period: string }) => seen.has(`${k.kind}:${k.period}`);
-    return {
-      coins,
-      tickets,
-      fee: sajuConfig.fee,
-      seen: Object.fromEntries(keys.map((k) => [k.kind, has(k)])) as SajuOffice['seen'],
-      premiumPriceLabel: sajuConfig.premiumPriceLabel,
-      tarotFee: sajuConfig.tarotFee,
-      tarotSeen: {
-        one: has(tarotKey('one', 'general', today)),
-        three: Object.fromEntries(TAROT_TOPICS.map((t) => [t, has(tarotKey('three', t, today))])) as Record<TarotTopic, boolean>,
-      },
-    };
-  }
-
-  /**
-   * 부엉 도사의 풀이. 기간 풀이(오늘·내일·이번 주·이번 달)는 복채(코인)를 내고, 같은 기간은 다시 봐도 무료.
-   * 상세 풀이는 이용권(useTicket)으로만 (유료 결제는 아직 없다). 한 해에 한 번 보면 그해에는 다시 무료.
-   */
-  async readSaju(viewer: Viewer | null, input: Record<string, unknown>): Promise<{ reading: SajuResult; office: SajuOffice; paid: number; usedTicket: boolean }> {
-    const p = await this.requireOnboarded(viewer);
-    if (!p.saju) throw new SceneError('not_found', '사주가 없어요. MY에서 생일을 넣어 주세요.');
-    const kind = input.kind;
-    if (kind !== 'premium' && !(SAJU_KINDS as readonly unknown[]).includes(kind)) throw new SceneError('bad_request', '풀이 종류가 올바르지 않아요.');
-    const k = kind as SajuKind | 'premium';
-    const today = localDate(this.now());
-    const period = sajuPeriods(today)[k];
-    const done = async (reading: SajuResult, paid: number, usedTicket: boolean) => ({ reading, office: await this.sajuOffice(viewer), paid, usedTicket });
-    const old = await this.store.getSajuReading<SajuResult>(p.id, k, period.key);
-    if (old) return done(old, 0, false);
-
-    const reading = makeReading(p.id, p.saju, k, today, period);
-    if (k === 'premium') {
-      if (input.useTicket !== true) throw new SceneError('conflict', `상세 풀이 결제(${sajuConfig.premiumPriceLabel})는 준비 중이에요. 사주 이용권으로 볼 수 있어요.`);
-      if (!(await this.store.spendTicket(p.id))) throw new SceneError('conflict', '사주 이용권이 없어요. 낚시터에서 아주 드물게 낚을 수 있어요.');
-      if (!(await this.store.saveSajuReading(p.id, k, period.key, reading, this.now()))) {
-        await this.store.addTickets(p.id, 1);
-        return done((await this.store.getSajuReading<SajuResult>(p.id, k, period.key))!, 0, false);
-      }
-      return done(reading, 0, true);
-    }
-    const fee = sajuConfig.fee[k];
-    if ((await this.store.spendCoins(p.id, fee)) === null) {
-      throw new SceneError('conflict', `복채가 모자라요. ${fee}코인이 필요해요. 낚시와 열매 따기로 모아 보세요.`);
-    }
-    if (!(await this.store.saveSajuReading(p.id, k, period.key, reading, this.now()))) {
-      await this.store.addCoins(p.id, fee);
-      return done((await this.store.getSajuReading<SajuResult>(p.id, k, period.key))!, 0, false);
-    }
-    return done(reading, fee, false);
-  }
-
-  /**
-   * 타로: 복채를 내고 카드를 뽑는다. 같은 날 같은 점(한 장, 또는 세 장의 같은 주제)은 다시 봐도 무료이고 같은 카드가 나온다.
-   * input: { spread: 'one' | 'three', topic (세 장일 때), picks: 늘어놓은 카드 중 고른 자리 }
-   */
-  async readTarot(viewer: Viewer | null, input: Record<string, unknown>): Promise<{ reading: TarotResult; office: SajuOffice; paid: number }> {
-    const p = await this.requireOnboarded(viewer);
-    const spread = input.spread;
-    if (spread !== 'one' && spread !== 'three') throw new SceneError('bad_request', '타로 종류가 올바르지 않아요.');
-    const topic: TarotTopic = spread === 'one' ? 'general' : (input.topic as TarotTopic);
-    if (!(TAROT_TOPICS as readonly unknown[]).includes(topic)) throw new SceneError('bad_request', '궁금한 주제를 골라 주세요.');
-    const today = localDate(this.now());
-    const key = tarotKey(spread, topic, today);
-    const done = async (reading: TarotResult, paid: number) => ({ reading, office: await this.sajuOffice(viewer), paid });
-    const old = await this.store.getSajuReading<TarotResult>(p.id, key.kind, key.period);
-    if (old) return done(old, 0);
-
-    const picks = validPicks(spread, input.picks) ? input.picks : spread === 'one' ? [0] : [0, 1, 2];
-    const reading = tarotReading(spread, topic, drawTarot(spread, picks, sajuConfig.tarotReversedChance), dayLabel(today));
-    const fee = sajuConfig.tarotFee[spread];
-    if ((await this.store.spendCoins(p.id, fee)) === null) {
-      throw new SceneError('conflict', `복채가 모자라요. ${fee}코인이 필요해요. 낚시와 열매 따기로 모아 보세요.`);
-    }
-    if (!(await this.store.saveSajuReading(p.id, key.kind, key.period, reading, this.now()))) {
-      // 동시에 두 번 눌렀으면 먼저 저장된 카드를 보여 주고 복채는 돌려준다
-      await this.store.addCoins(p.id, fee);
-      return done((await this.store.getSajuReading<TarotResult>(p.id, key.kind, key.period))!, 0);
-    }
-    return done(reading, fee);
-  }
-
-  // ───────────────────────── 오행 채우기 ─────────────────────────
-
-  /** 오행 한 칸 채우기. 기록에 실패해도 놀이는 그대로 된다 */
-  private async element(userId: string, element: Element, source: ElementSource): Promise<ElementFill | null> {
-    return this.store.fillElement(userId, element, source, this.now()).catch((e) => {
-      console.error('[elements] 기록 실패', e);
-      return null;
-    });
-  }
-
-  /** 오늘의 오행 채우기 (가입을 마친 주민만) */
-  async elementsView(viewer: Viewer | null): Promise<ElementsView> {
-    const p = await this.requireOnboarded(viewer);
-    const v = await this.store.elementsView(p.id, this.now());
-    if (!v) throw new SceneError('not_found', '사주가 없어요. MY에서 생일을 넣어 주세요.');
-    return v;
-  }
-
-  /** 화면이 알려 오는 놀이 (클럽 춤·신청곡·한 잔, 상가 들르기): 하루에 한 번씩 한 칸 */
-  async reportElement(viewer: Viewer | null, input: Record<string, unknown>): Promise<{ fill: ElementFill | null }> {
-    const p = await this.requireOnboarded(viewer);
-    const element = input.element as Element;
-    const source = input.source as ElementSource;
-    if (!(CLIENT_SOURCES[element] ?? []).includes(source)) throw new SceneError('bad_request', '알 수 없는 놀이예요.');
-    return { fill: await this.element(p.id, element, source) };
   }
 
   // ───────────────────────── 클럽 유튜브 신청 제한 ─────────────────────────
@@ -1344,7 +1129,7 @@ export class SceneService {
     return this.adminYoutube(viewer);
   }
 
-  // ───────────────────────── 오행 지역 대항전 ─────────────────────────
+  // ───────────────────────── MBTI 마을 대항전 ─────────────────────────
 
   /** 대항전 점수를 내 지역에 더한다 (하루 상한까지). 기록에 실패해도 놀이는 그대로 된다. 더해진 점수 */
   private async contest(p: { id: string; district: string | null }, kind: ContestKind, points: number): Promise<number> {
@@ -1446,7 +1231,6 @@ export class SceneService {
       throw new SceneError('conflict', '방금 다른 주민이 산 점포예요.');
     }
     await this.contest(p, 'market', contestConfig.points.shop);
-    await this.element(p.id, 'earth', 'shop');
     return this.marketView(viewer);
   }
 
@@ -1455,7 +1239,6 @@ export class SceneService {
     const p = await this.requireOnboarded(viewer);
     const shop = cleanShopInput(input);
     if (!(await this.store.updateShop(p.id, shop.name, shop.intro, shop.color, this.now()))) throw new SceneError('not_found', '내 점포가 없어요.');
-    await this.element(p.id, 'earth', 'shop');
     return this.marketView(viewer);
   }
 

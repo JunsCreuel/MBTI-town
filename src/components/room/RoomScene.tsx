@@ -13,7 +13,7 @@ import { shiftLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { profileTag, type Avatar } from '@/shared/avatar';
 import { CHARACTER_CLIPS, CHARACTER_HEIGHT, HEAD_SOCKET, TINT_MATERIAL, type ClipName } from '@/shared/character';
-import type { District } from '@/shared/districts';
+import { themeOf, type District } from '@/shared/districts';
 import {
   blockedCells, canPlace, findRoomPath, footprintSize, furnitureDef, itemCenter, moveInRoom,
   type FurnitureAction, type PlacedItem, type Point, type RoomLayout,
@@ -25,7 +25,6 @@ import type { RoomAssets } from './assets';
 import type { HousePresence } from './presence';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { assetUrl } from '@/assets/manifest';
-import type { Pet } from '@/shared/pet';
 import { floorTexture, wallTexture } from './textures';
 
 const W = roomConfig.width;
@@ -48,7 +47,7 @@ export interface RoomSceneProps {
   avatar: Avatar;
   /** 내 이름 (다른 사람이 함께 있을 때 머리 위에 보인다) */
   selfName?: string;
-  /** 내 이름표 둘째 줄 (MBTI·일주) */
+  /** 내 이름표 둘째 줄 (MBTI) */
   selfTag?: string;
   /** 같은 방에 있는 사람들 (주인·손님). 없으면 혼자 본다 */
   presence?: HousePresence | null;
@@ -64,8 +63,6 @@ export interface RoomSceneProps {
   playing?: boolean;
   /** 오늘의 편지를 아직 안 읽었으면 우편함 위에 편지가 뜬다 */
   mailUnread?: boolean;
-  /** 방 주인의 일주 동물 펫 (방 안을 돌아다닌다) */
-  pet?: Pet | null;
   photoUrl?: (id: string) => string;
   /** 화면 위아래를 가리는 HUD 높이 (px). 방이 그 사이에 들어오게 맞춘다. */
   insetTop?: number;
@@ -461,8 +458,10 @@ function Item({ item, assets, district, time, mode, selected, playing, mailUnrea
       mesh.receiveShadow = true;
       const name = (mesh.material as THREE.Material).name;
       if (name === 'view') {
-        const tint = time === 'night' && district !== 'water' ? R.night : time === 'evening' && district !== 'water' ? R.evening : '#FFFFFF';
-        mesh.material = new THREE.MeshBasicMaterial({ map: assets.views[district], color: tint });
+        // 푸른 호숫가(SJ) 창밖은 원래 밤 풍경이라 시간대 색을 입히지 않는다
+        const night = themeOf(district) === 'SJ';
+        const tint = time === 'night' && !night ? R.night : time === 'evening' && !night ? R.evening : '#FFFFFF';
+        mesh.material = new THREE.MeshBasicMaterial({ map: assets.views[themeOf(district)], color: tint });
       } else if (name === 'photo') {
         photoMat.current = new THREE.MeshBasicMaterial({ color: R.wall.cream });
         mesh.material = photoMat.current;
@@ -759,7 +758,7 @@ function RoomAvatar({
   mode: RoomMode;
   presence?: HousePresence | null;
   name?: string;
-  /** 이름표 둘째 줄 (MBTI·일주) */
+  /** 이름표 둘째 줄 (MBTI) */
   tag?: string;
   /** 다른 사람이 함께 있는지 (이름표를 띄운다) */
   together: boolean;
@@ -884,7 +883,7 @@ function FollowTag({
   label: string;
   color: string;
   self?: boolean;
-  /** 둘째 줄 (MBTI·일주) */
+  /** 둘째 줄 (MBTI) */
   sub?: string;
 }) {
   const g = useRef<THREE.Group>(null);
@@ -950,7 +949,7 @@ function RemoteAvatar({
   return (
     <>
       <primitive object={m.model} />
-      <FollowTag model={m.model} label={p.name} color={m.color} sub={profileTag(p.mbti, p.ilju)} />
+      <FollowTag model={m.model} label={p.name} color={m.color} sub={profileTag(p.mbti)} />
       <EmoteBubble presence={presence} gid={id} model={m.model} textures={emotes} />
     </>
   );
@@ -971,147 +970,6 @@ function RemoteAvatars({ presence, assets, emotes }: { presence: HousePresence; 
 // ───────────────────────── 장면 ─────────────────────────
 
 const noopSubscribe = () => () => {};
-
-// ───────────────────────── 일주 동물 펫 ─────────────────────────
-
-const petModels = new Map<string, Promise<THREE.Object3D>>();
-function loadPetModel(animal: string): Promise<THREE.Object3D> {
-  let p = petModels.get(animal);
-  if (!p) {
-    p = new GLTFLoader().loadAsync(assetUrl(`pet.${animal}`)).then((g) => g.scene);
-    petModels.set(animal, p);
-    p.catch(() => petModels.delete(animal));
-  }
-  return p;
-}
-
-const PET_SPEED = 1.3;
-
-/**
- * 방 주인의 일주 동물. 빈 칸을 골라 깡총깡총 돌아다니다 잠깐 쉰다.
- * 누르면 하트와 이름이 뜬다. 자리는 화면마다 따로 정한다 (서버로 맞추지 않는다).
- */
-function PetCritter({ pet, layout }: { pet: Pet; layout: RoomLayout }) {
-  const [model, setModel] = useState<THREE.Object3D | null>(null);
-  const [heart, setHeart] = useState<THREE.Texture | null>(null);
-  const blocked = useMemo(() => blockedCells(layout.items), [layout.items]);
-  const group = useRef<THREE.Group>(null);
-  const bubble = useRef<THREE.Group>(null);
-  const { animal, element, name } = pet;
-  const tag = useMemo(() => tagTexture(name, tokens.room.pet[element], false), [name, element]);
-  const state = useRef({
-    pos: { x: W / 2 + 1, z: D - 1.2 } as Point, path: null as Point[] | null, rest: 1.5, facing: 0, rot: 0, petAt: -10, petted: false,
-  });
-
-  useEffect(() => {
-    let alive = true;
-    loadPetModel(animal)
-      .then((src) => {
-        if (!alive) return;
-        const o = src.clone(true);
-        o.traverse((c) => {
-          const mesh = c as THREE.Mesh;
-          if (!mesh.isMesh) return;
-          mesh.castShadow = true;
-          const mat = mesh.material as THREE.MeshStandardMaterial;
-          if (mat.name === TINT_MATERIAL) {
-            mesh.material = mat.clone();
-            (mesh.material as THREE.MeshStandardMaterial).color.set(tokens.room.pet[element]);
-          }
-        });
-        setModel(o);
-      })
-      .catch(() => {});
-    bubbleTexture('ui.icon.heart', tokens.scene.heart).then((t) => alive && setHeart(t)).catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [animal, element]);
-
-  useFrame(({ clock }, rawDt) => {
-    const g = group.current;
-    if (!g) return;
-    const dt = Math.min(rawDt, 0.1);
-    const s = state.current;
-    const t = clock.elapsedTime;
-    if (s.petted) {
-      s.petted = false;
-      s.petAt = t;
-    }
-    // 가구가 옮겨 와 갇히면 빈 칸으로 비킨다
-    if (blocked[Math.floor(s.pos.z) * W + Math.floor(s.pos.x)]) {
-      s.pos = startSpot(blocked);
-      s.path = null;
-    }
-    let moving = false;
-    if (s.path?.length) {
-      const next = s.path[0];
-      const dx = next.x - s.pos.x;
-      const dz = next.z - s.pos.z;
-      const dist = Math.hypot(dx, dz);
-      const step = PET_SPEED * dt;
-      if (dist <= step) {
-        s.pos = { ...next };
-        s.path.shift();
-      } else {
-        s.pos = { x: s.pos.x + (dx / dist) * step, z: s.pos.z + (dz / dist) * step };
-      }
-      if (dist > 1e-4) s.facing = Math.atan2(dx, dz);
-      moving = true;
-    } else {
-      s.rest -= dt;
-      if (s.rest <= 0) {
-        // 다음에 갈 빈 칸 (가까운 곳 위주)
-        const free: Point[] = [];
-        for (let z = 0; z < D; z++) for (let x = 0; x < W; x++) if (!blocked[z * W + x] && Math.hypot(x + 0.5 - s.pos.x, z + 0.5 - s.pos.z) < 3.5) free.push({ x: x + 0.5, z: z + 0.5 });
-        const goal = free[Math.floor(Math.random() * free.length)];
-        s.path = goal ? findRoomPath(blocked, s.pos, goal) : null;
-        s.rest = 2 + Math.random() * 3;
-      }
-    }
-    s.rot += Math.atan2(Math.sin(s.facing - s.rot), Math.cos(s.facing - s.rot)) * (1 - Math.exp(-dt * 8));
-    // 걸을 때는 깡총깡총, 쉴 때는 숨쉬기. 누르면 한 번 크게 뛴다
-    const petted = t - s.petAt;
-    const jump = petted < 0.5 ? Math.sin((petted / 0.5) * Math.PI) * 0.25 : 0;
-    const hop = moving ? Math.abs(Math.sin(t * 11)) * 0.06 : 0;
-    g.position.set(s.pos.x, hop + jump, s.pos.z);
-    g.rotation.y = s.rot;
-    g.scale.setScalar(1 + (moving ? 0 : Math.sin(t * 2.4) * 0.015));
-    const b = bubble.current;
-    if (b) {
-      b.visible = petted < 2.4;
-      b.position.set(s.pos.x, 0.95 + jump + Math.sin(t * 5) * 0.02, s.pos.z);
-    }
-  });
-
-  if (!model) return null;
-  return (
-    <>
-      <group
-        ref={group}
-        onClick={(e: ThreeEvent<MouseEvent>) => {
-          if (e.delta > 8) return;
-          e.stopPropagation();
-          state.current.petted = true;
-        }}
-        onPointerOver={() => (document.body.style.cursor = 'pointer')}
-        onPointerOut={() => (document.body.style.cursor = '')}
-      >
-        <primitive object={model} />
-      </group>
-      <group ref={bubble} visible={false}>
-        {heart && (
-          <sprite position-y={0.32} scale={0.42} renderOrder={1001}>
-            <spriteMaterial map={heart} depthTest={false} depthWrite={false} transparent />
-          </sprite>
-        )}
-        <sprite scale={[0.22 * tag.aspect, 0.22, 1]} renderOrder={1000}>
-          <spriteMaterial map={tag.texture} depthTest={false} depthWrite={false} transparent />
-        </sprite>
-      </group>
-    </>
-  );
-}
 
 function FirstFrame({ onFrame }: { onFrame?: () => void }) {
   const done = useRef(false);
@@ -1195,7 +1053,6 @@ function SceneContent(props: RoomSceneProps) {
         emotes={emotes}
       />
       {presence && <RemoteAvatars presence={presence} assets={assets} emotes={emotes} />}
-      {props.pet && <PetCritter pet={props.pet} layout={layout} />}
       {mode === 'edit' && <DragController drag={drag} items={itemsRef} onMove={onMoveRef} />}
       <FirstFrame onFrame={props.onReady} />
     </>

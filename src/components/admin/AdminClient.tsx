@@ -100,12 +100,12 @@ export function AdminClient() {
 
   /** 주민마다 줄 코인 칸에 적은 값 */
   const [give, setGive] = useState<Record<string, string>>({});
-  async function adjust(u: AdminUser, body: { coins?: number; tickets?: number }) {
+  async function adjust(u: AdminUser, body: { coins: number }) {
     setBusy(u.id);
     try {
-      const r = await call<{ coins: number; tickets: number }>('POST', `/api/admin/users/${u.id}`, body);
+      const r = await call<{ coins: number }>('POST', `/api/admin/users/${u.id}`, body);
       setUsers((list) => list.map((x) => (x.id === u.id ? { ...x, ...r } : x)));
-      setToast(body.coins ? `${u.displayName} 님 코인 ${r.coins.toLocaleString('ko-KR')}` : `${u.displayName} 님 사주 이용권 ${r.tickets}장`);
+      setToast(`${u.displayName} 님 코인 ${r.coins.toLocaleString('ko-KR')}`);
     } catch (e) {
       setToast(e instanceof Error ? e.message : '바꾸지 못했어요');
     } finally {
@@ -325,10 +325,10 @@ export function AdminClient() {
                   {u.admin && <span className="admin-badge">운영자</span>}
                 </b>
                 <span className="muted">
-                  {u.handle ? `@${u.handle}` : '방 없음'} · {u.district ? DISTRICT[u.district].short : '지역 없음'} · 가입 {u.joinedAt ?? '-'} · 기록 {u.records}
+                  {u.handle ? `@${u.handle}` : '방 없음'} · {u.district ? DISTRICT[u.district].name : '마을 없음'} · 가입 {u.joinedAt ?? '-'} · 기록 {u.records}
                 </span>
                 <span className="admin-user__wallet">
-                  코인 <b>{u.coins.toLocaleString('ko-KR')}</b> · 사주 이용권 <b>{u.tickets}</b>장
+                  코인 <b>{u.coins.toLocaleString('ko-KR')}</b>
                 </span>
               </div>
               <div className="admin-wallet">
@@ -347,9 +347,6 @@ export function AdminClient() {
                 </button>
                 <button className="btn-secondary btn-small" disabled={busy === u.id || u.coins === 0} onClick={() => giveCoins(u, -1)}>
                   코인 빼기
-                </button>
-                <button className="btn-secondary btn-small" disabled={busy === u.id} onClick={() => void adjust(u, { tickets: 1 })}>
-                  이용권 +1
                 </button>
               </div>
               <div className="admin-actions">

@@ -11,7 +11,8 @@ export const metadata: Metadata = { title: 'SCENE · 나만의 작은 방' };
 export const dynamic = 'force-dynamic';
 
 const FEATURES = [
-  { icon: 'map', title: '걸어 다니는 마을', text: '다섯 지역과 중앙광장을 걸으며 이웃을 만나요' },
+  { icon: 'map', title: '걸어 다니는 MBTI 마을', text: '16개 유형 마을과 중앙광장을 걸으며 이웃을 만나요' },
+  { icon: 'debate', title: '오늘의 토론', text: '매일 E·I, S·N, T·F, J·P 중 한 판, 내 글자 편이 되어 겨뤄요' },
   { icon: 'home', title: '나만의 방', text: '내 집에 들어가 가구와 벽지로 취향대로 꾸며요' },
   { icon: 'music', title: '나의 BGM', text: '방에 들어오는 사람이 내 음악을 들어요' },
   { icon: 'archive', title: '감정과 일상 기록', text: '한 줄, 사진 한 장으로도 충분해요' },
@@ -30,12 +31,12 @@ export default async function Landing() {
       <Wordmark />
       <section className="landing__hero">
         <h1>
-          다섯 동네가 있는 마을,
+          MBTI 16개 마을,
           <br />
           그 안의 나의 작은 방
         </h1>
         <p>
-          마을을 걸어 다니며 이웃을 만나고, 내 집 문을 열면 나만의 방이 있어요. 음악과 사진, 기록으로 꾸민 방이 곧 나의 홈페이지예요.
+          내 MBTI 마을에 집이 생기고, 마을을 걸어 다니며 이웃을 만나요. 내 집 문을 열면 나만의 방이 있어요. 음악과 사진, 기록으로 꾸민 방이 곧 나의 홈페이지예요.
         </p>
         <Guide who="monnyang">어서 와요! 3분이면 마을에 내 집이 생겨요.</Guide>
       </section>

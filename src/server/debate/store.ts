@@ -1,19 +1,14 @@
 // 토론 데이터 읽기·쓰기 (SQL). 규칙 검사는 service.ts가 하고, 여기는 저장만 한다.
 import 'server-only';
 import type { MbtiType } from '@/design/mbti';
-import type { District } from '@/shared/districts';
 import type { Argument, Match, MatchResult, Side, Team, Topic, VoteRecord } from '@/shared/debate';
 import type { Sql } from '../db';
 import { addContestPoints } from '../contest';
-import { fillElement } from '../elements';
 
 export interface Profile {
   id: string;
-  /** 사는 지역 (가입을 마치지 않았으면 null). 토론 편은 지역으로 정해진다 */
-  district: District | null;
-  /** MBTI 태그 (선택) */
+  /** MBTI = 사는 마을 (가입을 마치지 않았으면 null). 토론 편은 MBTI 글자로 정해진다 */
   mbti: MbtiType | null;
-  mbtiChangedAt: Date | null;
 }
 
 export interface NewMatch {
@@ -45,7 +40,6 @@ interface ArgumentRow {
   id: string;
   match_id: string;
   author_id: string | null;
-  author_district: District | null;
   author_mbti: string | null;
   side: Side;
   body: string;
@@ -78,7 +72,6 @@ function toArgument(r: ArgumentRow): Argument {
     id: r.id,
     matchId: r.match_id,
     authorId: r.author_id,
-    authorDistrict: r.author_district,
     authorMbti: r.author_mbti,
     side: r.side,
     body: r.body,
@@ -92,12 +85,7 @@ const MATCH_COLS = `id, key, seq, topic, team_a, team_b, opens_at, writing_ends_
 export class DebateStore {
   constructor(private readonly sql: Sql) {}
 
-  /** 오행 채우기: 토론은 금(金) 기운 */
-  fillMetal(userId: string, now: Date) {
-    return fillElement(this.sql, userId, 'metal', 'debate', now);
-  }
-
-  /** 오행 지역 대항전 점수 (토론: 논거·추천·판정). 실제로 더해진 점수 */
+  /** MBTI 마을 대항전 점수 (토론: 논거·추천·판정). 실제로 더해진 점수 */
   addContestPoints(userId: string, district: string, points: number, now: Date): Promise<number> {
     return addContestPoints(this.sql, userId, district, 'debate', points, now);
   }
@@ -105,26 +93,11 @@ export class DebateStore {
   // ───────── 프로필 ─────────
 
   async getProfile(userId: string): Promise<Profile | null> {
-    const [r] = await this.sql.query<{ id: string; district: District | null; onboarded_at: Date | null; mbti: MbtiType | null; mbti_changed_at: Date | null }>(
-      `select id, district, onboarded_at, mbti, mbti_changed_at from public.profiles where id = $1`,
+    const [r] = await this.sql.query<{ id: string; onboarded_at: Date | null; mbti: MbtiType | null }>(
+      `select id, onboarded_at, mbti from public.profiles where id = $1`,
       [userId],
     );
-    return r
-      ? {
-          id: r.id,
-          district: r.onboarded_at ? r.district : null,
-          mbti: r.mbti,
-          mbtiChangedAt: r.mbti_changed_at ? new Date(r.mbti_changed_at) : null,
-        }
-      : null;
-  }
-
-  async setMbti(userId: string, mbti: MbtiType, at: Date): Promise<void> {
-    await this.sql.query(
-      `insert into public.profiles (id, mbti, mbti_changed_at) values ($1, $2, $3)
-       on conflict (id) do update set mbti = excluded.mbti, mbti_changed_at = excluded.mbti_changed_at`,
-      [userId, mbti, at],
-    );
+    return r ? { id: r.id, mbti: r.onboarded_at ? r.mbti : null } : null;
   }
 
   // ───────── 주제 ─────────
@@ -230,7 +203,7 @@ export class DebateStore {
 
   async listArguments(matchId: string): Promise<Argument[]> {
     const rows = await this.sql.query<ArgumentRow>(
-      `select a.id, a.match_id, a.author_id, a.author_district, a.author_mbti, a.side, a.body, a.created_at,
+      `select a.id, a.match_id, a.author_id, a.author_mbti, a.side, a.body, a.created_at,
               count(r.user_id)::int as recommendations
        from public.arguments a
        left join public.recommendations r on r.argument_id = a.id
@@ -250,14 +223,12 @@ export class DebateStore {
     return Number(r.n);
   }
 
-  async insertArgument(a: {
-    matchId: string; authorId: string; authorDistrict: District; authorMbti: string | null; side: Side; body: string; at: Date;
-  }): Promise<Argument> {
+  async insertArgument(a: { matchId: string; authorId: string; authorMbti: MbtiType; side: Side; body: string; at: Date }): Promise<Argument> {
     const [r] = await this.sql.query<ArgumentRow>(
-      `insert into public.arguments (match_id, author_id, author_district, author_mbti, side, body, created_at)
-       values ($1, $2, $3, $4, $5, $6, $7)
-       returning id, match_id, author_id, author_district, author_mbti, side, body, created_at, 0 as recommendations`,
-      [a.matchId, a.authorId, a.authorDistrict, a.authorMbti, a.side, a.body, a.at],
+      `insert into public.arguments (match_id, author_id, author_mbti, side, body, created_at)
+       values ($1, $2, $3, $4, $5, $6)
+       returning id, match_id, author_id, author_mbti, side, body, created_at, 0 as recommendations`,
+      [a.matchId, a.authorId, a.authorMbti, a.side, a.body, a.at],
     );
     return toArgument(r);
   }
@@ -275,7 +246,7 @@ export class DebateStore {
 
   async getArgument(id: string): Promise<Argument | null> {
     const rows = await this.sql.query<ArgumentRow>(
-      `select a.id, a.match_id, a.author_id, a.author_district, a.author_mbti, a.side, a.body, a.created_at,
+      `select a.id, a.match_id, a.author_id, a.author_mbti, a.side, a.body, a.created_at,
               (select count(*)::int from public.recommendations r where r.argument_id = a.id) as recommendations
        from public.arguments a where a.id = $1`,
       [id],
@@ -313,21 +284,21 @@ export class DebateStore {
   }
 
   /** 이미 판정했으면 false */
-  async insertVote(v: { matchId: string; userId: string; voterDistrict: District; side: Side; argumentId: string }): Promise<boolean> {
+  async insertVote(v: { matchId: string; userId: string; voterType: MbtiType; side: Side; argumentId: string }): Promise<boolean> {
     const rows = await this.sql.query(
-      `insert into public.votes (match_id, user_id, voter_district, side, argument_id) values ($1, $2, $3, $4, $5)
+      `insert into public.votes (match_id, user_id, voter_mbti, side, argument_id) values ($1, $2, $3, $4, $5)
        on conflict do nothing returning match_id`,
-      [v.matchId, v.userId, v.voterDistrict, v.side, v.argumentId],
+      [v.matchId, v.userId, v.voterType, v.side, v.argumentId],
     );
     return rows.length > 0;
   }
 
   async listVotes(matchId: string): Promise<VoteRecord[]> {
-    // 예전(MBTI 대결) 표는 지역이 없어 집계에서 빠진다 (끝난 경기는 결과가 이미 저장돼 있다)
-    const rows = await this.sql.query<{ voter_district: District; side: Side; argument_id: string | null }>(
-      `select voter_district, side, argument_id from public.votes where match_id = $1 and voter_district is not null`,
+    // 예전(오행 지역 대결) 표는 MBTI가 없어 집계에서 빠진다 (끝난 경기는 결과가 이미 저장돼 있다)
+    const rows = await this.sql.query<{ voter_mbti: MbtiType; side: Side; argument_id: string | null }>(
+      `select voter_mbti, side, argument_id from public.votes where match_id = $1 and voter_mbti is not null`,
       [matchId],
     );
-    return rows.map((r) => ({ voterDistrict: r.voter_district, side: r.side, argumentId: r.argument_id }));
+    return rows.map((r) => ({ voterType: r.voter_mbti, side: r.side, argumentId: r.argument_id }));
   }
 }

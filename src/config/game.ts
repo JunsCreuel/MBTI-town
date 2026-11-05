@@ -1,6 +1,6 @@
 // 운영 중 바꿀 수 있어야 하는 값은 코드에 박지 않고 여기에 둔다 (PROJECT_GUIDE.md 3부 2번).
 
-// 마을 (PROJECT_GUIDE.md 3장): 걸어 다니는 3D 마을. 가운데 중앙광장 + 둘레 다섯 지역(오행), 지역마다 주민의 집.
+// 마을 (PROJECT_GUIDE.md 3장): 걸어 다니는 3D 마을. 가운데 중앙광장 + 둘레 16유형 마을(기질 그룹이 한 사분면씩), 마을마다 주민의 집.
 export const townConfig = {
   /** Colyseus 방 이름 */
   roomName: 'town',
@@ -53,11 +53,11 @@ export const townConfig = {
   maxVisiblePlayers: 40,
   /** 지도에서 고른 곳으로 바로 가기 재사용 대기 (ms) */
   warpCooldownMs: 1500,
-  /** 지역 1동(본섬) 집터 수. 마을 맵 생성기와 집터 배정이 같이 쓴다. */
-  lotsPerDistrict: 20,
+  /** 유형 마을 1동(본섬) 집터 수. 마을 맵 생성기와 집터 배정이 같이 쓴다. */
+  lotsPerDistrict: 4,
   /** 2동·3동… 동네 하나의 집터 수 (동네 틀 맵 map.hood). 앞 동네가 다 차면 다음 동네가 열린다. */
-  hoodLots: 24,
-  /** 한 지역에서 열 수 있는 동네 번호 상한 (실시간 서버가 받는 방 이름 검사용) */
+  hoodLots: 16,
+  /** 한 마을에서 열 수 있는 동네 번호 상한 (실시간 서버가 받는 방 이름 검사용) */
   maxHoods: 99,
   /** 실시간 서버 입장 토큰 유효 시간 (초) */
   tokenTtlSeconds: 600,
@@ -101,8 +101,8 @@ export const cameraConfig = {
 
 // 마을 놀거리 (PROJECT_GUIDE.md 3장): 열매 따기·운세 열매·낚시
 export const playConfig = {
-  /** 지역마다 열매 나무 수 (마을 맵 생성기와 서버 검사가 같이 쓴다) */
-  fruitTreesPerDistrict: 3,
+  /** 유형 마을마다 열매 나무 수 (마을 맵 생성기와 서버 검사가 같이 쓴다) */
+  fruitTreesPerDistrict: 1,
   /** 나무 하나에서 하루에 따는 열매 수 */
   fruitsPerTree: 3,
   /** 하루 낚시 상한 (화면에 보여 주지 않는다. 자동으로 계속 던지는 것만 막는 넉넉한 값) */
@@ -125,24 +125,8 @@ export const coinConfig = {
   fortune: 10,
 } as const;
 
-/** 사주상담소 (부엉 도사, 광장): 복채와 이용권 (PROJECT_GUIDE.md 3장) */
-export const sajuConfig = {
-  /** 기간 풀이 복채 (코인). 같은 기간은 다시 봐도 무료 */
-  fee: { today: 10, tomorrow: 10, week: 30, month: 50 },
-  /** 사주 이용권: 낚시에서 던질 때마다 0.001% (잡으면 서버 전체 공지) */
-  ticketChance: 0.00001,
-  /** 상세 풀이 유료 가격 (아직 결제 없음, 화면에 "준비 중"으로 보인다) [결정 필요] */
-  premiumPriceLabel: '3,900원',
-  /** 도사 앞 이 거리(칸) 안이면 "사주 보기" 버튼 */
-  reach: 2.6,
-  /** 타로 복채 (코인): 오늘의 카드 한 장, 과거·현재·미래 세 장(주제마다). 같은 날 같은 점은 다시 봐도 무료 */
-  tarotFee: { one: 10, three: 30 },
-  /** 카드가 거꾸로 나올 확률 (재미로 보는 점이라 반보다 조금 낮게) */
-  tarotReversedChance: 0.35,
-} as const;
-
 /**
- * 오행 지역 대항전 (PROJECT_GUIDE.md 3장): 한 주 동안 활동 점수를 내 지역에 모으고 일요일 밤 9시(한국 시간)에 발표한다.
+ * MBTI 마을 대항전 (PROJECT_GUIDE.md 3장): 한 주 동안 활동 점수를 내 유형 마을에 모으고 일요일 밤 9시(한국 시간)에 발표한다.
  * 한 주 = 일요일 21시 ~ 다음 일요일 21시. 종류마다 한 사람이 하루에 올릴 수 있는 점수가 정해져 있다 (한 사람이 판을 좌우하지 않게).
  */
 export const contestConfig = {
@@ -150,39 +134,27 @@ export const contestConfig = {
   closeDow: 0,
   closeHour: 21,
   points: {
-    /** 물고기 한 마리 (흔해요·드물어요·전설·신화·잡동사니), 사주 이용권 */
+    /** 물고기 한 마리 (흔해요·드물어요·전설·신화·잡동사니) */
     fish: { common: 1, rare: 3, legend: 10, mythic: 50, junk: 0 },
-    ticket: 10,
     /** 나무 하나에서 열매 따기, 운세 열매 */
     fruit: 2,
     fortune: 2,
     /** 하루 첫 방문 */
     checkin: 5,
-    /** 오늘의 토론: 논거 쓰기, 우리 지역 논거 추천, 관전 판정 */
+    /** 오늘의 토론: 논거 쓰기, 우리 편 논거 추천, 판정 */
     argument: 5,
     recommend: 1,
     vote: 3,
     /** 상가 점포 사기 */
     shop: 20,
-    /** 오늘의 토론에서 이긴 지역 (지역 점수에 바로 더한다) */
+    /** 오늘의 토론에서 이긴 편의 유형 마을 여덟 곳에 하나씩 (마을 점수에 바로 더한다) */
     debateWin: 30,
   },
   /** 종류마다 한 사람이 하루에 올릴 수 있는 점수 */
   dailyCap: { fish: 30, fruit: 20, debate: 20, checkin: 5, market: 20 },
 } as const;
 
-/**
- * 오행 채우기 (PROJECT_GUIDE.md 3장): 내 사주에 모자란 오행을 그 오행의 놀이로 하루에 채운다.
- * 오행마다 target칸이 기준이고, 타고난 개수가 모자란 만큼 오늘 채울 칸이 생긴다. 다 채우면 하루 한 번 보상.
- */
-export const elementConfig = {
-  /** 오행마다 기준 칸 수 (사주 여덟 글자로는 다섯 오행이 모두 이 수를 넘을 수 없어 누구나 채울 칸이 있다) */
-  target: 2,
-  /** 다섯 오행을 모두 채운 날 한 번 받는 코인 */
-  reward: 30,
-} as const;
-
-/** 상가: 중앙광장 비콘(언덕 지역 쪽)으로 가는 섬의 점포 20칸 (PROJECT_GUIDE.md 3장) */
+/** 상가: 중앙광장 비콘으로 가는 섬의 점포 20칸 (PROJECT_GUIDE.md 3장) */
 export const marketConfig = {
   shops: 20,
   /** 점포 값 (코인). 하루 30번쯤 낚시하면 일주일쯤 모은다 */
@@ -270,12 +242,13 @@ export const debateConfig = {
   /** 팀 대표 논거 수 (팀 안 추천 상위 N개) */
   representativeArgs: 3,
   /**
-   * 관전 판정 집계 방식. 관전자는 대표 논거 하나를 고르고, 그 논거의 팀에 한 표가 간다.
-   * byDistrict: 판정 지역마다 같은 무게로 센다 (주민이 많은 지역이 판정을 좌우하지 않게).
+   * 판정 집계 방식. 모든 주민이 대표 논거 하나를 고르고, 그 논거의 편에 한 표가 간다.
+   * byType: 유형마다 같은 무게로 센다 (주민이 많은 유형이 판정을 좌우하지 않게. 성향 대결은 모두가 한쪽 편이라
+   * 제 편만 뽑으면 반반이 되고, 상대편 마음을 더 많이 돌린 쪽이 이긴다).
    * none: 표 수 그대로 센다.
    */
-  voteNormalization: 'byDistrict' as 'byDistrict' | 'none',
-  /** MBTI(프로필 태그)를 바꾼 뒤 다시 바꿀 수 있을 때까지 (일) */
+  voteNormalization: 'byType' as 'byType' | 'none',
+  /** MBTI(= 사는 마을)를 바꾼 뒤 다시 바꿀 수 있을 때까지 (일). 바꾸면 그 유형 마을로 이사한다 */
   mbtiChangeCooldownDays: 7,
   /** 결과 집계가 이 시간(분) 넘게 끝나지 않으면 멈춘 것으로 보고 다시 집계한다 */
   judgingStaleMinutes: 10,

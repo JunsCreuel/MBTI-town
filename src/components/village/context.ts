@@ -61,9 +61,8 @@ export interface SelfLook {
   name: string;
   color: AvatarColor;
   acc: AccessoryId;
-  /** 이름표 둘째 줄 (MBTI·일주) */
+  /** 이름표 둘째 줄 (MBTI) */
   mbti?: string;
-  ilju?: string;
 }
 
 export interface TownContextValue {

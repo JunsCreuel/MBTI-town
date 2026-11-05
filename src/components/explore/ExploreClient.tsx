@@ -10,7 +10,7 @@ import { tokens } from '@/design/tokens';
 import { call } from '@/lib/api';
 import type { DebateView } from '@/server/debate/service';
 import type { RoomCard } from '@/server/scene/service';
-import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
+import { DISTRICT, DISTRICTS, type District, THEME } from '@/shared/districts';
 import { Guide } from '../app/Guide';
 import { Icon } from '../app/Icon';
 import { TabBar } from '../app/TabBar';
@@ -164,7 +164,7 @@ export function ExploreClient() {
     <main className="page page--tabs">
       <header className="page__head">
         <h1>둘러보기</h1>
-        <p className="muted">지역을 눌러 이웃의 방을 구경해요. <Link href="/village">마을 걷기 ›</Link></p>
+        <p className="muted">마을을 눌러 이웃의 방을 구경해요. <Link href="/village">마을 걷기 ›</Link></p>
       </header>
       {flat ? (
         <VillageMap selected={selected} counts={data?.counts ?? {}} onSelect={setSelected} />
@@ -191,7 +191,7 @@ export function ExploreClient() {
       ) : (
         <section className="section" style={{ '--district': tokens.district[selected] } as CSSProperties}>
           <h2 className="section-title">
-            {DISTRICT[selected].name} <small>{DISTRICT[selected].element} · {DISTRICT[selected].mood}</small>
+            {DISTRICT[selected].name} <small>{THEME[DISTRICT[selected].theme].name} · {THEME[DISTRICT[selected].theme].place}</small>
           </h2>
           {data ? <RoomCards rooms={data.rooms} empty="아직 공개된 방이 없어요." /> : <div className="loader" aria-hidden />}
         </section>

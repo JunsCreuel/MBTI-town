@@ -1,79 +1,102 @@
-// 다섯 거주 지역(오행) (PROJECT_GUIDE.md 3장).
-// 거주 지역은 사주의 일간 오행으로 자동으로 정해진다 (src/server/saju.ts). 취향은 지역을 정하는 데 쓰지 않는다.
+// 16유형 마을 (PROJECT_GUIDE.md 3장). 사는 마을 = 내 MBTI 유형이다.
+// 기질 그룹(분석가 NT·외교관 NF·관리자 SJ·탐험가 SP)이 섬의 한 사분면씩 모이고, 그룹이 풍경(식물·명소·열매·색)을 정한다.
+import { MBTI_GROUPS, MBTI_TYPES, groupOf, isMbtiType, type MbtiGroup, type MbtiType } from '../design/mbti';
 
-export const DISTRICTS = ['wood', 'fire', 'earth', 'metal', 'water'] as const;
-export type District = (typeof DISTRICTS)[number];
+/** 마을 순서: 북쪽부터 시계 방향. 같은 기질 그룹 넷이 이어진다 (NT → NF → SJ → SP) */
+export const DISTRICTS = MBTI_TYPES;
+export type District = MbtiType;
 
-export interface DistrictMeta {
-  id: District;
-  /** 오행 */
-  element: string;
-  /** 거주 지역 이름 (가칭) */
+/** 풍경 테마 = 기질 그룹 */
+export type Theme = MbtiGroup;
+export const THEMES: readonly Theme[] = ['NT', 'NF', 'SJ', 'SP'];
+
+export interface ThemeMeta {
+  id: Theme;
+  /** 기질 이름 */
   name: string;
-  /** 한국어 짧은 이름 */
-  short: string;
+  /** 풍경 이름 (지도·안내에 쓴다) */
+  place: string;
   /** 분위기 소개 */
   mood: string;
 }
 
-export const DISTRICT: Record<District, DistrictMeta> = {
-  wood: { id: 'wood', element: '목(木)', name: 'Forest District', short: '숲', mood: '숲과 온실, 초록빛 건축' },
-  fire: { id: 'fire', element: '화(火)', name: 'Sunset District', short: '노을', mood: '노을과 조명, 붉은 지붕, 작은 공연장' },
-  earth: { id: 'earth', element: '토(土)', name: 'Hill District', short: '언덕', mood: '언덕과 돌길, 크림색 주택, 작은 상점' },
-  metal: { id: 'metal', element: '금(金)', name: 'Silver District', short: '은빛', mood: '금속 공방과 유리, 모던 건축' },
-  water: { id: 'water', element: '수(水)', name: 'Lake District', short: '호수', mood: '호수와 안개, 달빛, 푸른 건축' },
+export const THEME: Record<Theme, ThemeMeta> = {
+  NT: { id: 'NT', name: MBTI_GROUPS[0].name, place: '은빛 언덕', mood: '은빛 자작나무와 유리 공방' },
+  NF: { id: 'NF', name: MBTI_GROUPS[1].name, place: '초록 숲', mood: '숲과 온실, 초록빛 건축' },
+  SJ: { id: 'SJ', name: MBTI_GROUPS[2].name, place: '푸른 호숫가', mood: '호수와 부두, 푸른 지붕' },
+  SP: { id: 'SP', name: MBTI_GROUPS[3].name, place: '노을 거리', mood: '노을과 단풍, 작은 공연장' },
 };
 
+export interface DistrictMeta {
+  id: District;
+  /** 마을 이름: "ENFP 마을" */
+  name: string;
+  /** 짧은 이름 (유형 코드) */
+  short: string;
+  theme: Theme;
+}
+
+export const DISTRICT: Record<District, DistrictMeta> = Object.fromEntries(
+  DISTRICTS.map((d) => [d, { id: d, name: `${d} 마을`, short: d, theme: groupOf(d) }]),
+) as Record<District, DistrictMeta>;
+
+export const themeOf = (d: District): Theme => groupOf(d);
+
+/** 기질 그룹을 대표하는 마을 (그룹 풍경 소품의 색, 낚시터·클럽처럼 마을이 아닌 곳의 풍경에 쓴다) */
+export const THEME_DISTRICT: Record<Theme, District> = { NT: 'INTP', NF: 'INFP', SJ: 'ISFJ', SP: 'ISFP' };
+
+/** 마을이 아직 없을 때(예전 주민, 손님 미리 보기) 방 풍경에 쓰는 마을 */
+export const DEFAULT_DISTRICT: District = 'INFP';
+
 export function isDistrict(v: unknown): v is District {
-  return typeof v === 'string' && (DISTRICTS as readonly string[]).includes(v);
+  return isMbtiType(v);
 }
 
 // ───────────────────────── 취향 선택지 ─────────────────────────
-// 선택지 하나는 지역 하나에 1점을 준다.
+// 가입 때 고르는 취향 (방 꾸미기 추천에만 쓴다. 사는 마을과는 상관없다)
 
 export interface TasteOption {
   id: string;
   label: string;
-  district: District;
 }
 
 export const TASTE_COLORS: readonly TasteOption[] = [
-  { id: 'mint', label: '민트', district: 'wood' },
-  { id: 'green', label: '초록', district: 'wood' },
-  { id: 'coral', label: '코랄', district: 'fire' },
-  { id: 'peach', label: '복숭아', district: 'fire' },
-  { id: 'cream', label: '크림', district: 'earth' },
-  { id: 'butter', label: '버터', district: 'earth' },
-  { id: 'silver', label: '은빛', district: 'metal' },
-  { id: 'white', label: '하양', district: 'metal' },
-  { id: 'sky', label: '하늘', district: 'water' },
-  { id: 'lavender', label: '라벤더', district: 'water' },
+  { id: 'mint', label: '민트' },
+  { id: 'green', label: '초록' },
+  { id: 'coral', label: '코랄' },
+  { id: 'peach', label: '복숭아' },
+  { id: 'cream', label: '크림' },
+  { id: 'butter', label: '버터' },
+  { id: 'silver', label: '은빛' },
+  { id: 'white', label: '하양' },
+  { id: 'sky', label: '하늘' },
+  { id: 'lavender', label: '라벤더' },
 ];
 
 export const TASTE_MOODS: readonly TasteOption[] = [
-  { id: 'natural', label: '자연스러운', district: 'wood' },
-  { id: 'fresh', label: '산뜻한', district: 'wood' },
-  { id: 'lively', label: '활기찬', district: 'fire' },
-  { id: 'warm', label: '따뜻한', district: 'fire' },
-  { id: 'cozy', label: '아늑한', district: 'earth' },
-  { id: 'retro', label: '레트로', district: 'earth' },
-  { id: 'modern', label: '세련된', district: 'metal' },
-  { id: 'minimal', label: '미니멀', district: 'metal' },
-  { id: 'dreamy', label: '몽환적인', district: 'water' },
-  { id: 'calm', label: '차분한', district: 'water' },
+  { id: 'natural', label: '자연스러운' },
+  { id: 'fresh', label: '산뜻한' },
+  { id: 'lively', label: '활기찬' },
+  { id: 'warm', label: '따뜻한' },
+  { id: 'cozy', label: '아늑한' },
+  { id: 'retro', label: '레트로' },
+  { id: 'modern', label: '세련된' },
+  { id: 'minimal', label: '미니멀' },
+  { id: 'dreamy', label: '몽환적인' },
+  { id: 'calm', label: '차분한' },
 ];
 
 export const TASTE_MUSIC: readonly TasteOption[] = [
-  { id: 'acoustic', label: '어쿠스틱', district: 'wood' },
-  { id: 'indie', label: '인디', district: 'wood' },
-  { id: 'band', label: '밴드', district: 'fire' },
-  { id: 'citypop', label: '시티팝', district: 'fire' },
-  { id: 'jazz', label: '재즈', district: 'earth' },
-  { id: 'folk', label: '포크', district: 'earth' },
-  { id: 'electronic', label: '일렉트로닉', district: 'metal' },
-  { id: 'classical', label: '클래식', district: 'metal' },
-  { id: 'lofi', label: '로파이', district: 'water' },
-  { id: 'ambient', label: '앰비언트', district: 'water' },
+  { id: 'acoustic', label: '어쿠스틱' },
+  { id: 'indie', label: '인디' },
+  { id: 'band', label: '밴드' },
+  { id: 'citypop', label: '시티팝' },
+  { id: 'jazz', label: '재즈' },
+  { id: 'folk', label: '포크' },
+  { id: 'electronic', label: '일렉트로닉' },
+  { id: 'classical', label: '클래식' },
+  { id: 'lofi', label: '로파이' },
+  { id: 'ambient', label: '앰비언트' },
 ];
 
 export interface Taste {

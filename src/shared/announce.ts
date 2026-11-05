@@ -8,11 +8,9 @@ import { DISTRICT, isDistrict, type District } from './districts';
 export type Announcement =
   /** 누군가 황금 고래를 낚았다 */
   | { kind: 'golden_whale'; name: string }
-  /** 누군가 사주 이용권을 낚았다 */
-  | { kind: 'saju_ticket'; name: string }
   /** 운영자 공지 */
   | { kind: 'notice'; text: string }
-  /** 오행 지역 대항전 우승 지역 (일요일 21시) */
+  /** MBTI 마을 대항전 우승 마을 (일요일 21시) */
   | { kind: 'contest'; district: District };
 
 /** 방에서 화면으로 보내는 공지 (MSG.announce) */
@@ -31,8 +29,7 @@ export const announcementBody = (a: Announcement) => `${a.kind}:${a.kind === 'no
 
 export function announcementText(a: Announcement): string {
   if (a.kind === 'golden_whale') return `(공지) ${a.name}님이 황금 고래를 낚았습니다!`;
-  if (a.kind === 'saju_ticket') return `(공지) ${a.name}님이 사주 이용권을 낚았습니다!`;
-  if (a.kind === 'contest') return `(공지) 이번 주 오행 대항전 우승은 ${DISTRICT[a.district].short} 지역입니다! 광장 전광판에서 순위를 확인하세요.`;
+  if (a.kind === 'contest') return `(공지) 이번 주 MBTI 마을 대항전 우승은 ${DISTRICT[a.district].name}입니다! 광장 전광판에서 순위를 확인하세요.`;
   return `(공지) ${a.text}`;
 }
 
@@ -41,7 +38,7 @@ export function parseAnnouncement(v: unknown): Announcement | null {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
   const clean = (s: unknown, max: number) => (typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().slice(0, max) : '');
-  if (o.kind === 'golden_whale' || o.kind === 'saju_ticket') {
+  if (o.kind === 'golden_whale') {
     const name = clean(o.name, socialConfig.displayNameMax);
     return name ? { kind: o.kind, name } : null;
   }

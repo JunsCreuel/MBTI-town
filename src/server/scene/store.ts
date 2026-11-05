@@ -2,11 +2,8 @@
 import 'server-only';
 import type { MbtiType } from '@/design/mbti';
 import type { Avatar } from '@/shared/avatar';
-import type { BirthInput, SajuReading } from '@/shared/saju';
 import type { ContestDistrictScore, ContestKind, ContestStandings, ContestWeek } from '@/shared/contest';
 import { addContestPoints, contestStandings, myContestPoints } from '../contest';
-import { elementsView, fillElement } from '../elements';
-import type { Element, ElementFill, ElementSource, ElementsView } from '@/shared/elements';
 import type { District, Taste } from '@/shared/districts';
 import type { Emotion, RecordInput, RecordKind, Visibility } from '@/shared/records';
 import type { RoomLayout } from '@/shared/room';
@@ -17,15 +14,13 @@ export interface ProfileRow {
   handle: string | null;
   display_name: string | null;
   bio: string | null;
+  /** 사는 마을 (= MBTI 유형) */
   district: District | null;
-  birth_date: string | null;
-  /** 사용자가 넣은 생일 (본인만 본다) */
-  birth: BirthInput | null;
-  /** 사주 계산 결과 (화면 표시용) */
-  saju: SajuReading | null;
   taste: Partial<Taste>;
   avatar: Partial<Avatar>;
   mbti: MbtiType | null;
+  /** MBTI를 마지막으로 바꾼 때 (처음 정한 것은 null) */
+  mbti_changed_at: Date | null;
   room_visibility: Visibility;
   show_visits: boolean;
   discoverable: boolean;
@@ -99,7 +94,7 @@ export interface RoomCardRow {
   bgm: string | null;
 }
 
-const PROFILE_COLS = `id, handle, display_name, bio, district, to_char(birth_date, 'YYYY-MM-DD') as birth_date, birth, saju, taste, avatar, mbti,
+const PROFILE_COLS = `id, handle, display_name, bio, district, taste, avatar, mbti, mbti_changed_at,
   room_visibility, show_visits, discoverable, onboarded_at, house_hood, house_lot, hobby`;
 const RECORD_COLS = `id, owner_id, kind, emotion, body, photo_id, visibility, created_at`;
 const CARD_COLS = `p.id, p.handle, p.display_name, p.bio, p.district, p.avatar, r.bgm`;
@@ -113,9 +108,6 @@ export type ProfilePatch = Partial<{
   display_name: string;
   bio: string;
   district: District;
-  birth_date: string | null;
-  birth: BirthInput;
-  saju: SajuReading;
   taste: Taste;
   avatar: Avatar;
   room_visibility: Visibility;
@@ -124,9 +116,9 @@ export type ProfilePatch = Partial<{
   onboarded_at: Date;
   hobby: string;
 }>;
-const JSON_COLS = new Set(['taste', 'avatar', 'birth', 'saju']);
+const JSON_COLS = new Set(['taste', 'avatar']);
 const PATCH_COLS = new Set([
-  'handle', 'display_name', 'bio', 'district', 'birth_date', 'birth', 'saju', 'taste', 'avatar', 'room_visibility', 'show_visits', 'discoverable',
+  'handle', 'display_name', 'bio', 'district', 'taste', 'avatar', 'room_visibility', 'show_visits', 'discoverable',
   'onboarded_at', 'hobby',
 ]);
 
@@ -164,7 +156,6 @@ export interface AdminUserRow {
   is_admin: boolean;
   records: number;
   coins: number;
-  saju_tickets: number;
 }
 
 export class SceneStore {
@@ -270,7 +261,8 @@ export class SceneStore {
     await this.sql.query(`update public.profiles set last_seen_at = $2 where id = $1`, [id, at]);
   }
 
-  async setMbti(id: string, mbti: MbtiType, at: Date): Promise<void> {
+  /** MBTI 정하기. at = 바꾼 때 (처음 정한 것은 null: 바꾸기 대기 시간을 세지 않는다) */
+  async setMbti(id: string, mbti: MbtiType, at: Date | null): Promise<void> {
     await this.sql.query(`update public.profiles set mbti = $2, mbti_changed_at = $3 where id = $1`, [id, mbti, at]);
   }
 
@@ -527,7 +519,7 @@ export class SceneStore {
       `select p.id, p.handle, p.display_name, p.district, p.onboarded_at, p.last_seen_at,
               exists (select 1 from public.admins a where a.user_id = p.id) as is_admin,
               (select count(*) from public.records rc where rc.owner_id = p.id)::int as records,
-              p.coins, p.saju_tickets
+              p.coins
        from public.profiles p
        where $1 = '%%' or p.display_name ilike $1 or p.handle ilike $1
        order by p.onboarded_at desc nulls last limit $2`,
@@ -622,47 +614,6 @@ export class SceneStore {
     return rows.map((r) => ({ ...r, count: Number(r.count) }));
   }
 
-  // ───────────────────────── 사주상담소 ─────────────────────────
-
-  async ticketsOf(userId: string): Promise<number> {
-    const [r] = await this.sql.query<{ n: number }>(`select saju_tickets as n from public.profiles where id = $1`, [userId]);
-    return Number(r?.n ?? 0);
-  }
-
-  async addTickets(userId: string, n: number): Promise<number> {
-    const [r] = await this.sql.query<{ n: number }>(`update public.profiles set saju_tickets = saju_tickets + $2 where id = $1 returning saju_tickets as n`, [userId, n]);
-    return Number(r?.n ?? 0);
-  }
-
-  /** 이용권 한 장을 쓴다. 없으면 false */
-  async spendTicket(userId: string): Promise<boolean> {
-    const rows = await this.sql.query(`update public.profiles set saju_tickets = saju_tickets - 1 where id = $1 and saju_tickets > 0 returning id`, [userId]);
-    return rows.length > 0;
-  }
-
-  async getSajuReading<T>(userId: string, kind: string, period: string): Promise<T | null> {
-    const [r] = await this.sql.query<{ body: T }>(`select body from public.saju_readings where user_id = $1 and kind = $2 and period = $3`, [userId, kind, period]);
-    return r?.body ?? null;
-  }
-
-  /** 풀이를 남긴다. 이미 있으면(동시에 두 번) false */
-  async saveSajuReading(userId: string, kind: string, period: string, body: unknown, at: Date): Promise<boolean> {
-    const rows = await this.sql.query(
-      `insert into public.saju_readings (user_id, kind, period, body, created_at) values ($1, $2, $3, $4, $5) on conflict do nothing returning kind`,
-      [userId, kind, period, JSON.stringify(body), at],
-    );
-    return rows.length > 0;
-  }
-
-  /** 이 기간들 중 이미 본 풀이 (kind:period) */
-  async sajuReadingKeys(userId: string, keys: { kind: string; period: string }[]): Promise<Set<string>> {
-    const rows = await this.sql.query<{ kind: string; period: string }>(
-      `select kind, period from public.saju_readings where user_id = $1 and (kind || ':' || period) = any($2::text[])`,
-      [userId, keys.map((k) => `${k.kind}:${k.period}`)],
-    );
-    return new Set(rows.map((r) => `${r.kind}:${r.period}`));
-  }
-
   // ───────────────────────── 코인·상가 ─────────────────────────
 
   async coinsOf(userId: string): Promise<number> {
@@ -674,16 +625,6 @@ export class SceneStore {
   async addCoins(userId: string, n: number): Promise<number> {
     const [r] = await this.sql.query<{ coins: number }>(`update public.profiles set coins = coins + $2 where id = $1 returning coins`, [userId, n]);
     return Number(r?.coins ?? 0);
-  }
-
-  // ───────── 오행 채우기 ─────────
-
-  fillElement(userId: string, element: Element, source: ElementSource, now: Date): Promise<ElementFill | null> {
-    return fillElement(this.sql, userId, element, source, now);
-  }
-
-  elementsView(userId: string, now: Date): Promise<ElementsView | null> {
-    return elementsView(this.sql, userId, now);
   }
 
   // ───────── 클럽 유튜브 신청 제한 ─────────
@@ -731,7 +672,7 @@ export class SceneStore {
     return rows.some((r) => r.kind === 'video') ? 'video' : rows.length ? 'channel' : null;
   }
 
-  // ───────── 오행 지역 대항전 ─────────
+  // ───────── MBTI 마을 대항전 ─────────
 
   /** 대항전 점수를 더한다 (하루 상한까지). 실제로 더해진 점수 */
   addContestPoints(userId: string, district: string | null, kind: ContestKind, points: number, now: Date): Promise<number> {
@@ -766,12 +707,12 @@ export class SceneStore {
   }
 
   /** 운영자가 코인·이용권을 더하거나 뺀다 (0 밑으로는 내려가지 않는다). 새 값, 없는 주민이면 null */
-  async adjustWallet(userId: string, coins: number, tickets: number): Promise<{ coins: number; tickets: number } | null> {
-    const [r] = await this.sql.query<{ coins: number; saju_tickets: number }>(
-      `update public.profiles set coins = greatest(0, coins + $2), saju_tickets = greatest(0, saju_tickets + $3) where id = $1 returning coins, saju_tickets`,
-      [userId, coins, tickets],
+  async adjustWallet(userId: string, coins: number): Promise<{ coins: number } | null> {
+    const [r] = await this.sql.query<{ coins: number }>(
+      `update public.profiles set coins = greatest(0, coins + $2) where id = $1 returning coins`,
+      [userId, coins],
     );
-    return r ? { coins: Number(r.coins), tickets: Number(r.saju_tickets) } : null;
+    return r ? { coins: Number(r.coins) } : null;
   }
 
   /** 모자라지 않으면 코인을 쓴다. 새 잔액, 모자라면 null */

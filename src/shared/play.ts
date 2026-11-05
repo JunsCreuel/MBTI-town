@@ -1,7 +1,7 @@
 // 마을 놀거리: 열매 따기·운세 열매·낚시 (PROJECT_GUIDE.md 3장).
 // 하루 횟수와 결과는 서버가 정한다 (화면은 보여 주기만 한다). 재미로 보는 운세다.
 import { playConfig } from '../config/game';
-import { DISTRICTS, isDistrict, type District } from './districts';
+import { THEMES, isDistrict, themeOf, type District, type Theme } from './districts';
 
 // ───────────────────────── 열매 ─────────────────────────
 
@@ -14,31 +14,37 @@ export interface FruitDef {
   desc: string;
 }
 
-export const FRUITS: Record<District, FruitDef> = {
-  wood: { id: 'apple', name: '사과', color: '#7CC36A', desc: '숲 지역 나무에 열려요. 아삭하고 새콤해요.' },
-  fire: { id: 'peach', name: '복숭아', color: '#F4A08C', desc: '노을 지역 나무에 열려요. 말랑하고 달콤해요.' },
-  earth: { id: 'persimmon', name: '감', color: '#F09A3A', desc: '언덕 지역 나무에 열려요. 가을 햇살 맛이에요.' },
-  metal: { id: 'pear', name: '배', color: '#E9D98A', desc: '은빛 지역 나무에 열려요. 시원하고 물이 많아요.' },
-  water: { id: 'grape', name: '포도', color: '#7C6BC4', desc: '호수 지역 나무에 열려요. 송이송이 알이 꽉 찼어요.' },
+/** 기질 그룹(풍경)마다 마을 나무에 열리는 열매 */
+export const FRUITS: Record<Theme, FruitDef> = {
+  NT: { id: 'pear', name: '배', color: '#E9D98A', desc: '은빛 언덕(분석가) 마을 나무에 열려요. 시원하고 물이 많아요.' },
+  NF: { id: 'apple', name: '사과', color: '#7CC36A', desc: '초록 숲(외교관) 마을 나무에 열려요. 아삭하고 새콤해요.' },
+  SJ: { id: 'grape', name: '포도', color: '#7C6BC4', desc: '푸른 호숫가(관리자) 마을 나무에 열려요. 송이송이 알이 꽉 찼어요.' },
+  SP: { id: 'peach', name: '복숭아', color: '#F4A08C', desc: '노을 거리(탐험가) 마을 나무에 열려요. 말랑하고 달콤해요.' },
 };
+/** 이 마을 나무의 열매 */
+export const fruitOf = (d: District): FruitDef => FRUITS[themeOf(d)];
+/** 열매 나무 모델 (manifest 키) */
+export const fruitTreeKey = (t: Theme) => `prop.fruit.${t.toLowerCase()}`;
+/** 예전에 열리던 열매 (가방에 남아 있으면 이름만 보여 준다) */
+const OLD_FRUIT_NAMES: Record<string, string> = { persimmon: '감' };
 export const FORTUNE_FRUIT: FruitDef = { id: 'fortune', name: '운세 열매', color: '#F2C14E', desc: '광장 운세 나무에 하루 한 번 열려요. 그날의 운세가 적혀 있어요.' };
 
 /** 열매 이름 (도감) */
 export function fruitName(id: string): string {
   if (id === FORTUNE_FRUIT.id) return FORTUNE_FRUIT.name;
-  return Object.values(FRUITS).find((f) => f.id === id)?.name ?? id;
+  return Object.values(FRUITS).find((f) => f.id === id)?.name ?? OLD_FRUIT_NAMES[id] ?? id;
 }
 
 /**
- * 나무 자리 이름: 열매 나무 "fruit.wood.0", 운세 나무 "fortune".
- * 맵의 열매 나무(prop.fruit.<지역>)는 지역마다 놓인 순서대로 번호를 붙인다.
+ * 나무 자리 이름: 열매 나무 "fruit.ENFP.0", 운세 나무 "fortune".
+ * 맵의 열매 나무(prop.fruit.<기질>, district 속성 = 마을)는 마을마다 놓인 순서대로 번호를 붙인다.
  */
 export type TreeSpot = { kind: 'fruit'; district: District; index: number } | { kind: 'fortune' };
 
 export function parseTreeSpot(v: unknown): TreeSpot | null {
   if (v === 'fortune') return { kind: 'fortune' };
   if (typeof v !== 'string') return null;
-  const m = /^fruit\.([a-z]+)\.(\d{1,2})$/.exec(v);
+  const m = /^fruit\.([A-Z]{4})\.(\d{1,2})$/.exec(v);
   if (!m || !isDistrict(m[1])) return null;
   const index = Number(m[2]);
   return index < playConfig.fruitTreesPerDistrict ? { kind: 'fruit', district: m[1], index } : null;
@@ -191,4 +197,5 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-export const ALL_FRUIT_IDS = [...DISTRICTS.map((d) => FRUITS[d].id), FORTUNE_FRUIT.id];
+export const ALL_FRUITS: FruitDef[] = [...THEMES.map((t) => FRUITS[t]), FORTUNE_FRUIT];
+export const ALL_FRUIT_IDS = ALL_FRUITS.map((f) => f.id);

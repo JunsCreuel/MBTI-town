@@ -1,11 +1,10 @@
-// 팀 표시 색. 지역 팀은 지역 색. (예전 MBTI 대결 기록: 유형 팀은 유형 색, 기질 그룹 팀은 그룹 색)
+// 팀 표시 색. 성향 대결(E·I 등)은 글자마다 정한 색. 예전 기록: 지역 팀은 회색, 유형 팀은 유형 색, 기질 그룹 팀은 그룹 색
 import { MBTI_GROUPS, isMbtiType, mbtiColor, withMaxLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import type { Side, Team } from '@/shared/debate';
-import { isDistrict } from '@/shared/districts';
 
 export function teamColor(team: Team, side: Side): string {
-  if (team.kind === 'district' && isDistrict(team.id)) return tokens.district[team.id];
+  if (team.kind === 'axis' && team.id in tokens.axis) return tokens.axis[team.id as keyof typeof tokens.axis];
   if (team.kind === 'type' && isMbtiType(team.id)) return mbtiColor(team.id);
   if (team.kind === 'group') {
     const g = MBTI_GROUPS.find((x) => x.id === team.id);

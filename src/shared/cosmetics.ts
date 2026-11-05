@@ -12,7 +12,7 @@ export interface CosmeticItem {
 
 export const UPCOMING_COSMETICS: readonly CosmeticItem[] = [
   { id: 'hanbok', name: '색동 한복', slot: 'outfit' },
-  { id: 'hoodie', name: '오행 후드티', slot: 'outfit' },
+  { id: 'hoodie', name: '마을 후드티', slot: 'outfit' },
   { id: 'overall', name: '멜빵바지', slot: 'outfit' },
   { id: 'raincoat', name: '노란 우비', slot: 'outfit' },
   { id: 'gat', name: '도사 갓', slot: 'head' },

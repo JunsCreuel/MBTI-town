@@ -84,41 +84,6 @@
   "furn.shelf": {
     "file": "furniture/furn_shelf_ph.glb"
   },
-  "room.view.wood": {
-    "file": "room/room_view_wood_ph.png",
-    "size": [
-      512,
-      512
-    ]
-  },
-  "room.view.fire": {
-    "file": "room/room_view_fire_ph.png",
-    "size": [
-      512,
-      512
-    ]
-  },
-  "room.view.earth": {
-    "file": "room/room_view_earth_ph.png",
-    "size": [
-      512,
-      512
-    ]
-  },
-  "room.view.metal": {
-    "file": "room/room_view_metal_ph.png",
-    "size": [
-      512,
-      512
-    ]
-  },
-  "room.view.water": {
-    "file": "room/room_view_water_ph.png",
-    "size": [
-      512,
-      512
-    ]
-  },
   "ui.icon.home": {
     "file": "ui/ui_icon_home_ph.svg"
   },
@@ -512,57 +477,6 @@
   "ui.icon.think": {
     "file": "ui/ui_icon_think_ph.svg"
   },
-  "pet.rat": {
-    "file": "pets/pet_rat_ph.glb"
-  },
-  "pet.ox": {
-    "file": "pets/pet_ox_ph.glb"
-  },
-  "pet.tiger": {
-    "file": "pets/pet_tiger_ph.glb"
-  },
-  "pet.rabbit": {
-    "file": "pets/pet_rabbit_ph.glb"
-  },
-  "pet.dragon": {
-    "file": "pets/pet_dragon_ph.glb"
-  },
-  "pet.snake": {
-    "file": "pets/pet_snake_ph.glb"
-  },
-  "pet.horse": {
-    "file": "pets/pet_horse_ph.glb"
-  },
-  "pet.sheep": {
-    "file": "pets/pet_sheep_ph.glb"
-  },
-  "pet.monkey": {
-    "file": "pets/pet_monkey_ph.glb"
-  },
-  "pet.rooster": {
-    "file": "pets/pet_rooster_ph.glb"
-  },
-  "pet.dog": {
-    "file": "pets/pet_dog_ph.glb"
-  },
-  "pet.pig": {
-    "file": "pets/pet_pig_ph.glb"
-  },
-  "prop.fruit.wood": {
-    "file": "props/prop_fruit_wood_ph.glb"
-  },
-  "prop.fruit.fire": {
-    "file": "props/prop_fruit_fire_ph.glb"
-  },
-  "prop.fruit.earth": {
-    "file": "props/prop_fruit_earth_ph.glb"
-  },
-  "prop.fruit.metal": {
-    "file": "props/prop_fruit_metal_ph.glb"
-  },
-  "prop.fruit.water": {
-    "file": "props/prop_fruit_water_ph.glb"
-  },
   "prop.plaza.fortune_tree": {
     "file": "props/prop_plaza_fortune_tree_ph.glb"
   },
@@ -842,89 +756,11 @@
   "map.market": {
     "file": "maps/market.json"
   },
-  "char.npc.saju": {
-    "file": "characters/char_npc_saju_ph.glb"
-  },
-  "prop.plaza.saju": {
-    "file": "props/prop_plaza_saju_ph.glb"
-  },
-  "item.ticket.saju": {
-    "file": "items/item_ticket_saju_ph.svg"
-  },
   "ui.icon.dex": {
     "file": "ui/ui_icon_dex_ph.svg"
   },
   "ui.icon.character": {
     "file": "ui/ui_icon_character_ph.svg"
-  },
-  "item.tarot.fool": {
-    "file": "items/item_tarot_fool_ph.svg"
-  },
-  "item.tarot.magician": {
-    "file": "items/item_tarot_magician_ph.svg"
-  },
-  "item.tarot.high_priestess": {
-    "file": "items/item_tarot_high_priestess_ph.svg"
-  },
-  "item.tarot.empress": {
-    "file": "items/item_tarot_empress_ph.svg"
-  },
-  "item.tarot.emperor": {
-    "file": "items/item_tarot_emperor_ph.svg"
-  },
-  "item.tarot.hierophant": {
-    "file": "items/item_tarot_hierophant_ph.svg"
-  },
-  "item.tarot.lovers": {
-    "file": "items/item_tarot_lovers_ph.svg"
-  },
-  "item.tarot.chariot": {
-    "file": "items/item_tarot_chariot_ph.svg"
-  },
-  "item.tarot.strength": {
-    "file": "items/item_tarot_strength_ph.svg"
-  },
-  "item.tarot.hermit": {
-    "file": "items/item_tarot_hermit_ph.svg"
-  },
-  "item.tarot.wheel": {
-    "file": "items/item_tarot_wheel_ph.svg"
-  },
-  "item.tarot.justice": {
-    "file": "items/item_tarot_justice_ph.svg"
-  },
-  "item.tarot.hanged_man": {
-    "file": "items/item_tarot_hanged_man_ph.svg"
-  },
-  "item.tarot.death": {
-    "file": "items/item_tarot_death_ph.svg"
-  },
-  "item.tarot.temperance": {
-    "file": "items/item_tarot_temperance_ph.svg"
-  },
-  "item.tarot.devil": {
-    "file": "items/item_tarot_devil_ph.svg"
-  },
-  "item.tarot.tower": {
-    "file": "items/item_tarot_tower_ph.svg"
-  },
-  "item.tarot.star": {
-    "file": "items/item_tarot_star_ph.svg"
-  },
-  "item.tarot.moon": {
-    "file": "items/item_tarot_moon_ph.svg"
-  },
-  "item.tarot.sun": {
-    "file": "items/item_tarot_sun_ph.svg"
-  },
-  "item.tarot.judgement": {
-    "file": "items/item_tarot_judgement_ph.svg"
-  },
-  "item.tarot.world": {
-    "file": "items/item_tarot_world_ph.svg"
-  },
-  "item.tarot.back": {
-    "file": "items/item_tarot_back_ph.svg"
   },
   "prop.plaza.screen": {
     "file": "props/prop_plaza_screen_ph.glb"
@@ -934,5 +770,45 @@
   },
   "ui.icon.ranking": {
     "file": "ui/ui_icon_ranking_ph.svg"
+  },
+  "prop.fruit.nt": {
+    "file": "props/prop_fruit_nt_ph.glb"
+  },
+  "prop.fruit.nf": {
+    "file": "props/prop_fruit_nf_ph.glb"
+  },
+  "prop.fruit.sj": {
+    "file": "props/prop_fruit_sj_ph.glb"
+  },
+  "prop.fruit.sp": {
+    "file": "props/prop_fruit_sp_ph.glb"
+  },
+  "room.view.nt": {
+    "file": "room/room_view_nt_ph.png",
+    "size": [
+      512,
+      512
+    ]
+  },
+  "room.view.nf": {
+    "file": "room/room_view_nf_ph.png",
+    "size": [
+      512,
+      512
+    ]
+  },
+  "room.view.sj": {
+    "file": "room/room_view_sj_ph.png",
+    "size": [
+      512,
+      512
+    ]
+  },
+  "room.view.sp": {
+    "file": "room/room_view_sp_ph.png",
+    "size": [
+      512,
+      512
+    ]
   }
 }

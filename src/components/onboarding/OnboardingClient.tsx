@@ -2,17 +2,17 @@
 
 // 첫 가입 2~7단계 (1단계 "세계에 입장"은 첫 화면). PROJECT_GUIDE.md 5장.
 // 목표: 긴 설명보다 짧은 시간에 "내 공간이 생겼다"는 만족감.
-// 사는 지역은 고르지 않는다. 생일로 사주를 풀어 일간의 오행으로 자동으로 정해진다 (서버가 다시 계산한다).
+// 사는 마을 = 내 MBTI 유형 마을. 알면 16개 중에서 고르고, 모르면 12문항 간단 테스트로 정한다.
+// 예전에 MBTI 없이 가입한 주민도 여기서 MBTI만 정하고 그 마을로 이사한다.
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { socialConfig } from '@/config/game';
-import { MBTI_TYPES, type MbtiType } from '@/design/mbti';
+import type { MbtiType } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { ACCESSORIES, AVATAR_COLORS, DEFAULT_AVATAR, type Avatar } from '@/shared/avatar';
 import { BGM_TRACKS, bgmForDistrict } from '@/shared/bgm';
-import { DISTRICT } from '@/shared/districts';
-import type { SajuReading } from '@/shared/saju';
+import { DEFAULT_DISTRICT, DISTRICT } from '@/shared/districts';
 import { FLOORS, STARTER_ROOMS, WALLPAPERS, starterLayout, type FloorId, type WallpaperId } from '@/shared/room';
 import { call, errorMessage } from '@/lib/api';
 import { BgmPlayer } from '../app/BgmPlayer';
@@ -22,21 +22,17 @@ import { Icon } from '../app/Icon';
 import type { MyProfile } from '@/server/scene/service';
 import { useMe } from '../app/useMe';
 import { loadRoomAssets, type RoomAssets } from '../room/assets';
-import { BirthForm, birthFromDraft, emptyBirthDraft, type BirthDraft } from '../saju/BirthForm';
-import { SajuCard } from '../saju/SajuCard';
+import { MbtiPicker, VillageCard } from './MbtiPicker';
 
 const RoomScene = dynamic(() => import('../room/RoomScene'), { ssr: false });
 const AvatarPreview = dynamic(() => import('../room/AvatarPreview'), { ssr: false });
 
-const STEPS = ['나의 사주', '나의 지역', '캐릭터', '첫 집', 'BGM', '완성'] as const;
+const STEPS = ['나의 MBTI', '나의 마을', '캐릭터', '첫 집', 'BGM', '완성'] as const;
 
 export function OnboardingClient() {
   const router = useRouter();
   const { me } = useMe({ require: 'login' });
   const [step, setStep] = useState(0);
-  const [sajuName, setSajuName] = useState('');
-  const [birth, setBirth] = useState<BirthDraft>(emptyBirthDraft);
-  const [reading, setReading] = useState<SajuReading | null>(null);
   const [mbti, setMbti] = useState<MbtiType | ''>('');
   const [avatar, setAvatar] = useState<Avatar>(DEFAULT_AVATAR);
   const [starter, setStarter] = useState<string>(STARTER_ROOMS[0].id);
@@ -53,12 +49,12 @@ export function OnboardingClient() {
   const [error, setError] = useState<string | null>(null);
   const top = useRef<HTMLDivElement>(null);
 
-  // 사주를 풀기 전에는 쓰이지 않는다 (지역 단계부터 reading이 있다)
-  const chosenDistrict = reading?.district ?? 'earth';
-  const birthInput = birthFromDraft(birth);
+  const chosenDistrict = mbti || DEFAULT_DISTRICT;
+  /** 예전에 MBTI 없이 가입한 주민: MBTI만 정하면 그 마을로 이사한다 */
+  const resident = !!me?.profile?.onboarded;
 
   useEffect(() => {
-    if (me?.profile?.onboarded && !issued) router.replace('/village');
+    if (me?.profile?.onboarded && me.profile.mbti && !issued) router.replace('/village');
   }, [me, router, issued]);
 
   // 3D 모델은 캐릭터 단계 전에 미리 받아 둔다
@@ -74,18 +70,16 @@ export function OnboardingClient() {
   const layout = useMemo(() => starterLayout(starter, wallpaper, floor), [starter, wallpaper, floor]);
   const recommendedBgm = bgmForDistrict(chosenDistrict).key;
 
-  /** 생일로 사주를 풀어 보고 지역 단계로 */
-  async function readSaju() {
-    if (!birthInput) return;
+  /** 예전 주민: MBTI를 정하고 그 마을의 빈 집터로 이사한 뒤 마을로 */
+  async function moveIn() {
+    if (!mbti) return;
     setBusy(true);
     setError(null);
     try {
-      setReading(await call<SajuReading>('POST', '/api/saju/preview', birthInput));
-      if (!name.trim() && sajuName.trim()) setName(sajuName.trim().slice(0, socialConfig.displayNameMax));
-      setStep(1);
+      await call<MyProfile>('POST', '/api/me', { mbti });
+      router.replace('/village?welcome=1');
     } catch (e) {
       setError(errorMessage(e));
-    } finally {
       setBusy(false);
     }
   }
@@ -95,8 +89,7 @@ export function OnboardingClient() {
     setError(null);
     try {
       const done = await call<MyProfile>('POST', '/api/onboarding', {
-        birth: birthInput,
-        mbti: mbti || undefined,
+        mbti,
         avatar,
         starter,
         wallpaper,
@@ -106,7 +99,7 @@ export function OnboardingClient() {
         bio,
         hobby,
       });
-      // 지역을 배정받고 집이 생겼다: 주민증이 나온다. 그다음 마을의 내 집 문 앞으로 간다
+      // MBTI 마을에 집이 생겼다: 주민증이 나온다. 그다음 마을의 내 집 문 앞으로 간다
       setIssued(done);
       setBusy(false);
       window.scrollTo({ top: 0 });
@@ -135,44 +128,34 @@ export function OnboardingClient() {
 
       {step === 0 && (
         <section className="onboarding__body">
-          <Guide>태어난 날로 사주를 풀어 볼게요. 사주의 오행(목·화·토·금·수)에 따라 살 동네가 정해져요.</Guide>
-          <label className="field">
-            <span>이름</span>
-            <input value={sajuName} maxLength={40} onChange={(e) => setSajuName(e.target.value)} placeholder="사주에 보일 이름" />
-          </label>
-          <BirthForm value={birth} onChange={(b) => { setBirth(b); setReading(null); }} />
-          <p className="muted">
-            태어난 시간을 몰라도 괜찮아요. 사는 동네는 태어난 날로 정해져서 시간과 상관없어요. 생일과 시간은 나만 볼 수 있어요.
-          </p>
-          <details className="optional">
-            <summary>MBTI (선택)</summary>
-            <label className="field">
-              <span>MBTI</span>
-              <select value={mbti} onChange={(e) => setMbti(e.target.value as MbtiType | '')}>
-                <option value="">입력하지 않기</option>
-                {MBTI_TYPES.map((t) => (
-                  <option key={t} value={t}>{t}</option>
-                ))}
-              </select>
-            </label>
-            <p className="muted">MBTI를 넣으면 중앙광장의 &lsquo;오늘의 토론&rsquo; 이벤트에 참여할 수 있어요. 사는 동네와는 상관없어요.</p>
-          </details>
-          <button className="btn-primary" onClick={readSaju} disabled={busy || !birthInput || !sajuName.trim()}>
-            {busy ? '사주를 푸는 중…' : '사주 보기'}
+          <Guide>
+            {resident
+              ? '마을이 MBTI 16개 마을로 새로 바뀌었어요! 내 MBTI를 고르면 그 마을로 이사해요.'
+              : 'MBTI 유형마다 마을이 있어요. 내 MBTI를 고르면 그 마을에 내 집이 생겨요.'}
+          </Guide>
+          <MbtiPicker value={mbti} onChange={setMbti} />
+          <button className="btn-primary" onClick={next} disabled={!mbti}>
+            다음
           </button>
         </section>
       )}
 
-      {step === 1 && reading && (
+      {step === 1 && mbti && (
         <section className="onboarding__body">
-          <Guide>
-            {sajuName.trim() || '당신'}님은 {DISTRICT[reading.district].short} 지역 주민이에요! 그곳 빈 집터에 첫 집을 지어 줄게요.
-          </Guide>
-          <SajuCard reading={reading} name={sajuName.trim() || undefined} />
-          <p className="muted">생일을 잘못 넣었다면 이전으로 돌아가 고칠 수 있어요. 가입한 뒤에는 MY에서 고치면 사는 동네도 다시 정해져요.</p>
-          <button className="btn-primary" onClick={next}>
-            {DISTRICT[reading.district].short} 지역에 집 짓기
-          </button>
+          <Guide>{DISTRICT[mbti].name} 주민이 될 거예요! 그 마을 빈 집터에 {resident ? '집을 옮겨' : '첫 집을 지어'} 줄게요.</Guide>
+          <VillageCard type={mbti} />
+          <p className="muted">
+            가입한 뒤에도 MY에서 MBTI를 바꾸면 그 마을로 이사해요. 처음 한 번은 바로 바꿀 수 있고, 그 뒤로는 일주일에 한 번이에요.
+          </p>
+          {resident ? (
+            <button className="btn-primary" onClick={moveIn} disabled={busy}>
+              {busy ? '이사하는 중…' : `${DISTRICT[mbti].name}로 이사하기`}
+            </button>
+          ) : (
+            <button className="btn-primary" onClick={next}>
+              {DISTRICT[mbti].name}에 집 짓기
+            </button>
+          )}
         </section>
       )}
 
@@ -273,7 +256,7 @@ export function OnboardingClient() {
 
       {issued?.district && issued.joinedAt && (
         <section className="onboarding__body">
-          <Guide>주민증이 나왔어요! 이제 {DISTRICT[issued.district].short} 지역 주민이에요. 친구에게 자랑하고 마을로 가 볼까요?</Guide>
+          <Guide>주민증이 나왔어요! 이제 {DISTRICT[issued.district].name} 주민이에요. 친구에게 자랑하고 마을로 가 볼까요?</Guide>
           <ResidentCard
             info={{
               name: issued.displayName,

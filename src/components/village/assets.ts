@@ -135,7 +135,7 @@ export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) =
 const tagCache = new Map<string, { texture: THREE.Texture; aspect: number; rel: number }>();
 
 /**
- * 이름표: 색 점 + 이름, 둘째 줄에 작게 MBTI·일주(sub). 내 캐릭터는 강조색 바탕에 "나"를 붙인다.
+ * 이름표: 색 점 + 이름, 둘째 줄에 작게 MBTI(sub). 내 캐릭터는 강조색 바탕에 "나"를 붙인다.
  * rel = 한 줄짜리 이름표 대비 높이 (두 줄이면 더 높다). 같은 이름표는 한 번만 만든다.
  */
 export function tagTexture(label: string, dotColor: string | null, self = false, sub = '') {

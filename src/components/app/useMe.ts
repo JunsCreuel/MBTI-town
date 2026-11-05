@@ -17,7 +17,8 @@ export function useMe(opts: { require?: 'login' | 'onboarded' } = {}) {
         router.replace(`/login?next=${encodeURIComponent(window.location.pathname)}`);
         return;
       }
-      if (opts.require === 'onboarded' && !m.profile?.onboarded) {
+      // 가입을 마치지 않았거나, 예전에 MBTI 없이 가입한 주민은 MBTI(= 사는 마을)부터 정한다
+      if (opts.require === 'onboarded' && (!m.profile?.onboarded || !m.profile.mbti)) {
         router.replace('/onboarding');
         return;
       }

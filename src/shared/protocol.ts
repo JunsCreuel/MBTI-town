@@ -48,7 +48,7 @@ export interface Hood {
 export function parseRoomPlace(v: unknown): Hood | null | undefined {
   if (v === undefined || v === 'town') return null;
   if (typeof v !== 'string') return undefined;
-  const m = /^([a-z]+)\.(\d{1,3})$/.exec(v);
+  const m = /^([A-Z]{4})\.(\d{1,3})$/.exec(v);
   if (!m || !isDistrict(m[1])) return undefined;
   const hood = Number(m[2]);
   return hood >= 2 && hood <= townConfig.maxHoods ? { district: m[1], hood } : undefined;
