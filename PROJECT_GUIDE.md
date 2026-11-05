@@ -218,7 +218,7 @@ CLAUDE.md에는 "이 프로젝트는 PROJECT_GUIDE.md를 따른다" 한 줄만 �
   - 일과 (90초 한 바퀴, `RESIDENT_CYCLE`): 집 안에 있다가 문으로 나와서(흐려졌다 또렷해진다) 집 앞 둘레 몇 군데를 걸어서 들르고(서 있기·생각하기·춤), 다시 문으로 들어간다. 밖에 있는 시간은 한 바퀴에 50~60초쯤. 일과는 서버 시계 시각만으로 정해서 모든 화면에서 같은 자리에 보인다 (실시간 서버는 주민을 모른다).
   - 가까이(3칸) 가면 말풍선으로 인사한다. 서 있을 때는 나를 보고 손을 흔든다. 이름표 둘째 줄은 "OOOO 마을 주민".
   - 모델은 그 집에서 24칸 안으로 가야 받고 (첫 화면 용량에 들지 않는다), 집이 34칸보다 먼 주민은 그리지 않는다.
-- **펫과 산책** (`src/shared/pets.ts`, `src/components/village/Pets.tsx`): 마을 오른쪽 위 발바닥 버튼 → "펫 불러오기" 시트에서 펫을 고르면 내 옆(조금 뒤)을 따라다닌다. 지금은 강아지(`pet.dog`) 하나이고 하나씩 늘려 간다 (모델을 `npm run assets:characters`로 넣고 `PETS`에 한 줄).
+- **펫과 산책** (`src/shared/pets.ts`, `src/components/village/Pets.tsx`): 마을 오른쪽 위 발바닥 버튼 → "펫 불러오기" 시트에서 펫을 고르면 내 옆(조금 뒤)을 따라다닌다. 지금은 강아지(`pet.dog`) 하나이고 하나씩 늘려 간다 (모델을 `npm run assets:characters`로 넣고 `PETS`에 한 줄, 화면 키 `height`도 정한다).
   - 걸으면 깡총깡총 따라오고 (멀수록 빨리), 멈추면 주인이 보는 쪽을 같이 본다. 주인이 지도로 멀리 가거나 길이 막혀 처지면 주인 곁으로 옮겨 온다. 불러오면 톡 커지며 나타난다.
   - 다른 사람에게도 보인다: 실시간 서버의 `Player.pet`(입장할 때 `JoinOptions.pet`, 바꿀 때 `MSG.pet`). 자리는 화면마다 주인 위치로 따로 계산한다. 집이 있는 주민만 (손님은 안내 문구, 서버도 손님 펫은 받지 않는다).
   - 데리고 다니던 펫은 이 기기에 기억해 다음에 마을에 들어와도 같이 나온다 (`scene:pet`). 시트의 "OO 집에 보내기"로 돌려보낸다. 방 안에는 방마다 강아지가 따로 산다.
@@ -454,7 +454,7 @@ src/config/game.ts         # 운영 중 바꿀 값
 | 캐릭터 (남자 `char.base`, 여자 `char.base.female`) | GLB, Mixamo 뼈대 스킨 + `idle`·`walk` | 키 1.32, 삼각형 약 1만 개, 400KB 안팎 | 프로젝트 소유자가 Tripo로 만든 원본(`assets-src/characters/`)을 `npm run assets:characters`로 바꾼다: 색 텍스처 1024px WebP 한 장(티셔츠 자리를 알파에 표시), 삼각형 반으로, meshopt 압축(화면은 MeshoptDecoder), 손가락 동작 빼기. 붙는 자리 `socket_head`(머리 가운데)·`socket_eyes`(안경)·`socket_hand_r`(낚싯대). 원본에 없는 몸짓(`cheer`·`clap`·`wave`·`bow`·`dance`·`jump`·`think`·`fish`)은 화면이 서 있기 첫 자세에서 뼈를 돌려 만든다(`src/lib/characterRig.ts`). 원본 서 있기·걷기는 팔이 몸에 붙어 윗팔을 옆으로 벌린다(`armSpread`: 남자 15°, 여자 20°) |
 | 표정 | PNG 512×512, 눈·입 따로 | 표정 10칸 아틀라스 (`FACES`) | 원본 `face_parts`(남자)·`face_parts_female`(여자). 스티커 흰 테두리·분홍 재단선을 지우고, 두 눈 사이를 넓혀(남자 20px) 얼굴 앞면에 투영한 메시(`face`)로 머리 뼈에 붙인다. 이모티콘·몸짓 중에는 그 표정 (`EMOTE_FACE`·`CLIP_FACE`), 평소는 `neutral` (남자: 놀란 눈 + 미소, 여자: 미소) |
 | 아바타 소품 | GLB | 삼각형 800개 이하 | `socket_head` 기준 (안경은 `socket_eyes`) |
-| 펫 | GLB (뼈 없음) | 키 0.5, 삼각형 약 8,000개 | 강아지 `pet.dog` (같은 스크립트로 바꾼다) |
+| 펫 | GLB (뼈 없음) | 모델 키 0.5, 삼각형 약 8,000개 | 강아지 `pet.dog` (같은 스크립트로 바꾼다). 화면에서는 `PETS`의 `height`(강아지 0.82, 사람은 1.32)로 맞춰 그린다 (마을·방 같이, `fitHeight`) |
 | 방 소품 | GLB | 삼각형 2,000개 이하, 재질 2개 이하 | 원점 = 바닥(벽 소품은 벽면) 가운데, 정면 = +Z. 차지하는 칸 수는 `src/shared/room.ts` 소품 목록의 `size` |
 | 마을 소품 | GLB | 삼각형 3,000개 이하 | 원점 = 바닥 가운데, 정면 = +Z. 마을 색을 입힐 부분은 재질 `outfit`, 밤에 켜지는 부분은 `glass`(창)·`glow`(등), 늘 제 색으로 빛나는 클럽 네온은 `neonPink`·`neonCyan`·`neonGreen`, 바람에 흔들릴 잎·풀은 `foliage`. 집은 바닥 2.4×2.2, 문이 정면 |
 | 자연물 | GLB (Kenney Nature Kit, CC0) | 나무 높이 약 2~3.5, 꽃·풀 0.3~0.5 | `prop.nature.*`. 원본 묶음은 저장소에 넣지 않고 `npm run assets:kenney -- <GLTF 폴더>`로 다시 만든다 |

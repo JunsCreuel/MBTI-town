@@ -239,6 +239,14 @@ export function cloneCharacter(gltf: GLTF): THREE.Object3D {
   return SkeletonUtils.clone(gltf.scene);
 }
 
+/** 모델을 키(height, 칸)에 맞춰 키운다 (펫처럼 뼈 없는 모델. 발바닥이 원점에 있다고 본다) */
+export function fitHeight(model: THREE.Object3D, height: number) {
+  model.scale.setScalar(1);
+  model.updateMatrixWorld(true);
+  const size = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+  if (size.y > 0) model.scale.setScalar(height / size.y);
+}
+
 /** 머리 소품을 단다: 안경은 눈 높이 자리, 나머지는 머리 가운데 자리 */
 export function attachAccessory(model: THREE.Object3D, accessoryId: string, prop: THREE.Object3D) {
   const def = ACCESSORIES.find((a) => a.id === accessoryId);

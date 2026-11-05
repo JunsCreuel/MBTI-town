@@ -7,6 +7,7 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
 import { townConfig } from '@/config/game';
+import { fitHeight } from '@/lib/characterRig';
 import { lerpAngle, moveWithCollision } from '@/shared/movement';
 import { petDef } from '@/shared/pets';
 import { groundHeightAt, isBlockedAt } from '@/shared/townMap';
@@ -50,6 +51,7 @@ export function PetFollower({ owner, petOf }: { owner: RefObject<Actor>; petOf: 
       .then((src) => {
         if (!live) return;
         const o = src.clone(true);
+        fitHeight(o, def.height);
         o.traverse((c) => void ((c as THREE.Mesh).isMesh && ((c as THREE.Mesh).castShadow = true)));
         setModel(o);
       })

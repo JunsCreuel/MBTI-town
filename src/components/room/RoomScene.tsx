@@ -14,7 +14,8 @@ import { tokens } from '@/design/tokens';
 import { profileTag, type Avatar, type AvatarBody } from '@/shared/avatar';
 import { useBodyModel } from './useBodyModel';
 import { CHARACTER_HEIGHT, faceFor, type ClipName } from '@/shared/character';
-import { attachAccessory, characterActions, cloneCharacter, faceControl, tintOutfit, withMeshopt } from '@/lib/characterRig';
+import { attachAccessory, characterActions, cloneCharacter, faceControl, fitHeight, tintOutfit, withMeshopt } from '@/lib/characterRig';
+import { petDef } from '@/shared/pets';
 import { themeOf, type District } from '@/shared/districts';
 import {
   blockedCells, canPlace, findRoomPath, footprintSize, furnitureDef, itemCenter, moveInRoom,
@@ -992,6 +993,8 @@ function FirstFrame({ onFrame }: { onFrame?: () => void }) {
 
 /** 펫 이름표 (지금은 강아지 한 종류) */
 const PET_NAME = '강아지';
+/** 방 강아지 키 (마을에서 데리고 다니는 강아지와 같다) */
+const PET_HEIGHT = petDef('dog')!.height;
 const PET_SPEED = 1.3;
 let petModel: Promise<THREE.Object3D> | null = null;
 function loadPetModel(): Promise<THREE.Object3D> {
@@ -1023,6 +1026,7 @@ function PetDog({ layout }: { layout: RoomLayout }) {
       .then((src) => {
         if (!alive) return;
         const o = src.clone(true);
+        fitHeight(o, PET_HEIGHT);
         o.traverse((c) => void ((c as THREE.Mesh).isMesh && ((c as THREE.Mesh).castShadow = true)));
         setModel(o);
       })
@@ -1085,7 +1089,7 @@ function PetDog({ layout }: { layout: RoomLayout }) {
     const b = bubble.current;
     if (b) {
       b.visible = petted < 2.4;
-      b.position.set(s.pos.x, 0.85 + jump + Math.sin(t * 5) * 0.02, s.pos.z);
+      b.position.set(s.pos.x, PET_HEIGHT + 0.35 + jump + Math.sin(t * 5) * 0.02, s.pos.z);
     }
   });
 
