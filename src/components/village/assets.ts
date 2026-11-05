@@ -7,7 +7,7 @@ import { ACCESSORIES, bodyKey, type AvatarBody } from '@/shared/avatar';
 import { allFloraKeys } from '@/shared/flora';
 import type { TownMap } from '@/shared/townMap';
 import { EMOTES, type EmoteKind } from '@/shared/protocol';
-import { withMeshopt } from '@/lib/characterRig';
+import { brightenFur, withMeshopt } from '@/lib/characterRig';
 import { EMOTE_INFO } from '../app/gestures';
 import { hasClubNpcs } from './npc';
 
@@ -151,7 +151,10 @@ export function loadPet(key: string): Promise<THREE.Object3D> {
   if (!p) {
     p = withMeshopt(new GLTFLoader())
       .loadAsync(assetUrl(key))
-      .then((g) => g.scene);
+      .then((g) => {
+        brightenFur(g.scene);
+        return g.scene;
+      });
     petCache.set(key, p);
     p.catch(() => petCache.delete(key));
   }

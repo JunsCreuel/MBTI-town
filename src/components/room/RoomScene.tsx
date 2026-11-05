@@ -14,7 +14,7 @@ import { tokens } from '@/design/tokens';
 import { profileTag, type Avatar, type AvatarBody } from '@/shared/avatar';
 import { useBodyModel } from './useBodyModel';
 import { CHARACTER_HEIGHT, faceFor, type ClipName } from '@/shared/character';
-import { attachAccessory, characterActions, cloneCharacter, faceControl, fitHeight, tintOutfit, withMeshopt } from '@/lib/characterRig';
+import { attachAccessory, brightenFur, characterActions, cloneCharacter, faceControl, fitHeight, tintOutfit, withMeshopt } from '@/lib/characterRig';
 import { petDef } from '@/shared/pets';
 import { themeOf, type District } from '@/shared/districts';
 import {
@@ -998,7 +998,12 @@ const PET_HEIGHT = petDef('dog')!.height;
 const PET_SPEED = 1.3;
 let petModel: Promise<THREE.Object3D> | null = null;
 function loadPetModel(): Promise<THREE.Object3D> {
-  petModel ??= withMeshopt(new GLTFLoader()).loadAsync(assetUrl('pet.dog')).then((g) => g.scene);
+  petModel ??= withMeshopt(new GLTFLoader())
+    .loadAsync(assetUrl('pet.dog'))
+    .then((g) => {
+      brightenFur(g.scene);
+      return g.scene;
+    });
   petModel.catch(() => {
     petModel = null;
   });

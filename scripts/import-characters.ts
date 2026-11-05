@@ -58,6 +58,8 @@ interface ModelSpec {
   simplifyError?: number;
   /** 색 텍스처 크기 (px) */
   texture?: number;
+  /** 밝은 털을 새하얗게 (원본이 베이지·회색빛인 흰 동물). 눈·코처럼 어두운 곳은 그대로 */
+  whiten?: boolean;
   /** 예전 임시 에셋 (지운다) */
   old?: string;
 }
@@ -112,7 +114,7 @@ const MODELS: ModelSpec[] = [
   { src: 'animal_fox.glb', key: 'char.resident.fox', file: 'characters/char_resident_fox.glb', height: 1.32 },
   { src: 'animal_bear.glb', key: 'char.resident.bear', file: 'characters/char_resident_bear.glb', height: 1.38 },
   { src: 'animal_rabbit.glb', key: 'char.resident.rabbit', file: 'characters/char_resident_rabbit.glb', height: 1.3 },
-  { src: 'animal_dog_lowpoly.glb', key: 'pet.dog', file: 'pets/pet_dog.glb', height: 0.5, pet: true, simplify: 0.3, simplifyError: 0.01, texture: 512 },
+  { src: 'animal_dog_lowpoly.glb', key: 'pet.dog', file: 'pets/pet_dog.glb', height: 0.5, pet: true, simplify: 0.3, simplifyError: 0.01, texture: 512, whiten: true },
 ];
 
 /** 표정 그림 한 칸 (px) */
@@ -240,6 +242,27 @@ function upperBodyUvMask(doc: Document, size: number): Uint8Array {
   return mask;
 }
 
+/**
+ * 흰 동물의 털을 새하얗게: 밝은 곳(밝기 0.35~0.55부터 서서히)은 색을 빼고 흰색 쪽으로 당긴다 (명암은 조금 남긴다).
+ * 눈·코·입처럼 어두운 곳은 그대로 둔다. RGB 바이트 배열을 그 자리에서 고친다
+ */
+function whitenFur(rgb: Buffer) {
+  const smooth = (a: number, b: number, x: number) => {
+    const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+    return t * t * (3 - 2 * t);
+  };
+  for (let i = 0; i < rgb.length; i += 3) {
+    const r = rgb[i] / 255;
+    const g = rgb[i + 1] / 255;
+    const b = rgb[i + 2] / 255;
+    const l = (Math.max(r, g, b) + Math.min(r, g, b)) / 2;
+    const w = smooth(0.35, 0.55, l);
+    if (!w) continue;
+    const target = 1 - (1 - l) * 0.22;
+    for (let c = 0; c < 3; c++) rgb[i + c] = Math.round((rgb[i + c] / 255 + (target - rgb[i + c] / 255) * w) * 255);
+  }
+}
+
 /** 색 텍스처 한 장만 남기고 1024px WebP로. 베이스는 티셔츠 자리를 알파에 표시하고, 티셔츠 평균 밝기를 돌려준다 */
 async function slimTextures(doc: Document, spec: ModelSpec): Promise<number | null> {
   let shirtLum: number | null = null;
@@ -277,6 +300,7 @@ async function slimTextures(doc: Document, spec: ModelSpec): Promise<number | nu
       // exact: 투명한 칸(티셔츠가 아닌 곳)의 색도 그대로 둔다 (기본값은 버려서 머리·얼굴 색이 깨진다)
       out = await sharp(rgba, { raw: { width: info.width, height: info.height, channels: 4 } }).webp({ quality: 86, alphaQuality: 90, exact: true }).toBuffer();
     } else {
+      if (spec.whiten) whitenFur(data);
       out = await sharp(data, { raw: { width: info.width, height: info.height, channels: 3 } }).webp({ quality: 86 }).toBuffer();
     }
     tex.setImage(new Uint8Array(out)).setMimeType('image/webp').setURI('');
@@ -580,7 +604,10 @@ const licensesPath = join(ROOT, 'LICENSES.md');
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, Record<string, unknown>>;
 let licenses = readFileSync(licensesPath, 'utf8').trimEnd().split('\n');
 
+// --only <manifest 키>: 그 모델만 다시 바꾼다 (예: --only pet.dog)
+const only = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null;
 for (const spec of MODELS) {
+  if (only && spec.key !== only) continue;
   await convert(spec);
   manifest[spec.key] = { file: spec.file };
   if (spec.old) {

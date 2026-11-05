@@ -247,6 +247,23 @@ export function fitHeight(model: THREE.Object3D, height: number) {
   if (size.y > 0) model.scale.setScalar(height / size.y);
 }
 
+/**
+ * 펫 털을 그늘에서도 밝게: 색 텍스처를 빛나는 텍스처로도 써서 밝은 털만 조금 스스로 빛나게 한다
+ * (눈·코처럼 어두운 곳은 그대로 어둡다). 받은 원본에 한 번만 (복제본은 재질을 같이 쓴다)
+ */
+export function brightenFur(model: THREE.Object3D, amount = 0.28) {
+  model.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    for (const m of [mesh.material].flat() as THREE.MeshStandardMaterial[]) {
+      if (!m.map || !('emissive' in m)) continue;
+      m.emissiveMap = m.map;
+      m.emissive.setScalar(amount);
+      m.needsUpdate = true;
+    }
+  });
+}
+
 /** 머리 소품을 단다: 안경은 눈 높이 자리, 나머지는 머리 가운데 자리 */
 export function attachAccessory(model: THREE.Object3D, accessoryId: string, prop: THREE.Object3D) {
   const def = ACCESSORIES.find((a) => a.id === accessoryId);
