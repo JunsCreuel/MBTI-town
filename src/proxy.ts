@@ -6,7 +6,26 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { authMode, supabaseAnonKey, supabaseUrl } from '@/lib/authConfig';
 
+/**
+ * 다른 사이트에서 보낸 상태 바꾸기 요청(POST·PATCH·PUT·DELETE)을 API에 닿기 전에 막는다 (CSRF 이중 방어).
+ * 브라우저는 다른 사이트에서 보낸 요청에 Origin(또는 Sec-Fetch-Site: cross-site)을 붙인다.
+ * 둘 다 없는 요청(서버끼리 부르는 예약 작업 등)은 쿠키가 없으므로 그대로 보낸다
+ */
+function crossSiteWrite(request: NextRequest): boolean {
+  if (!request.nextUrl.pathname.startsWith('/api/') || ['GET', 'HEAD', 'OPTIONS'].includes(request.method)) return false;
+  if (request.headers.get('sec-fetch-site') === 'cross-site') return true;
+  const origin = request.headers.get('origin');
+  if (!origin) return false;
+  const host = request.headers.get('x-forwarded-host') ?? request.headers.get('host');
+  try {
+    return new URL(origin).host !== host;
+  } catch {
+    return true;
+  }
+}
+
 export async function proxy(request: NextRequest) {
+  if (crossSiteWrite(request)) return NextResponse.json({ error: 'forbidden', message: '다른 사이트에서 보낸 요청은 받지 않아요.' }, { status: 403 });
   // 개발용 로그인이거나 로그인 쿠키가 없으면 할 일이 없다
   if (authMode() !== 'supabase' || !request.cookies.getAll().some((c) => c.name.startsWith('sb-'))) return NextResponse.next();
   let response = NextResponse.next({ request });

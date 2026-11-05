@@ -44,10 +44,14 @@ export interface TownPass {
 
 const DEV_SECRET = 'scene-dev-town-secret';
 
+/**
+ * 토큰 비밀값. 개발용 값은 저장소에 적혀 있어 누구나 운영자 토큰을 만들 수 있으므로, 내 컴퓨터에서만 쓴다:
+ * 운영 모드이거나 배포 환경(Render·Vercel)이면 비밀값이 없을 때 토큰을 하나도 만들거나 받지 않는다
+ */
 function secret(): string {
   const s = process.env.TOWN_TOKEN_SECRET;
   if (s) return s;
-  if (process.env.NODE_ENV === 'production') throw new Error('TOWN_TOKEN_SECRET이 없습니다');
+  if (process.env.NODE_ENV === 'production' || process.env.RENDER || process.env.VERCEL) throw new Error('TOWN_TOKEN_SECRET이 없습니다');
   return DEV_SECRET;
 }
 

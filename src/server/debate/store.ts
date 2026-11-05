@@ -240,8 +240,9 @@ export class DebateStore {
   }
 
   /** 논거 지우기 (추천·투표에 걸린 것도 같이) */
+  /** 논거를 지운다. 그 논거에 간 판정 표도 같이 지운다 (표가 남으면 지운 논거 편에 계속 세어지고, 그 사람은 다시 고르지 못한다) */
   async deleteArgument(id: string): Promise<void> {
-    await this.sql.query(`delete from public.arguments where id = $1`, [id]);
+    await this.sql.query(`with v as (delete from public.votes where argument_id = $1) delete from public.arguments where id = $1`, [id]);
   }
 
   async getArgument(id: string): Promise<Argument | null> {

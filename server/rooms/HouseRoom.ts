@@ -48,8 +48,11 @@ export class HouseRoom extends Room<{ state: HouseState }> {
   private readonly passes = new Map<string, TownPass>();
   private readonly lastGestureAt = new Map<string, number>();
 
-  /** 이 집에 들어갈 수 있는 토큰인지 (토큰의 house와 들어가려는 집이 같아야 한다) */
-  onAuth(_client: Client, options?: HouseJoinOptions): TownPass {
+  /**
+   * 이 집에 들어갈 수 있는 토큰인지 (토큰의 house와 들어가려는 집이 같아야 한다).
+   * 자리를 잡기 전(방 찾기·만들기 단계)에 확인한다 (static: Colyseus 0.18은 이것만 매치메이킹에서 부른다)
+   */
+  static async onAuth(_token: string, options?: HouseJoinOptions): Promise<TownPass> {
     const pass = verifyTownPass(options?.token);
     if (!pass?.house || typeof options?.house !== 'string' || pass.house !== options.house) {
       throw new Error('이 집에 들어갈 수 있는 토큰이 아닙니다');
@@ -57,7 +60,9 @@ export class HouseRoom extends Room<{ state: HouseState }> {
     return pass;
   }
 
-  onCreate() {
+  onCreate(options?: HouseJoinOptions) {
+    // 집 번호(주인의 마을 사람 번호) 모양이 아니면 방을 열지 않는다
+    if (typeof options?.house !== 'string' || !/^[A-Za-z0-9_-]{8,32}$/.test(options.house)) throw new Error('집이 올바르지 않습니다');
     this.autoDispose = true;
     this.stopAnnouncements = listenAnnouncements(this);
     this.onMessage(MSG.move, (client, message: unknown) => this.handleMove(client, message));

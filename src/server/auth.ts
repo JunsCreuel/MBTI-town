@@ -13,9 +13,13 @@ export interface SessionUser {
   id: string;
 }
 
-/** 개발용 로그인은 Supabase가 없고, 운영이 아닐 때만 쓴다 */
+/**
+ * 개발용 로그인은 Supabase가 없고, 운영이 아닐 때만 쓴다.
+ * 쿠키에 적힌 계정 번호를 그대로 믿으므로 실제 DB(DATABASE_URL)나 Vercel 배포에서는 어떤 설정으로도 켜지지 않는다
+ */
 export function devLoginEnabled(): boolean {
-  return authMode() === 'dev' && (process.env.NODE_ENV !== 'production' || process.env.DEBATE_ALLOW_DEV_LOGIN === '1');
+  if (authMode() !== 'dev' || process.env.DATABASE_URL || process.env.VERCEL) return false;
+  return process.env.NODE_ENV !== 'production' || process.env.DEBATE_ALLOW_DEV_LOGIN === '1';
 }
 
 export async function supabaseServer() {

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { safeNext as cleanNext } from '@/lib/safeNext';
 import { supabaseServer } from '@/server/auth';
 
 /**
@@ -11,9 +12,8 @@ import { supabaseServer } from '@/server/auth';
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
-  const next = url.searchParams.get('next') ?? '/home';
-  // 다른 사이트로 보내지 않게 경로만 받는다
-  const safeNext = next.startsWith('/') && !next.startsWith('//') ? next : '/home';
+  // 다른 사이트로 보내지 않게 우리 사이트 경로만 받는다
+  const safeNext = cleanNext(url.searchParams.get('next'));
   const reset = safeNext.startsWith('/login/reset');
   const fail = (kind: string) => NextResponse.redirect(new URL(`/login?error=${kind}`, url.origin));
 

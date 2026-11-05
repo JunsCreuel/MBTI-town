@@ -231,7 +231,8 @@ describe('새 동네 (2동·3동…)', () => {
   });
 
   it('클럽 신청곡은 지금 곡 뒤 대기열에 차례로 쌓이고, 채널 모두가 같은 목록을 받는다', async () => {
-    const a = await join(pass({ name: '신청자' }), 'home', 'club');
+    const pa = pass({ name: '신청자' });
+    const a = await join(pa, 'home', 'club');
     const b = await join(pass({ name: '듣는이' }), 'home', 'club');
     expect(b.roomId).toBe(a.roomId);
     const got: MusicState[] = [];
@@ -243,7 +244,8 @@ describe('새 동네 (2동·3동…)', () => {
     await until(() => got.length === 1 && results.length === 1);
     // 지금 곡(시계 순서)은 그대로, 신청곡은 대기열 첫 번째
     expect(got[0].by).toBe('');
-    expect(got[0].queue).toEqual([{ index: 2, by: '신청자', who: a.sessionId }]);
+    // 신청한 사람은 마을 사람 번호로 센다 (다시 접속해도 쉬는 시간·한 사람 몫이 이어진다)
+    expect(got[0].queue).toEqual([{ index: 2, by: '신청자', who: pa.pid }]);
     expect(got[0].startedAt).toBeLessThanOrEqual(got[0].serverNow);
     expect(results[0]).toEqual({ ok: true, position: 1 });
     // 다른 사람이 신청하면 두 번째
@@ -271,8 +273,18 @@ describe('새 동네 (2동·3동…)', () => {
     await a.leave();
   });
 
-  it('유튜브 신청곡은 웹 서버가 서명한 신청표만 받는다', async () => {
-    const a = await join(pass({ name: '유튜버' }), 'home', 'club');
+  it('유튜브 신청곡은 웹 서버가 서명한 신청표만, 집이 있는 주민만 받는다', async () => {
+    const guest = await join(pass({ name: '손님' }), 'home', 'club');
+    const guestResults: MusicResult[] = [];
+    guest.onMessage(MSG.musicResult, (r: MusicResult) => guestResults.push(r));
+    const guestSong = { id: 'dQw4w9WgXcQ', title: '유튜브 곡', seconds: 200 };
+    const guestExp = Date.now() + 60_000;
+    guest.send(MSG.musicRequest, { youtube: { song: guestSong, exp: guestExp, sig: signYoutube(guestSong, guestExp) } });
+    await until(() => guestResults.length === 1);
+    expect(guestResults[0]).toEqual({ ok: false, reason: 'closed' });
+    await guest.leave();
+    const pa = pass({ name: '유튜버', pid: townPid('user-youtuber'), district: 'ENFP', lot: 3 });
+    const a = await join(pa, 'home', 'club');
     const got: MusicState[] = [];
     const results: MusicResult[] = [];
     a.onMessage(MSG.music, (m: MusicState) => got.push(m));
@@ -289,7 +301,7 @@ describe('새 동네 (2동·3동…)', () => {
     a.send(MSG.musicRequest, { youtube: { song, exp, sig: signYoutube(song, exp) } });
     await until(() => got.length === 1 && results.length === 4);
     expect(results[3]).toEqual({ ok: true, position: got[0].queue.length });
-    expect(got[0].queue.at(-1)).toEqual({ index: -1, by: '유튜버', who: a.sessionId, yt: song });
+    expect(got[0].queue.at(-1)).toEqual({ index: -1, by: '유튜버', who: pa.pid, yt: song });
     await a.leave();
   });
 
@@ -484,5 +496,25 @@ describe('서버 전체 공지', () => {
     expect((await post({ kind: 'shout', text: '아무 말' })).status).toBe(400);
     await new Promise((res) => setTimeout(res, 300));
     expect(heard).toBe(0);
+  });
+});
+
+describe('실시간 서버 막기', () => {
+  it('토큰 없이는 방 찾기 단계에서 자리를 잡지 못한다 (마을·집 모두)', async () => {
+    const res = await fetch(`http://localhost:${PORT}/matchmake/joinOrCreate/town`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ place: 'plaza' }) });
+    expect(res.ok).toBe(false);
+    const house = await fetch(`http://localhost:${PORT}/matchmake/joinOrCreate/house`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ house: townPid('user-x') }) });
+    expect(house.ok).toBe(false);
+  });
+
+  it('방을 마음대로 만드는 create·join은 열지 않는다', async () => {
+    const res = await fetch(`http://localhost:${PORT}/matchmake/create/town`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: signTownPass(pass()) }) });
+    expect(res.ok).toBe(false);
+    expect(await res.text()).toMatch(/invalid method/);
+  });
+
+  it('큰 본문·길이를 밝히지 않은 본문은 읽기 전에 거른다', async () => {
+    const big = await fetch(`http://localhost:${PORT}/scene/announce`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'x'.repeat(64 * 1024) });
+    expect(big.status).toBe(413);
   });
 });

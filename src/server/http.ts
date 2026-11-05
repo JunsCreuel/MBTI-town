@@ -21,6 +21,10 @@ export async function handle(fn: () => Promise<unknown>): Promise<NextResponse> 
     if (u) {
       return NextResponse.json({ error: u.code, message: u.message }, { status: u.status });
     }
+    // 동시에 두 번 눌러 같은 것을 두 번 만들려다 DB 고유 조건(unique)에 걸린 경우: 500이 아니라 409
+    if (e && typeof e === 'object' && (e as { code?: unknown }).code === '23505') {
+      return NextResponse.json({ error: 'conflict', message: '이미 처리됐어요. 새로 고침해 주세요.' }, { status: 409 });
+    }
     console.error('[api]', e);
     return NextResponse.json({ error: 'server_error', message: '잠시 후 다시 시도해 주세요.' }, { status: 500 });
   }

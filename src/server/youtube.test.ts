@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { signYoutube, verifyYoutube } from '@/shared/townToken';
-import { checkVideo, isoDurationSeconds, lookupYoutube } from './youtube';
+import { checkVideo, clearVideoCache, isoDurationSeconds, lookupYoutube } from './youtube';
 
 const ok = {
   snippet: { title: '  좋은   노래  ', categoryId: '10', liveBroadcastContent: 'none' },
@@ -10,6 +10,7 @@ const ok = {
 
 describe('유튜브 신청곡 확인', () => {
   afterEach(() => {
+    clearVideoCache();
     vi.unstubAllEnvs();
     vi.unstubAllGlobals();
   });

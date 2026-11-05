@@ -61,6 +61,8 @@ export const townConfig = {
   maxHoods: 99,
   /** 실시간 서버 입장 토큰 유효 시간 (초) */
   tokenTtlSeconds: 600,
+  /** 집 방 입장 토큰 유효 시간 (초). 짧게 두어 차단·비공개가 바로 듣게 한다 (들어올 때만 쓴다) */
+  houseTokenTtlSeconds: 90,
   /** 집 이름표가 보이는 거리 (칸) */
   nameplateDistance: 10,
   /** 지역 잔디에 지역 색을 섞는 정도 (0~1) */
@@ -228,6 +230,13 @@ export const recordConfig = {
   photoMaxSide: 1600,
   /** 사진 파일 크기 상한 (바이트) */
   photoMaxBytes: 800 * 1024,
+  /**
+   * 한 사람이 둘 수 있는 사진 수·전체 용량, 하루에 올릴 수 있는 수.
+   * 사진은 DB에 들어가서 한 사람이 마구 올리면 DB가 가득 차 사이트 전체가 멈춘다 (나중에 Supabase Storage로 옮길 것)
+   */
+  photosMax: 150,
+  photoTotalBytes: 40 * 1024 * 1024,
+  photosPerDay: 30,
   /** 한 번에 불러오는 기록 수 */
   pageSize: 30,
 } as const;
@@ -245,6 +254,10 @@ export const socialConfig = {
   guestbookPageSize: 30,
   /** 방문 기록을 보여 줄 기간 (일) */
   visitDays: 30,
+  /** 한 사람이 하루에 쓸 수 있는 방명록·기록·신고 수 (도배·신고 폭탄 막기) */
+  guestbookPerDay: 60,
+  recordsPerDay: 50,
+  reportsPerDay: 20,
 } as const;
 
 // 오늘의 토론: 중앙광장 이벤트 (PROJECT_GUIDE.md 10장). 시간과 숫자는 모두 가안이다.

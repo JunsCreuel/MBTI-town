@@ -1,7 +1,7 @@
 // 미니홈피 규칙을 실제 Postgres(PGlite, 메모리)로 확인한다. 공개 범위·차단은 서버 규칙이라 여기서 꼼꼼히 본다.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { coinConfig, contestConfig, debateConfig, marketConfig, playConfig, townConfig } from '@/config/game';
+import { coinConfig, contestConfig, debateConfig, marketConfig, playConfig, recordConfig, townConfig } from '@/config/game';
 import type { Announcement } from '@/shared/announce';
 import { DISTRICTS, type District } from '@/shared/districts';
 import { refundFor } from '@/shared/market';
@@ -926,5 +926,77 @@ describe('가입 도움 (운영자)', () => {
     await expectError(service.adminClearSignupFailures({ id: randomUUID() }), 'not_found');
     await service.adminClearSignupFailures(admin);
     expect((await service.adminSignups(admin, '')).failures).toEqual([]);
+  });
+});
+
+describe('오래된 기록 정리 (매일 예약 작업)', () => {
+  it('지난 열매·낚시 하루 기록, 오래된 방문, 3주 지난 대항전 점수만 지운다', async () => {
+    const v = await user();
+    const other = await user();
+    await onboard(v, '정리주민', { district: 'INTP' });
+    await onboard(other, '정리손님', { district: 'INTP' });
+    // now = 2026-11-02 (테스트 시계)
+    await sql.query(`insert into public.daily_picks (user_id, day, spot) values ($1, '2026-10-20', 'tree:old'), ($1, '2026-11-02', 'tree:new')`, [v.id]);
+    await sql.query(`insert into public.visits (owner_id, visitor_id, visited_on) values ($1, $2, '2026-09-01'), ($1, $2, '2026-11-01')`, [v.id, other.id]);
+    await sql.query(
+      `insert into public.contest_points (week, day, user_id, district, kind, points) values ('2026-10-05', '2026-10-06', $1, 'INTP', 'fish', 3), ('2026-10-26', '2026-10-27', $1, 'INTP', 'fish', 3)`,
+      [v.id],
+    );
+    const done = await service.cleanup();
+    expect(done.dailyPicks).toBeGreaterThanOrEqual(1);
+    expect((await sql.query(`select spot from public.daily_picks where user_id = $1`, [v.id])).map((r) => r.spot)).toEqual(['tree:new']);
+    expect((await sql.query(`select to_char(visited_on, 'YYYY-MM-DD') as d from public.visits where owner_id = $1`, [v.id])).map((r) => r.d)).toEqual(['2026-11-01']);
+    expect((await sql.query(`select to_char(week, 'YYYY-MM-DD') as w from public.contest_points where user_id = $1`, [v.id])).map((r) => r.w)).toEqual(['2026-10-26']);
+  });
+});
+
+describe('회원 탈퇴', () => {
+  it('확인 글자가 있어야 하고, 계정과 딸린 것이 모두 지워진다. 운영자는 먼저 빼야 한다', async () => {
+    const v = await user();
+    await onboard(v, '떠나는주민', { district: 'ISTP' });
+    await service.createRecord(v, { kind: 'diary', body: '마지막 일기', visibility: 'private' }).catch(() => null);
+    await expectError(service.deleteMyAccount(v, '네'), 'bad_request');
+    await expectError(service.deleteMyAccount(null, '탈퇴'), 'login_required');
+    await service.deleteMyAccount(v, '탈퇴');
+    expect(await sql.query(`select 1 from public.profiles where id = $1`, [v.id])).toEqual([]);
+    expect(await sql.query(`select 1 from auth.users where id = $1`, [v.id])).toEqual([]);
+    expect(await sql.query(`select 1 from public.records where owner_id = $1`, [v.id])).toEqual([]);
+
+    const admin = await user();
+    await onboard(admin, '운영탈퇴', { district: 'ISTP' });
+    await sql.query(`insert into public.admins (user_id) values ($1)`, [admin.id]);
+    await expectError(service.deleteMyAccount(admin, '탈퇴'), 'forbidden');
+  });
+
+  it('가입은 한 번만: 다시 부르면 막는다 (MBTI 대기 시간 건너뛰기·방 덮어쓰기 막기)', async () => {
+    const v = await user();
+    await onboard(v, '두번가입', { district: 'ESFP' });
+    await expectError(onboard(v, '두번가입', { district: 'INTJ' }), 'conflict');
+    expect((await service.me(v)).profile.mbti).toBe('ESFP');
+  });
+
+  it('이름·프로필 문구의 거친 말은 거르고, 운영자처럼 보이는 주소는 쓸 수 없다', async () => {
+    const v = await user();
+    await onboard(v, '착한이름', { district: 'ENTP' });
+    await expectError(service.updateProfile(v, { displayName: '멍청이' }), 'rejected');
+    await expectError(service.updateProfile(v, { bio: '연락은 open.kakao.com/abc' }), 'rejected');
+    await expectError(service.updateProfile(v, { handle: 'admin' }), 'bad_request');
+    await expectError(service.updateProfile(v, { handle: 'official_kr' }), 'bad_request');
+    expect((await service.updateProfile(v, { handle: 'adminkim' })).handle).toBe('adminkim');
+  });
+});
+
+describe('쓰기 상한', () => {
+  it('사진은 하루 상한까지만, 신고는 처리 전 같은 대상 한 번만', async () => {
+    const v = await user();
+    const other = await user();
+    await onboard(v, '사진많이', { district: 'ISFP' });
+    await onboard(other, '신고대상', { district: 'ISFP' });
+    for (let i = 0; i < recordConfig.photosPerDay; i++) await service.uploadPhoto(v, PNG);
+    await expectError(service.uploadPhoto(v, PNG), 'limit');
+    const handle = (await service.me(other)).profile.handle!;
+    await service.report(v, { kind: 'user', targetId: handle, reason: '도배' });
+    await service.report(v, { kind: 'user', targetId: handle, reason: '또 도배' });
+    expect(await sql.query(`select 1 from public.reports where reporter = $1 and target_id = $2`, [v.id, other.id])).toHaveLength(1);
   });
 });

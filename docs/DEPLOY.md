@@ -105,7 +105,7 @@ Free 플랜은 15분 동안 접속이 없으면 잠들고, 다음 사람이 마�
 | `NEXT_PUBLIC_REALTIME_URL` | 3단계 Render 주소 (`https://…onrender.com`, 끝에 `/` 없이) | 필수 |
 | `TOWN_TOKEN_SECRET` | Render 서비스 Environment 탭의 같은 이름 값 (똑같이 복사) | 필수 |
 | `NEXT_PUBLIC_AUTH_PROVIDERS` | 비워 둡니다. 5단계에서 소셜 로그인을 켠 뒤 `kakao,google` 처럼 적습니다 | 선택 |
-| `CRON_SECRET` | 아무 긴 무작위 문자열 (7단계) | 선택 |
+| `CRON_SECRET` | 아무 긴 무작위 문자열 (7단계) | 권장 (없으면 매일 정리 작업이 돌지 않는다) |
 | `YOUTUBE_API_KEY` | 클럽 유튜브 신청곡용 YouTube Data API v3 키 (아래 4-1) | 선택 |
 
 4. 기본 브랜치를 `main` 으로 바꾸지 않았다면: Project **Settings → Git → Production Branch** 를 `main` 으로 바꾸고 **Deployments → Redeploy**.

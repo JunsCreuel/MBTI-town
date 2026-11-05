@@ -62,8 +62,26 @@ export interface YoutubeLimits {
 
 const NO_LIMITS: YoutubeLimits = { on: async () => true, blocked: async () => null };
 
+/** 같은 영상을 여러 사람이 신청해도 YouTube API를 한 번만 부르게 10분 기억한다 */
+const VIDEO_CACHE_MS = 10 * 60_000;
+const videoCache = new Map<string, { at: number; item: VideoItem | undefined }>();
+
+/** 테스트용: 기억한 영상 정보를 비운다 */
+export function clearVideoCache(): void {
+  videoCache.clear();
+}
+
 /** 영상 정보 하나 (YouTube Data API v3). 키가 없거나 못 받으면 오류 */
 export async function fetchVideo(id: string): Promise<VideoItem | undefined> {
+  const hit = videoCache.get(id);
+  if (hit && Date.now() - hit.at < VIDEO_CACHE_MS) return hit.item;
+  const item = await fetchVideoFresh(id);
+  if (videoCache.size > 500) videoCache.delete(videoCache.keys().next().value!);
+  videoCache.set(id, { at: Date.now(), item });
+  return item;
+}
+
+async function fetchVideoFresh(id: string): Promise<VideoItem | undefined> {
   const key = process.env.YOUTUBE_API_KEY;
   if (!key) throw new SceneError('conflict', '유튜브 신청은 준비 중이에요. (운영자가 YouTube API 키를 넣으면 열려요)');
   const api = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,status&id=${id}&key=${encodeURIComponent(key)}`;

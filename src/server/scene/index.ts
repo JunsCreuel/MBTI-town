@@ -9,7 +9,8 @@ import { SceneStore } from './store';
 const g = globalThis as unknown as { __sceneService?: Promise<SceneService> };
 
 export function getSceneService(): Promise<SceneService> {
-  g.__sceneService ??= (async () => new SceneService(new SceneStore(await getSql()), () => new Date(Date.now() + clockOffsetMs()), announceToTown))();
+  // 마을 집 목록은 20초 모아 둔다 (마을 화면마다 1분에 한 번 묻는다)
+  g.__sceneService ??= (async () => new SceneService(new SceneStore(await getSql()), () => new Date(Date.now() + clockOffsetMs()), announceToTown, 20_000))();
   g.__sceneService.catch(() => {
     g.__sceneService = undefined;
   });

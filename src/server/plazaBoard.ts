@@ -31,11 +31,23 @@ export interface PlazaBoard extends Pick<ContestView, 'standings' | 'last'> {
   serverNow: string;
 }
 
+/** 광장 게시판은 모두에게 같으므로 20초 모아 두고 같이 쓴다 (마을 화면마다 1분에 한 번 묻는다) */
+const BOARD_CACHE_MS = 20_000;
+let boardCache: { at: number; value: Promise<Omit<PlazaBoard, 'serverNow'>> } | null = null;
+
 export async function plazaBoard(): Promise<PlazaBoard> {
-  await settleContestIfDue().catch((e) => console.error('[contest] 지난주 결과 정하기 실패', e));
-  const scene = await getSceneService();
-  const [board, debate] = await Promise.all([scene.contestBoard(), boardDebate().catch(() => null)]);
-  return { ...board, debate, serverNow: new Date().toISOString() };
+  const t = Date.now();
+  if (!boardCache || t - boardCache.at > BOARD_CACHE_MS) {
+    const value = (async () => {
+      await settleContestIfDue().catch((e) => console.error('[contest] 지난주 결과 정하기 실패', e));
+      const scene = await getSceneService();
+      const [board, debate] = await Promise.all([scene.contestBoard(), boardDebate().catch(() => null)]);
+      return { ...board, debate };
+    })();
+    boardCache = { at: t, value };
+    value.catch(() => (boardCache = null));
+  }
+  return { ...(await boardCache.value), serverNow: new Date().toISOString() };
 }
 
 async function boardDebate(): Promise<BoardDebate> {

@@ -1,5 +1,5 @@
 import { authMode } from '@/lib/authConfig';
-import { currentUser, devLoginEnabled } from '@/server/auth';
+import { currentUser, devLoginEnabled, logout } from '@/server/auth';
 import { handle, readJson } from '@/server/http';
 import { getSceneService } from '@/server/scene';
 import type { MyProfile } from '@/server/scene/service';
@@ -42,5 +42,14 @@ export async function POST(request: Request) {
   return handle(async () => {
     const { mbti } = await readJson(request);
     return (await getSceneService()).changeMbti(await currentUser(), mbti);
+  });
+}
+
+/** 회원 탈퇴 ({ confirm: '탈퇴' }): 계정과 딸린 것을 모두 지우고 로그아웃한다 */
+export async function DELETE(request: Request) {
+  return handle(async () => {
+    const body = await readJson(request);
+    await (await getSceneService()).deleteMyAccount(await currentUser(), body.confirm);
+    await logout().catch(() => {});
   });
 }

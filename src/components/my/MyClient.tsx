@@ -124,6 +124,19 @@ export function MyClient() {
     }
   }
 
+  /** 회원 탈퇴: 두 번 묻고, '탈퇴'를 그대로 적어야 지운다 */
+  async function leave() {
+    if (!confirm('정말 탈퇴할까요? 계정과 방·기록·사진·방명록·친구·코인·점포가 모두 지워지고 되돌릴 수 없어요.')) return;
+    const typed = prompt("탈퇴하려면 '탈퇴'라고 적어 주세요.");
+    if (typed === null) return;
+    try {
+      await call('DELETE', '/api/me', { confirm: typed.trim() });
+      window.location.href = '/';
+    } catch (e) {
+      setToast(errorMessage(e));
+    }
+  }
+
   if (!me || !profile) return <main className="page page--center"><div className="loader" aria-hidden /></main>;
 
   const changeable = me.mbtiChangeableAt && new Date(me.mbtiChangeableAt) > new Date() ? new Date(me.mbtiChangeableAt) : null;
@@ -332,6 +345,12 @@ export function MyClient() {
         >
           로그아웃
         </button>
+      </section>
+
+      <section className="section card">
+        <h2 className="section-title">회원 탈퇴</h2>
+        <p className="muted">계정과 방·기록·사진·방명록·친구·코인·점포가 모두 지워지고 되돌릴 수 없어요. 필요하면 위에서 기록을 먼저 내보내 두세요.</p>
+        <button className="btn-danger" onClick={() => void leave()}>탈퇴하기</button>
       </section>
       {toast && <div className="toast" role="status">{toast}</div>}
       <TabBar />

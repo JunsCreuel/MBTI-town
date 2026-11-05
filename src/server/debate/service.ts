@@ -248,9 +248,13 @@ export class DebateService {
     }
     const check = moderate(body);
     if (!check.allowed) throw new DebateError('rejected', check.reason);
-    const inserted = await this.store.insertArgument({
-      matchId: match.id, authorId: viewer!.id, authorMbti: mbti, side, body, at: this.now(),
-    });
+    // 동시에 두 번 보내도 한 경기에 하나만 (DB 고유 조건 arguments_one_per_match가 막는다)
+    const inserted = await this.store
+      .insertArgument({ matchId: match.id, authorId: viewer!.id, authorMbti: mbti, side, body, at: this.now() })
+      .catch((e: unknown) => {
+        if ((e as { code?: string }).code === '23505') throw new DebateError('limit', '이번 경기에 낼 수 있는 논거를 모두 냈어요.');
+        throw e;
+      });
     await this.contest(viewer!.id, mbti, contestConfig.points.argument);
     return inserted;
   }

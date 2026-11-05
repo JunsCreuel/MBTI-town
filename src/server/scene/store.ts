@@ -282,8 +282,12 @@ export class SceneStore {
     return rows.map((r) => r.id);
   }
 
+  /** 마지막 접속 시각. 화면마다 부르므로 5분에 한 번만 쓴다 (DB 쓰기 줄이기) */
   async touch(id: string, at: Date): Promise<void> {
-    await this.sql.query(`update public.profiles set last_seen_at = $2 where id = $1`, [id, at]);
+    await this.sql.query(
+      `update public.profiles set last_seen_at = $2 where id = $1 and (last_seen_at is null or last_seen_at < $2::timestamptz - interval '5 minutes')`,
+      [id, at],
+    );
   }
 
   /** MBTI 정하기. at = 바꾼 때 (처음 정한 것은 null: 바꾸기 대기 시간을 세지 않는다) */
@@ -318,6 +322,17 @@ export class SceneStore {
       [ownerId, mime, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength), width, height],
     );
     return r.id;
+  }
+
+  /** 내 사진 수·전체 용량(바이트), since 뒤에 올린 수. 용량은 TOAST 머리만 읽어 빠르다 */
+  async photoUsage(ownerId: string, since: Date): Promise<{ count: number; bytes: number; today: number }> {
+    const [r] = await this.sql.query<{ count: number; bytes: string | number; today: number }>(
+      `select count(*)::int as count, coalesce(sum(octet_length(bytes)), 0)::bigint as bytes,
+              count(*) filter (where created_at >= $2)::int as today
+       from public.photos where owner_id = $1`,
+      [ownerId, since],
+    );
+    return { count: Number(r?.count ?? 0), bytes: Number(r?.bytes ?? 0), today: Number(r?.today ?? 0) };
   }
 
   async getPhotoMeta(id: string): Promise<{ id: string; owner_id: string; mime: string } | null> {
@@ -466,11 +481,22 @@ export class SceneStore {
     );
   }
 
+  /** 같은 사람이 같은 대상을 처리되기 전에 또 신고하면 넣지 않는다 */
   async report(reporter: string, kind: string, targetId: string, reason: string | null): Promise<void> {
     await this.sql.query(
-      `insert into public.reports (reporter, target_kind, target_id, reason) values ($1, $2, $3, $4)`,
+      `insert into public.reports (reporter, target_kind, target_id, reason)
+       select $1, $2, $3, $4
+       where not exists (
+         select 1 from public.reports where reporter = $1 and target_kind = $2 and target_id = $3 and resolved_at is null)`,
       [reporter, kind, targetId, reason],
     );
+  }
+
+  /** since 뒤에 그 사람이 쓴 방명록·기록·신고 수 (하루 상한) */
+  async countRecentBy(table: 'guestbook' | 'records' | 'reports', userId: string, since: Date): Promise<number> {
+    const col = { guestbook: 'author_id', records: 'owner_id', reports: 'reporter' }[table];
+    const [r] = await this.sql.query<{ n: number }>(`select count(*)::int as n from public.${table} where ${col} = $1 and created_at >= $2`, [userId, since]);
+    return Number(r?.n ?? 0);
   }
 
   // ───────── 운영자 ─────────
@@ -604,6 +630,23 @@ export class SceneStore {
        on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at`,
       [JSON.stringify(list), at],
     );
+  }
+
+  // ───────── 오래된 기록 정리 (매일 예약 작업) ─────────
+
+  /**
+   * 다시 읽지 않는 오래된 줄을 지운다. 지운 줄 수.
+   * - 열매·낚시 하루 기록: 그날 것만 읽는다 → 이틀 지난 것
+   * - 방문 기록: 30일만 보여 준다 → 35일 지난 것
+   * - 대항전 점수: 이번 주·지난주만 읽는다(끝난 주 결과는 contest_results) → 3주 지난 것
+   */
+  async cleanupOld(today: string): Promise<{ dailyPicks: number; visits: number; contestPoints: number }> {
+    const count = async (text: string) => Number((await this.sql.query<{ n: number }>(`with d as (${text} returning 1) select count(*)::int as n from d`, [today]))[0]?.n ?? 0);
+    return {
+      dailyPicks: await count(`delete from public.daily_picks where day < $1::date - 2`),
+      visits: await count(`delete from public.visits where visited_on < $1::date - 35`),
+      contestPoints: await count(`delete from public.contest_points where week < $1::date - 21`),
+    };
   }
 
   /** 계정을 지운다 (프로필과 딸린 것이 모두 같이 지워진다) */
@@ -809,6 +852,28 @@ export class SceneStore {
        from public.market_shops s join public.profiles p on p.id = s.owner_id order by s.slot`,
     );
     return rows.map((r) => ({ ...r, slot: Number(r.slot) }));
+  }
+
+  /**
+   * 점포 사기를 한 문장으로: 빈 칸이고 그 사람에게 점포가 없으면 넣고, 넣은 경우에만 값을 뺀다.
+   * 코인이 모자라면 coins >= 0 조건에 걸려 문장 전체가 되돌려진다 (점포도 안 들어간다). 중간에 끊겨 코인만 사라지는 일이 없다.
+   * 결과: 'bought'(새 잔액과 함께) | 'taken'(칸이 찼거나 이미 점포가 있음) | 'short'(코인 모자람)
+   */
+  async buyShop(slot: number, ownerId: string, name: string, intro: string, color: string, price: number, at: Date): Promise<{ result: 'bought'; coins: number } | { result: 'taken' | 'short' }> {
+    try {
+      const rows = await this.sql.query<{ coins: number }>(
+        `with shop as (
+           insert into public.market_shops (slot, owner_id, name, intro, color, bought_at, updated_at) values ($1, $2, $3, $4, $5, $6, $6)
+           on conflict do nothing returning owner_id
+         )
+         update public.profiles p set coins = p.coins - $7 from shop where p.id = shop.owner_id returning p.coins`,
+        [slot, ownerId, name, intro, color, at, price],
+      );
+      return rows.length ? { result: 'bought', coins: Number(rows[0].coins) } : { result: 'taken' };
+    } catch (e) {
+      if ((e as { code?: string }).code === '23514') return { result: 'short' };
+      throw e;
+    }
   }
 
   /** 빈 칸이고 그 사람에게 점포가 없으면 넣는다. 넣었으면 true */

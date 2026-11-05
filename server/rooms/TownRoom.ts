@@ -66,8 +66,11 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
   /** 클럽: 사람마다 마지막으로 신청한 시각 */
   private lastRequestAt = new Map<string, number>();
 
-  /** 토큰 확인은 들어오기 전에 한다 (틀리면 접속을 받지 않는다) */
-  onAuth(_client: Client, options?: JoinOptions): TownPass {
+  /**
+   * 토큰 확인은 자리를 잡기 전(방 찾기·만들기 단계)에 한다. 인스턴스 onAuth는 웹소켓이 붙을 때에야 불려서,
+   * 토큰 없이도 방을 만들거나 자리를 잡아 정원을 채울 수 있었다 (Colyseus 0.18: static onAuth만 매치메이킹에서 불린다)
+   */
+  static async onAuth(_token: string, options?: JoinOptions): Promise<TownPass> {
     const pass = verifyTownPass(options?.token);
     if (!pass) throw new Error('입장 토큰이 없거나 만료되었습니다');
     return pass;
@@ -125,6 +128,8 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
         const song = { id: String(sg.id ?? ''), title: String(sg.title ?? '').slice(0, 80), seconds: Number(sg.seconds) };
         if (!/^[A-Za-z0-9_-]{11}$/.test(song.id) || !(song.seconds > 0) || song.seconds > YOUTUBE_MAX_SECONDS) return reply({ ok: false, reason: 'closed' });
         if (!verifyYoutube(song, msg.youtube.exp, msg.youtube.sig)) return reply({ ok: false, reason: 'closed' });
+        // 유튜브 신청은 집이 있는 주민만 (손님이 남의 신청표를 다시 쓰지 못하게)
+        if (!this.passes.get(client.sessionId)?.district) return reply({ ok: false, reason: 'closed' });
         yt = song;
       } else {
         const i = msg.index;
@@ -132,14 +137,16 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
         index = i;
       }
       const now = Date.now();
-      if (now - (this.lastRequestAt.get(client.sessionId) ?? 0) < townConfig.musicRequestCooldownMs) return reply({ ok: false, reason: 'cooldown' });
+      // 쉬는 시간·한 사람 몫은 사람(마을 사람 번호) 기준: 다시 접속해도 풀리지 않는다
+      const who = this.passes.get(client.sessionId)?.pid ?? client.sessionId;
+      if (now - (this.lastRequestAt.get(who) ?? 0) < townConfig.musicRequestCooldownMs) return reply({ ok: false, reason: 'cooldown' });
       const seconds = clubTrackSeconds();
       const line = this.music ? advanceLine(this.music, now, seconds) : lineFromClock(now, seconds);
       if (!line) return reply({ ok: false, reason: 'closed' });
       if (line.queue.length >= townConfig.musicQueueMax) return reply({ ok: false, reason: 'full' });
-      if (line.queue.filter((q) => q.who === client.sessionId).length >= townConfig.musicQueuePerPerson) return reply({ ok: false, reason: 'mine' });
-      this.lastRequestAt.set(client.sessionId, now);
-      line.queue.push({ index, by: this.passes.get(client.sessionId)?.name ?? '', who: client.sessionId, ...(yt ? { yt } : {}) });
+      if (line.queue.filter((q) => q.who === who).length >= townConfig.musicQueuePerPerson) return reply({ ok: false, reason: 'mine' });
+      this.lastRequestAt.set(who, now);
+      line.queue.push({ index, by: this.passes.get(client.sessionId)?.name ?? '', who, ...(yt ? { yt } : {}) });
       this.music = line;
       this.broadcast(MSG.music, { ...line, serverNow: now } satisfies MusicState);
       reply({ ok: true, position: line.queue.length });
@@ -217,7 +224,7 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     this.state.players.delete(client.sessionId);
     this.moveBudget.delete(client.sessionId);
     this.lastGestureAt.delete(client.sessionId);
-    this.lastRequestAt.delete(client.sessionId);
+    // 신청곡 쉬는 시간(lastRequestAt)은 사람 기준이라 나가도 지우지 않는다 (다시 들어와 바로 신청하지 못하게)
     this.lastWarpAt.delete(client.sessionId);
     this.passes.delete(client.sessionId);
   }

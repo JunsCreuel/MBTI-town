@@ -42,6 +42,8 @@ export class HousePresence {
   private readonly listeners = new Set<() => void>();
   private readonly snapListeners = new Set<(s: SnapMessage) => void>();
   private ticket: Promise<HouseTicket | null> | null = null;
+  /** 토큰을 받은 시각 (오래됐으면 들어가기 전에 새로 받는다) */
+  private ticketAt = 0;
   private attempt = 0;
 
   constructor(readonly handle: string) {}
@@ -67,6 +69,7 @@ export class HousePresence {
     void wakeRealtime();
     this.ticket = call<HouseTicket>('POST', '/api/house/token', { handle: this.handle })
       .then((t) => {
+        this.ticketAt = Date.now();
         if (attempt === this.attempt) this.update({ status: 'connecting', pass: t.pass, hidden: t.hidden });
         return t;
       })
@@ -80,11 +83,18 @@ export class HousePresence {
   /** 같은 집 방에 들어간다. here: 붙는 순간의 내 자리 */
   async join(here: () => { x: number; z: number }): Promise<void> {
     const attempt = this.attempt;
-    const ticket = await (this.ticket ?? this.prepare());
+    let ticket = await (this.ticket ?? this.prepare());
     if (!ticket || attempt !== this.attempt) return;
     try {
       await wakeRealtime();
       if (attempt !== this.attempt) return;
+      // 집 방 토큰은 짧게(90초) 쓰므로, 서버가 깨어나는 동안 오래됐으면 새로 받는다
+      if (Date.now() - this.ticketAt > 45_000) {
+        ticket = await call<HouseTicket>('POST', '/api/house/token', { handle: this.handle });
+        this.ticketAt = Date.now();
+        this.ticket = Promise.resolve(ticket);
+        if (attempt !== this.attempt) return;
+      }
       const options: HouseJoinOptions = { token: ticket.token, house: ticket.house, start: here() };
       const room = await new Client(realtimeUrl()).joinOrCreate(roomConfig.realtimeRoomName, options);
       if (attempt !== this.attempt) {

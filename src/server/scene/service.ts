@@ -25,15 +25,16 @@ import {
 import { youtubeIdOf } from '@/shared/clubMusic';
 import { coinConfig, contestConfig, debateConfig, marketConfig, playConfig } from '@/config/game';
 import { contestLeader, previousContestWeek, type ContestDistrictScore, type ContestKind, type ContestStandings } from '@/shared/contest';
+import { stripImageMetadata } from '../imageMeta';
 import type { AdminCounts, ProfileRow, RecordRow, RoomCardRow, SceneStore, SignupFailure, SignupRow } from './store';
 
 export type SceneErrorCode =
   | 'login_required' | 'onboarding_required' | 'not_found' | 'forbidden' | 'bad_request' | 'conflict' | 'blocked' | 'rejected'
-  | 'too_large';
+  | 'too_large' | 'limit';
 
 const STATUS: Record<SceneErrorCode, number> = {
   login_required: 401, onboarding_required: 409, not_found: 404, forbidden: 403, bad_request: 400, conflict: 409,
-  blocked: 403, rejected: 400, too_large: 413,
+  blocked: 403, rejected: 400, too_large: 413, limit: 429,
 };
 
 export class SceneError extends Error {
@@ -302,6 +303,16 @@ function toRecord(r: RecordRow): RecordView {
 }
 
 /** 주민증 취미: 짧게, 거친 말·링크는 안 된다 */
+/** 이름·프로필 문구: 마을 이름표와 방에 보이므로 거친 말·링크·연락처를 거른다 */
+function cleanPublicText(v: unknown, max: number, what: string, required = false): string {
+  const s = cleanText(v, max, what, required);
+  if (s && !moderate(s).allowed) throw new SceneError('rejected', `${what}에는 거친 표현이나 링크·연락처를 넣을 수 없어요.`);
+  return s;
+}
+
+/** 운영자·공식 계정처럼 보이는 방 주소는 쓰지 못하게 한다 */
+const RESERVED_HANDLE = /^(admin|administrator|root|system|staff|support|help|official|operator|manager|moderator|mod|mbti_?town|mbtitown|scene|notice|security)(_|\d|$)/;
+
 function cleanHobby(v: unknown): string {
   const s = cleanText(v, socialConfig.hobbyMax, '취미');
   if (s && !moderate(s).allowed) throw new SceneError('rejected', '취미에는 거친 표현이나 링크·연락처를 넣을 수 없어요.');
@@ -409,7 +420,28 @@ export class SceneService {
     private readonly store: SceneStore,
     private readonly now: () => Date = () => new Date(),
     private readonly announce: Announcer = async () => false,
+    /** 마을 집 목록을 이만큼(ms) 모아 두고 같이 쓴다 (마을 화면마다 1분에 한 번 묻는다). 0이면 매번 읽는다 */
+    private readonly housesCacheMs = 0,
   ) {}
+
+  private housesCache: { at: number; rows: Promise<Awaited<ReturnType<SceneStore['houses']>>> } | null = null;
+
+  /** 집 목록 (모든 주민). 잠깐 모아 두고, 내 집 줄은 늘 새로 읽는다 (막 가입·이사한 내 집이 바로 보이게) */
+  private async housesFor(viewer: Viewer | null) {
+    if (!this.housesCacheMs) return this.store.houses();
+    const t = Date.now();
+    if (!this.housesCache || t - this.housesCache.at > this.housesCacheMs) {
+      const rows = this.store.houses();
+      this.housesCache = { at: t, rows };
+      rows.catch(() => (this.housesCache = null));
+    }
+    const rows = await this.housesCache.rows;
+    if (!viewer) return rows;
+    const me = await this.store.getProfile(viewer.id);
+    const others = rows.filter((h) => h.id !== viewer.id);
+    if (!me?.onboarded_at || !me.district || me.house_lot === null) return others;
+    return [...others, { id: me.id, handle: me.handle, display_name: me.display_name, district: me.district, house_hood: me.house_hood, house_lot: me.house_lot, room_visibility: me.room_visibility, discoverable: me.discoverable }];
+  }
 
   // ───────────────────────── 나 ─────────────────────────
 
@@ -473,14 +505,16 @@ export class SceneService {
     if (!viewer) throw new SceneError('login_required', '로그인이 필요해요.');
     await this.store.ensureProfile(viewer.id);
     const p = (await this.store.getProfile(viewer.id))!;
+    // 가입은 한 번만: 다시 부르면 MBTI 바꾸기 대기 시간(7일)을 건너뛰고 방까지 처음 상태로 덮어쓰게 된다
+    if (p.onboarded_at) throw new SceneError('conflict', '이미 가입을 마쳤어요. MBTI는 MY에서 바꿀 수 있어요.');
     const now = this.now();
     // 사는 마을은 MBTI 유형 마을이다
     if (!isMbtiType(input.mbti)) throw new SceneError('bad_request', 'MBTI를 골라 주세요. 모르면 간단 테스트로 정할 수 있어요.');
     const mbti = input.mbti;
     const bgm = bgmTrack(typeof input.bgm === 'string' ? input.bgm : null);
     if (!bgm) throw new SceneError('bad_request', '대표 BGM을 골라 주세요.');
-    const displayName = cleanText(input.displayName, socialConfig.displayNameMax, '이름', true);
-    const bio = cleanText(input.bio, socialConfig.bioMax, '프로필 문구');
+    const displayName = cleanPublicText(input.displayName, socialConfig.displayNameMax, '이름', true);
+    const bio = cleanPublicText(input.bio, socialConfig.bioMax, '프로필 문구');
     const hobby = cleanHobby(input.hobby);
     const layout = starterLayout(String(input.starter ?? ''), String(input.wallpaper ?? ''), String(input.floor ?? ''));
     await this.store.updateProfile(viewer.id, {
@@ -509,12 +543,13 @@ export class SceneService {
     const p = await this.requireOnboarded(viewer);
     const id = p.id;
     const next: Parameters<SceneStore['updateProfile']>[1] = {};
-    if ('displayName' in patch) next.display_name = cleanText(patch.displayName, socialConfig.displayNameMax, '이름', true);
-    if ('bio' in patch) next.bio = cleanText(patch.bio, socialConfig.bioMax, '프로필 문구');
+    if ('displayName' in patch) next.display_name = cleanPublicText(patch.displayName, socialConfig.displayNameMax, '이름', true);
+    if ('bio' in patch) next.bio = cleanPublicText(patch.bio, socialConfig.bioMax, '프로필 문구');
     if ('hobby' in patch) next.hobby = cleanHobby(patch.hobby);
     if ('handle' in patch) {
       const h = String(patch.handle ?? '').trim().toLowerCase();
       if (!HANDLE.test(h)) throw new SceneError('bad_request', '주소는 영문 소문자·숫자·밑줄 3~20자로 정해 주세요.');
+      if (RESERVED_HANDLE.test(h) && h !== p.handle) throw new SceneError('bad_request', '운영자·공식 계정처럼 보이는 주소는 쓸 수 없어요.');
       if (await this.store.handleTaken(h, id)) throw new SceneError('conflict', '이미 쓰는 주소예요.');
       next.handle = h;
     }
@@ -710,6 +745,9 @@ export class SceneService {
       const photo = await this.store.getPhotoMeta(check.record.photoId);
       if (photo?.owner_id !== p.id) throw new SceneError('forbidden', '내 사진만 붙일 수 있어요.');
     }
+    if ((await this.store.countRecentBy('records', p.id, this.dayStart())) >= socialConfig.recordsPerDay) {
+      throw new SceneError('limit', `기록은 하루에 ${socialConfig.recordsPerDay}개까지 남길 수 있어요.`);
+    }
     return toRecord(await this.store.insertRecord(p.id, check.record, this.now()));
   }
 
@@ -736,8 +774,16 @@ export class SceneService {
     if (bytes.length > recordConfig.photoMaxBytes) throw new SceneError('too_large', '사진이 너무 커요.');
     const mime = sniffImage(bytes);
     if (!mime) throw new SceneError('bad_request', 'JPEG, PNG, WebP 사진만 올릴 수 있어요.');
+    // 한 사람 몫 (DB가 가득 차지 않게)
+    const use = await this.store.photoUsage(p.id, this.dayStart());
+    if (use.today >= recordConfig.photosPerDay) throw new SceneError('limit', `사진은 하루에 ${recordConfig.photosPerDay}장까지 올릴 수 있어요.`);
+    if (use.count >= recordConfig.photosMax || use.bytes + bytes.length > recordConfig.photoTotalBytes) {
+      throw new SceneError('limit', '사진을 더 올릴 자리가 없어요. 안 쓰는 기록·사진을 지워 주세요.');
+    }
+    // 찍은 위치(GPS) 같은 촬영 정보는 지우고 둔다
+    const clean = stripImageMetadata(bytes, mime);
     const dim = (n: unknown) => (Number.isInteger(n) && (n as number) > 0 && (n as number) <= 10000 ? (n as number) : null);
-    return { id: await this.store.insertPhoto(p.id, mime, bytes, dim(size?.width), dim(size?.height)) };
+    return { id: await this.store.insertPhoto(p.id, mime, clean, dim(size?.width), dim(size?.height)) };
   }
 
   async myPhotos(viewer: Viewer | null): Promise<{ id: string; createdAt: string }[]> {
@@ -825,6 +871,9 @@ export class SceneService {
     if (!canView(owner.room_visibility, relation) && !(await this.isAdmin(viewer))) throw new SceneError('forbidden', '이 방에는 방명록을 쓸 수 없어요.');
     const body = cleanText(input.body, socialConfig.guestbookMax, '방명록', true);
     if (!moderate(body).allowed) throw new SceneError('rejected', '거친 표현이나 링크·연락처는 남길 수 없어요.');
+    if ((await this.store.countRecentBy('guestbook', me.id, this.dayStart())) >= socialConfig.guestbookPerDay) {
+      throw new SceneError('limit', `방명록은 하루에 ${socialConfig.guestbookPerDay}개까지 남길 수 있어요.`);
+    }
     const visibility = input.visibility === 'friends' ? 'friends' : 'public';
     await this.store.insertGuestbook(owner.id, me.id, body, visibility, this.now());
   }
@@ -872,10 +921,24 @@ export class SceneService {
     } else if (!UUID.test(targetId)) {
       throw new SceneError('bad_request', '신고 대상이 올바르지 않아요.');
     }
+    if ((await this.store.countRecentBy('reports', me.id, this.dayStart())) >= socialConfig.reportsPerDay) {
+      throw new SceneError('limit', `신고는 하루에 ${socialConfig.reportsPerDay}번까지 할 수 있어요.`);
+    }
+    // 같은 대상을 처리되기 전에 또 신고하면 한 번으로 친다 (store.report가 거른다)
     await this.store.report(me.id, kind, targetId, cleanText(input.reason, 300, '신고 이유') || null);
   }
 
+  /** 오늘 0시 (한국 시간) */
+  private dayStart(): Date {
+    return new Date(`${localDate(this.now())}T00:00:00+09:00`);
+  }
+
   // ───────────────────────── 운영자 ─────────────────────────
+
+  /** 가입을 마친 주민인지 확인한다 (아니면 오류). 다른 서버 기능(유튜브 신청 등)이 쓴다 */
+  async requireResident(viewer: Viewer | null): Promise<void> {
+    await this.requireOnboarded(viewer);
+  }
 
   /** 운영자인지 (운영 화면 /admin이 쓴다) */
   async isAdminViewer(viewer: Viewer | null): Promise<boolean> {
@@ -982,6 +1045,19 @@ export class SceneService {
     await this.store.deleteAccount(id);
   }
 
+  /** 매일 예약 작업: 오래된 기록 정리, 30일 지난 가입 막힘 기록 지우기 */
+  async cleanup(): Promise<Record<string, number>> {
+    const now = this.now();
+    const done: Record<string, number> = await this.store.cleanupOld(localDate(now));
+    const failures = await this.store.signupFailures().catch(() => null);
+    if (failures) {
+      const keep = failures.filter((f) => now.getTime() - Date.parse(f.at) < 30 * 86_400_000);
+      if (keep.length !== failures.length) await this.store.saveSignupFailures(keep, now);
+      done.signupFailures = failures.length - keep.length;
+    }
+    return done;
+  }
+
   /** 가입·로그인 막힘 기록 비우기 */
   async adminClearSignupFailures(viewer: Viewer | null): Promise<void> {
     await this.requireAdmin(viewer);
@@ -1034,6 +1110,24 @@ export class SceneService {
     return { sent };
   }
 
+  /**
+   * 회원 탈퇴: 내 계정과 방·기록·사진·방명록·친구·코인·점포 등 딸린 것을 모두 지운다 (되돌릴 수 없다).
+   * 실수로 부르지 않게 confirm = '탈퇴'를 받는다. 운영자 계정은 먼저 운영자에서 빼야 한다.
+   * 토론에 낸 논거 글은 이름 없이 남는다 (그 경기 기록의 일부).
+   */
+  async deleteMyAccount(viewer: Viewer | null, confirm: unknown): Promise<void> {
+    if (!viewer) throw new SceneError('login_required', '로그인이 필요해요.');
+    if (confirm !== '탈퇴') throw new SceneError('bad_request', '탈퇴하려면 확인 글자를 적어 주세요.');
+    if (await this.store.isAdmin(viewer.id)) throw new SceneError('forbidden', '운영자 계정은 운영자에서 먼저 빼야 탈퇴할 수 있어요.');
+    // 가입 막힘 기록에 남은 내 이메일도 지운다
+    const email = (await this.store.getSignup(viewer.id))?.email?.toLowerCase();
+    if (email) {
+      const failures = await this.store.signupFailures().catch(() => null);
+      if (failures?.some((f) => f.email === email)) await this.store.saveSignupFailures(failures.filter((f) => f.email !== email), this.now()).catch(() => {});
+    }
+    await this.store.deleteAccount(viewer.id);
+  }
+
   /** 계정 삭제 (되돌릴 수 없다). 나와 다른 운영자는 지울 수 없다 */
   async adminDeleteUser(viewer: Viewer | null, id: string): Promise<void> {
     const me = await this.requireAdmin(viewer);
@@ -1064,7 +1158,7 @@ export class SceneService {
   /** 마을에 서 있는 집들. 이름은 내 집·친구 집·공개 방만, 차단 관계인 사람 집은 이름 없이 둔다. */
   async town(viewer: Viewer | null): Promise<TownView> {
     const [houses, friends, blocks] = await Promise.all([
-      this.store.houses(),
+      this.housesFor(viewer),
       viewer ? this.store.friendIds(viewer.id) : Promise.resolve([]),
       viewer ? this.store.blockRelations(viewer.id) : Promise.resolve([]),
     ]);
@@ -1143,7 +1237,8 @@ export class SceneService {
     const relation = await this.relationTo(viewer, owner);
     if (!canView(owner.room_visibility, relation) && !(await this.isAdmin(viewer))) throw new SceneError('forbidden', '이 방에는 들어갈 수 없어요.');
     const base = await this.townTicket(viewer);
-    const pass: TownPass = { ...base.pass, house: townPid(owner.id) };
+    // 집 방 토큰은 짧게: 주인이 차단하거나 방을 비공개로 바꾸면 그 뒤로는 들어올 수 없게 (들어올 때만 쓰는 토큰)
+    const pass: TownPass = { ...base.pass, house: townPid(owner.id), exp: Math.min(base.pass.exp, Math.floor(Date.now() / 1000) + townConfig.houseTokenTtlSeconds) };
     const hidden = viewer ? (await this.store.blockRelations(viewer.id)).map((id) => townPid(id)) : [];
     return { token: signTownPass(pass), pass, guest: base.guest, house: pass.house!, hidden };
   }
@@ -1364,15 +1459,13 @@ export class SceneService {
     const mine = shops.find((r) => r.owner_id === p.id);
     if (mine) throw new SceneError('conflict', `이미 ${shopLabel(mine.slot)} 점포 주인이에요. 점포는 한 사람에 한 칸이에요.`);
     if (shops.some((r) => r.slot === slot)) throw new SceneError('conflict', '방금 다른 주민이 산 점포예요.');
-    if ((await this.store.spendCoins(p.id, marketConfig.price)) === null) {
+    // 점포 넣기와 값 치르기를 한 문장으로 (동시에 같은 칸을 사거나 두 칸을 사려 하면 한쪽만 들어간다)
+    const bought = await this.store.buyShop(slot, p.id, shop.name, shop.intro, shop.color, marketConfig.price, this.now());
+    if (bought.result === 'short') {
       const have = await this.store.coinsOf(p.id);
       throw new SceneError('conflict', `코인이 모자라요. ${marketConfig.price.toLocaleString('ko-KR')}코인이 필요한데 ${have.toLocaleString('ko-KR')}코인 있어요.`);
     }
-    // 동시에 같은 칸을 사거나 두 칸을 사려 하면 한쪽만 들어간다. 못 들어가면 코인을 돌려준다
-    if (!(await this.store.insertShop(slot, p.id, shop.name, shop.intro, shop.color, this.now()))) {
-      await this.store.addCoins(p.id, marketConfig.price);
-      throw new SceneError('conflict', '방금 다른 주민이 산 점포예요.');
-    }
+    if (bought.result === 'taken') throw new SceneError('conflict', '방금 다른 주민이 산 점포예요.');
     await this.contest(p, 'market', contestConfig.points.shop);
     return this.marketView(viewer);
   }
