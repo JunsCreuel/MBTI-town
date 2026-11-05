@@ -114,7 +114,7 @@ const MODELS: ModelSpec[] = [
   { src: 'animal_fox.glb', key: 'char.resident.fox', file: 'characters/char_resident_fox.glb', height: 1.32 },
   { src: 'animal_bear.glb', key: 'char.resident.bear', file: 'characters/char_resident_bear.glb', height: 1.38 },
   { src: 'animal_rabbit.glb', key: 'char.resident.rabbit', file: 'characters/char_resident_rabbit.glb', height: 1.3 },
-  { src: 'animal_dog_lowpoly.glb', key: 'pet.dog', file: 'pets/pet_dog.glb', height: 0.5, pet: true, simplify: 0.3, simplifyError: 0.01, texture: 512, whiten: true },
+  { src: 'animal_dog_lowpoly.glb', key: 'pet.dog', file: 'pets/pet_dog.glb', height: 0.5, pet: true, simplify: 0.6, simplifyError: 0.01, texture: 1024, whiten: true },
 ];
 
 /** 표정 그림 한 칸 (px) */
@@ -242,6 +242,72 @@ function upperBodyUvMask(doc: Document, size: number): Uint8Array {
   return mask;
 }
 
+/** 텍스처에서 삼각형이 쓰는 칸 (모든 메시의 TEXCOORD_0 삼각형을 칠한다) */
+function uvCoverage(doc: Document, w: number, h: number): Uint8Array {
+  const mask = new Uint8Array(w * h);
+  const t: number[] = [];
+  for (const mesh of doc.getRoot().listMeshes()) {
+    for (const prim of mesh.listPrimitives()) {
+      const uv = prim.getAttribute('TEXCOORD_0');
+      if (!uv) continue;
+      const idx = prim.getIndices();
+      const count = idx ? idx.getCount() : uv.getCount();
+      for (let f = 0; f + 2 < count; f += 3) {
+        const p = [f, f + 1, f + 2].map((k) => uv.getElement(idx ? idx.getScalar(k) : k, t).slice() as [number, number]).map(([u, v]) => [u * w, v * h]);
+        const x0 = Math.max(0, Math.floor(Math.min(p[0][0], p[1][0], p[2][0])));
+        const x1 = Math.min(w - 1, Math.ceil(Math.max(p[0][0], p[1][0], p[2][0])));
+        const y0 = Math.max(0, Math.floor(Math.min(p[0][1], p[1][1], p[2][1])));
+        const y1 = Math.min(h - 1, Math.ceil(Math.max(p[0][1], p[1][1], p[2][1])));
+        const area = (p[1][0] - p[0][0]) * (p[2][1] - p[0][1]) - (p[2][0] - p[0][0]) * (p[1][1] - p[0][1]);
+        if (Math.abs(area) < 1e-9) continue;
+        for (let y = y0; y <= y1; y++) {
+          for (let x = x0; x <= x1; x++) {
+            const a = ((p[1][0] - x - 0.5) * (p[2][1] - y - 0.5) - (p[2][0] - x - 0.5) * (p[1][1] - y - 0.5)) / area;
+            const b = ((p[2][0] - x - 0.5) * (p[0][1] - y - 0.5) - (p[0][0] - x - 0.5) * (p[2][1] - y - 0.5)) / area;
+            // 가장자리 칸도 넣는다 (조금 넉넉히)
+            if (a >= -0.02 && b >= -0.02 && 1 - a - b >= -0.02) mask[y * w + x] = 1;
+          }
+        }
+      }
+    }
+  }
+  return mask;
+}
+
+/**
+ * 조각 사이 빈 곳을 가까운 조각 색으로 채운다 (가장자리에서 바깥으로 한 칸씩, passes칸까지. 그 너머는 쓰는 칸 평균색).
+ * 잘게 쪼개진 텍스처를 줄이거나 멀리서 볼 때 빈 곳(검은색)이 조각 가장자리에 번져 검은 선·점이 생기는 것을 막는다
+ */
+function bleedEdges(rgb: Buffer, w: number, h: number, used: Uint8Array, passes: number) {
+  const filled = used.slice();
+  let frontier: number[] = [];
+  const near = (i: number) => {
+    const x = i % w;
+    return [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, i - w, i + w].filter((j) => j >= 0 && j < w * h);
+  };
+  for (let i = 0; i < w * h; i++) if (!filled[i] && near(i).some((j) => filled[j])) frontier.push(i);
+  for (let pass = 0; pass < passes && frontier.length; pass++) {
+    const colors = frontier.map((i) => {
+      const src = near(i).filter((j) => filled[j]);
+      return [0, 1, 2].map((c) => src.reduce((s, j) => s + rgb[j * 3 + c], 0) / src.length);
+    });
+    frontier.forEach((i, k) => {
+      for (let c = 0; c < 3; c++) rgb[i * 3 + c] = Math.round(colors[k][c]);
+      filled[i] = 1;
+    });
+    const next = new Set<number>();
+    for (const i of frontier) for (const j of near(i)) if (!filled[j]) next.add(j);
+    frontier = [...next];
+  }
+  const avg = [0, 1, 2].map((c) => {
+    let s = 0;
+    let n = 0;
+    for (let i = 0; i < w * h; i++) if (used[i]) (s += rgb[i * 3 + c]), n++;
+    return n ? Math.round(s / n) : 0;
+  });
+  for (let i = 0; i < w * h; i++) if (!filled[i]) for (let c = 0; c < 3; c++) rgb[i * 3 + c] = avg[c];
+}
+
 /**
  * 흰 동물의 털을 새하얗게: 밝은 곳(밝기 0.35~0.55부터 서서히)은 색을 빼고 흰색 쪽으로 당긴다 (명암은 조금 남긴다).
  * 눈·코·입처럼 어두운 곳은 그대로 둔다. RGB 바이트 배열을 그 자리에서 고친다
@@ -272,9 +338,19 @@ async function slimTextures(doc: Document, spec: ModelSpec): Promise<number | nu
     mat.setName(spec.face ? TINT_MATERIAL : 'body');
     const tex = mat.getBaseColorTexture();
     if (!tex) continue;
-    const { data, info } = await sharp(Buffer.from(tex.getImage()!)).resize(spec.texture ?? 1024, spec.texture ?? 1024).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    const size = spec.texture ?? 1024;
     let out: Buffer;
-    if (spec.face) {
+    if (!spec.face) {
+      // 원본 크기에서 조각 사이를 채운 뒤(흰 털이면 하얗게) 줄인다
+      const full = await sharp(Buffer.from(tex.getImage()!)).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      bleedEdges(full.data, full.info.width, full.info.height, uvCoverage(doc, full.info.width, full.info.height), 32);
+      if (spec.whiten) whitenFur(full.data);
+      out = await sharp(full.data, { raw: { width: full.info.width, height: full.info.height, channels: 3 } }).resize(size, size).webp({ quality: 88 }).toBuffer();
+      tex.setImage(new Uint8Array(out)).setMimeType('image/webp').setURI('');
+      continue;
+    }
+    const { data, info } = await sharp(Buffer.from(tex.getImage()!)).resize(size, size).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+    {
       // 티셔츠: 윗몸(척추·어깨·윗팔)에 붙은 자리 중 살색·어두운 색(머리카락)이 아닌 곳
       const upper = upperBodyUvMask(doc, info.width);
       const rgba = Buffer.alloc(info.width * info.height * 4);
@@ -299,9 +375,6 @@ async function slimTextures(doc: Document, spec: ModelSpec): Promise<number | nu
       shirtLum = n ? sum / n : 1;
       // exact: 투명한 칸(티셔츠가 아닌 곳)의 색도 그대로 둔다 (기본값은 버려서 머리·얼굴 색이 깨진다)
       out = await sharp(rgba, { raw: { width: info.width, height: info.height, channels: 4 } }).webp({ quality: 86, alphaQuality: 90, exact: true }).toBuffer();
-    } else {
-      if (spec.whiten) whitenFur(data);
-      out = await sharp(data, { raw: { width: info.width, height: info.height, channels: 3 } }).webp({ quality: 86 }).toBuffer();
     }
     tex.setImage(new Uint8Array(out)).setMimeType('image/webp').setURI('');
   }
