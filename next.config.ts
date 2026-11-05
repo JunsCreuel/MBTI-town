@@ -39,6 +39,19 @@ export default function config(phase: string): NextConfig {
     async headers() {
       return [
         {
+          // 보안 헤더: 다른 사이트가 우리 화면을 몰래 액자(iframe)에 넣지 못하게, 파일 형식 추측 금지,
+          // 다른 사이트로 나갈 때 주소 전체를 넘기지 않기, 쓰지 않는 기기 권한 끄기.
+          // (스크립트 출처까지 막는 전체 CSP는 Next 인라인 스크립트·유튜브·실시간 서버 주소를 다 열어야 해서 아직 두지 않는다)
+          source: '/:path*',
+          headers: [
+            { key: 'X-Frame-Options', value: 'DENY' },
+            { key: 'Content-Security-Policy', value: "frame-ancestors 'none'; object-src 'none'; base-uri 'self'" },
+            { key: 'X-Content-Type-Options', value: 'nosniff' },
+            { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+            { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), payment=(), usb=()' },
+          ],
+        },
+        {
           // 버전이 붙은 에셋 주소는 내용이 바뀌지 않으므로 1년 동안 다시 묻지 않는다
           source: '/assets/:path*',
           has: [{ type: 'query', key: 'v' }],
