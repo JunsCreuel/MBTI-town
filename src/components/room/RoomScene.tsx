@@ -323,8 +323,9 @@ function Lights({ time }: { time: TimeOfDay }) {
 // ───────────────────────── 바닥과 벽 ─────────────────────────
 
 /** 현관문 (앞 벽 가운데): 폭·높이 (칸). 1인칭으로 들어설 때 문 밖 이만큼에서 출발한다 */
-const DOOR_W = 1.1;
-const DOOR_H = 2.15;
+/** 현관문 너비·높이 (m, 실제 문 크기) */
+const DOOR_W = 1.0;
+const DOOR_H = 2.05;
 const DOOR_OUTSIDE = 1.4;
 
 /** 벽지를 칠한 벽 한 조각 (안쪽 면). 벽지 무늬가 칸 크기에 맞게 반복된다 */
@@ -776,7 +777,8 @@ function DragController({
 
 // ───────────────────────── 캐릭터 ─────────────────────────
 
-const AVATAR_SCALE = 0.92;
+/** 집 안 캐릭터 크기 배율: 키를 roomConfig.personHeight에 맞춘다 (가구가 실제 크기라서) */
+const AVATAR_SCALE = roomConfig.personHeight / CHARACTER_HEIGHT;
 const TURN_RATE = 12;
 
 /** 방 앞쪽 가운데에서 가장 가까운 빈 칸 */
@@ -1169,10 +1171,10 @@ function FirstFrame({ onFrame }: { onFrame?: () => void }) {
 
 // ───────────────────────── 펫 (강아지) ─────────────────────────
 
-/** 방 강아지 키 (마을에서 데리고 다니는 강아지와 같다) */
-const PET_HEIGHT = petDef('dog')!.height;
-/** 방 강아지 걷는 빠르기 (칸/초): 느긋하게 */
-const PET_SPEED = 1.0;
+/** 방 강아지 키: 실제 작은 개 크기 (마을 강아지는 멀리서 보여 더 크게 그린다) */
+const PET_HEIGHT = roomConfig.petHeight;
+/** 방 강아지 걷는 빠르기 (m/초): 작은 개가 느긋하게 걷는 빠르기 (다리 동작이 다다닥거리지 않게) */
+const PET_SPEED = 0.6;
 let petModel: Promise<GLTF> | null = null;
 /** 강아지 모델 (뼈대와 걷기·서 있기 동작 포함, 한 번만 받는다) */
 function loadPetModel(): Promise<GLTF> {
