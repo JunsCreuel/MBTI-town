@@ -129,7 +129,7 @@ const MODELS: ModelSpec[] = [
     regions: { hair: ['754134', '8e5b4d'], skin: ['fdcbac', 'f5c2a3'], other: ['dadaeb', 'e9ba99', 'f2e0f4', 'bcc8df', 'efd0d7'] },
   },
   {
-    src: 'base_blank_face_female.glb', key: 'char.base.female', file: 'characters/char_base_female.glb', height: CHARACTER_HEIGHT, face: FEMALE_FACE, armSpread: 20,
+    src: 'base_blank_face_female.glb', key: 'char.base.female', file: 'characters/char_base_female.glb', height: CHARACTER_HEIGHT, face: FEMALE_FACE, armSpread: 30,
     // 짙은 갈색 긴 머리, 살구색 살, 흰 티셔츠·황토색 반바지·신발
     regions: { hair: ['31160c', '3d2217'], skin: ['fcb993', 'f7b38c', 'f8c5a3'], other: ['fefcf9', 'daad88', 'ecdcc0', '836555'] },
   },
