@@ -34,6 +34,7 @@ export function OnboardingClient() {
   const { me } = useMe({ require: 'login' });
   const [step, setStep] = useState(0);
   const [mbti, setMbti] = useState<MbtiType | ''>('');
+  const [testing, setTesting] = useState(false);
   const [avatar, setAvatar] = useState<Avatar>(DEFAULT_AVATAR);
   const [starter, setStarter] = useState<string>(STARTER_ROOMS[0].id);
   const [wallpaper, setWallpaper] = useState<WallpaperId>(STARTER_ROOMS[0].layout.wallpaper);
@@ -133,8 +134,8 @@ export function OnboardingClient() {
               ? '마을이 MBTI 16개 마을로 새로 바뀌었어요! 내 MBTI를 고르면 그 마을로 이사해요.'
               : 'MBTI 유형마다 마을이 있어요. 내 MBTI를 고르면 그 마을에 내 집이 생겨요.'}
           </Guide>
-          <MbtiPicker value={mbti} onChange={setMbti} />
-          <button className="btn-primary" onClick={next} disabled={!mbti}>
+          <MbtiPicker value={mbti} onChange={setMbti} onTesting={setTesting} />
+          <button className="btn-primary" onClick={next} disabled={!mbti || testing}>
             다음
           </button>
         </section>

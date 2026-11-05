@@ -2,19 +2,30 @@
 
 // MBTI 고르기: 알면 16개 중에서 바로 고르고, 모르면 12문항 간단 테스트로 정한다.
 // 고른 유형이 사는 마을이다 (가입 화면과 예전 주민의 MBTI 정하기 화면이 같이 쓴다).
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { MBTI, MBTI_GROUPS, MBTI_TYPES, groupOf, type MbtiType } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { DISTRICT, THEME } from '@/shared/districts';
 import type { AxisLetter } from '@/shared/debate';
 import { MBTI_TEST, scoreMbtiTest } from '@/shared/mbtiTest';
 
-export function MbtiPicker({ value, onChange }: { value: MbtiType | ''; onChange: (t: MbtiType) => void }) {
+export function MbtiPicker({
+  value,
+  onChange,
+  onTesting,
+}: {
+  value: MbtiType | '';
+  onChange: (t: MbtiType) => void;
+  /** 테스트를 푸는 중이면 true (끝나기 전에는 '다음'을 막는다) */
+  onTesting?: (testing: boolean) => void;
+}) {
   const [mode, setMode] = useState<'pick' | 'test'>('pick');
   const [answers, setAnswers] = useState<Record<string, AxisLetter>>({});
   const at = MBTI_TEST.findIndex((q) => !answers[q.id]);
   const done = at === -1;
   const q = done ? null : MBTI_TEST[at];
+  const testing = mode === 'test' && !done;
+  useEffect(() => onTesting?.(testing), [testing, onTesting]);
 
   function answer(letter: AxisLetter) {
     if (!q) return;
@@ -71,7 +82,7 @@ export function MbtiPicker({ value, onChange }: { value: MbtiType | ''; onChange
                 <span style={{ width: `${(at / MBTI_TEST.length) * 100}%` }} />
               </div>
               <h3 className="mbti-test__q">{q.q}</h3>
-              <div className="mbti-test__choices">
+              <div className="mbti-test__choices" key={q.id}>
                 <button className="choice-card" onClick={() => answer(q.a.letter)}>
                   {q.a.text}
                 </button>

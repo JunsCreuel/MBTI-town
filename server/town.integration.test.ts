@@ -62,20 +62,20 @@ describe('마을 실시간 서버', () => {
   let a: Room;
   let b: Room;
 
-  const haru = pass({ pid: townPid('user-haru'), name: '하루', handle: 'haru', district: 'water', lot: 3, color: 'sky', acc: 'cap' });
+  const haru = pass({ pid: townPid('user-haru'), name: '하루', handle: 'haru', district: 'ISFJ', lot: 3, color: 'sky', acc: 'cap' });
 
   it('같은 채널에 들어온 사람끼리 서로 보인다 (토큰에 적힌 이름·모습으로)', async () => {
     a = await join(haru);
-    b = await join(pass({ name: '봄', district: 'wood', lot: -1 }));
+    b = await join(pass({ name: '봄', district: 'INFP', lot: -1 }));
     expect(b.roomId).toBe(a.roomId);
     await until(() => a.state.players.size === 2 && b.state.players.size === 2);
     expect(a.state.channel).toBe(1);
-    expect(b.state.players.get(a.sessionId)).toMatchObject({ pid: haru.pid, name: '하루', handle: 'haru', district: 'water', color: 'sky', acc: 'cap' });
+    expect(b.state.players.get(a.sessionId)).toMatchObject({ pid: haru.pid, name: '하루', handle: 'haru', district: 'ISFJ', color: 'sky', acc: 'cap' });
   });
 
-  it('들어오면 내 집 문 앞에서 시작하고, 집이 없으면 내 지역 입구에서 시작한다', () => {
-    expect(near(a.state.players.get(a.sessionId), lotDoor(map.lots.water[3]), 0.5)).toBe(true);
-    expect(inSpawn(b.state.players.get(b.sessionId), spawnName('wood'))).toBe(true);
+  it('들어오면 내 집 문 앞에서 시작하고, 집이 없으면 내 마을 입구에서 시작한다', () => {
+    expect(near(a.state.players.get(a.sessionId), lotDoor(map.lots.ISFJ[3]), 0.5)).toBe(true);
+    expect(inSpawn(b.state.players.get(b.sessionId), spawnName('INFP'))).toBe(true);
   });
 
   it('정원이 차면 다음 채널이 열린다. 손님은 중앙광장에서 시작한다', async () => {
@@ -125,7 +125,7 @@ describe('마을 실시간 서버', () => {
     const snaps: SnapMessage[] = [];
     b.onMessage(MSG.snap, (m: SnapMessage) => snaps.push(m));
     b.send(MSG.warp, { to: 'plaza' });
-    b.send(MSG.warp, { to: 'fire' });
+    b.send(MSG.warp, { to: 'ESTP' });
     await until(() => snaps.length >= 1);
     await new Promise((r) => setTimeout(r, 300));
     expect(snaps).toHaveLength(1);
@@ -136,11 +136,11 @@ describe('마을 실시간 서버', () => {
     expect(snaps[0].z).toBeLessThanOrEqual(z + h);
     await until(() => near(a.state.players.get(b.sessionId), snaps[0], 1e-3));
 
-    // 다른 지역으로도 간다
+    // 다른 마을로도 간다
     await new Promise((r) => setTimeout(r, 1600));
-    b.send(MSG.warp, { to: 'earth' });
+    b.send(MSG.warp, { to: 'ESTJ' });
     await until(() => snaps.length === 2);
-    expect(inSpawn(snaps[1], spawnName('earth'))).toBe(true);
+    expect(inSpawn(snaps[1], spawnName('ESTJ'))).toBe(true);
     b.send(MSG.warp, { to: 'NOPE' });
     await new Promise((r) => setTimeout(r, 200));
     expect(snaps).toHaveLength(2);
@@ -155,7 +155,7 @@ describe('마을 실시간 서버', () => {
     await new Promise((r) => setTimeout(r, 1600));
     a.send(MSG.warp, { to: 'home' });
     await until(() => homeSnaps.length === 2);
-    expect(near(homeSnaps[1], lotDoor(map.lots.water[3]), 0.5)).toBe(true);
+    expect(near(homeSnaps[1], lotDoor(map.lots.ISFJ[3]), 0.5)).toBe(true);
   });
 
   it('나가면 목록에서 빠지고, 같은 사람이 또 들어오면 먼저 들어온 쪽이 나간다', async () => {
@@ -174,39 +174,39 @@ describe('마을 실시간 서버', () => {
 });
 
 describe('새 동네 (2동·3동…)', () => {
-  const hood = getHoodMap('water');
-  const sea = pass({ name: '바다', district: 'water', hood: 2, lot: 5 });
+  const hood = getHoodMap('ISFJ');
+  const sea = pass({ name: '바다', district: 'ISFJ', hood: 2, lot: 5 });
 
   it('동네마다 방이 따로 열리고, 내 집이 있는 동네에서는 문 앞에서 시작한다', async () => {
-    const mine = await join(sea, 'home', 'water.2');
+    const mine = await join(sea, 'home', 'ISFJ.2');
     await until(() => mine.state.players.size === 1);
-    expect(near(mine.state.players.get(mine.sessionId), lotDoor(hood.lots.water[5]), 0.5)).toBe(true);
+    expect(near(mine.state.players.get(mine.sessionId), lotDoor(hood.lots.ISFJ[5]), 0.5)).toBe(true);
     // 같은 동네에 들어온 사람은 같은 방, 다른 동네는 다른 방
-    const visitor = await join(pass({ name: '손님2' }), 'home', 'water.2');
+    const visitor = await join(pass({ name: '손님2' }), 'home', 'ISFJ.2');
     expect(visitor.roomId).toBe(mine.roomId);
     expect(inSpawn(visitor.state.players.get(visitor.sessionId), 'spawn', hood)).toBe(true);
-    const other = await join(pass(), 'home', 'water.3');
+    const other = await join(pass(), 'home', 'ISFJ.3');
     expect(other.roomId).not.toBe(mine.roomId);
     expect(other.state.channel).toBe(1);
   });
 
-  it('본섬에서 내 집이 다른 동네에 있으면 내 지역 동네 길 아치 앞에서 시작한다', async () => {
+  it('본섬에서 내 집이 다른 동네에 있으면 내 마을 동네 길 아치 앞에서 시작한다', async () => {
     const r = await join(sea);
-    expect(inSpawn(r.state.players.get(r.sessionId), gateSpawnName('water'))).toBe(true);
+    expect(inSpawn(r.state.players.get(r.sessionId), gateSpawnName('ISFJ'))).toBe(true);
   });
 
   it('화면이 먼저 세운 자리(start)가 걸을 수 있는 곳이면 그 자리에서 시작하고, 아니면 원래 규칙을 따른다', async () => {
     // 동네 쉼터 안의 걸을 수 있는 자리 하나
     const sp = hood.spawns.spawn;
     const start = { x: Math.floor(sp.x + sp.w / 2) + 0.5, z: Math.floor(sp.z + sp.h / 2) + 0.5 };
-    const ok = await join(pass({ name: '먼저' }), 'home', 'water.4');
-    const r1 = await connect({ token: signTownPass(pass({ name: '먼저2' })), place: 'water.4', start });
+    const ok = await join(pass({ name: '먼저' }), 'home', 'ISFJ.4');
+    const r1 = await connect({ token: signTownPass(pass({ name: '먼저2' })), place: 'ISFJ.4', start });
     rooms.push(r1);
     await until(() => !!r1.state.players?.get(r1.sessionId));
     expect(near(r1.state.players.get(r1.sessionId), start, 0.01)).toBe(true);
     // 바다 한가운데(맵 구석)나 맵 밖은 받지 않는다
     for (const bad of [{ x: 0.5, z: 0.5 }, { x: -3, z: 5 }, { x: Number.NaN, z: 1 }]) {
-      const r = await connect({ token: signTownPass(pass()), place: 'water.5', start: bad });
+      const r = await connect({ token: signTownPass(pass()), place: 'ISFJ.5', start: bad });
       rooms.push(r);
       await until(() => !!r.state.players?.get(r.sessionId));
       expect(inSpawn(r.state.players.get(r.sessionId), 'spawn', hood)).toBe(true);
@@ -325,7 +325,7 @@ describe('새 동네 (2동·3동…)', () => {
   });
 
   it('없는 곳으로는 들어가지 못한다', async () => {
-    for (const place of ['moon.2', 'water.1', 'water.0', 'water.100', 'water']) {
+    for (const place of ['moon.2', 'ISFJ.1', 'ISFJ.0', 'ISFJ.100', 'ISFJ']) {
       await expect(connect({ token: signTownPass(pass()), place: place as JoinOptions['place'] })).rejects.toThrow();
     }
   });
@@ -333,7 +333,7 @@ describe('새 동네 (2동·3동…)', () => {
 
 describe('이동 예산', () => {
   it('메시지를 잘게 쪼개 보내도 걷는 속도보다 빨리 갈 수 없다', async () => {
-    const room = await join(pass({ district: 'metal' }));
+    const room = await join(pass({ district: 'INTJ' }));
     const start = { ...room.state.players.get(room.sessionId) };
     let snaps = 0;
     room.onMessage(MSG.snap, () => snaps++);
@@ -358,12 +358,12 @@ describe('집 안 (방)', () => {
   it('같은 집 토큰을 가진 주인과 손님이 같은 방에서 서로 보인다', async () => {
     const owner = await enter(pass({ pid: ownerPid, name: '주인', house: ownerPid }), ownerPid);
     rooms.push(owner);
-    const friend = await enter(pass({ name: '친구', color: 'peach', house: ownerPid, mbti: 'ENFP', ilju: '갑자' }), ownerPid, { x: 2.5, z: 4.5 });
+    const friend = await enter(pass({ name: '친구', color: 'peach', house: ownerPid, mbti: 'ENFP' }), ownerPid, { x: 2.5, z: 4.5 });
     rooms.push(friend);
     expect(friend.roomId).toBe(owner.roomId);
     await until(() => owner.state.players.size === 2 && friend.state.players.size === 2);
     const seen = owner.state.players.get(friend.sessionId);
-    expect(seen).toMatchObject({ name: '친구', color: 'peach', mbti: 'ENFP', ilju: '갑자' });
+    expect(seen).toMatchObject({ name: '친구', color: 'peach', mbti: 'ENFP' });
     expect(near(seen, { x: 2.5, z: 4.5 }, 0.01)).toBe(true);
     // 걸으면 주인 화면에도 보인다
     friend.send(MSG.move, { x: 2.8, z: 4.5, rot: 1, moving: true });

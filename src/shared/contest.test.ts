@@ -24,13 +24,14 @@ describe('대항전 한 주', () => {
   });
 
   it('지역 순서: 점수 → 참여한 사람 수 → 지역 차례, 없는 지역은 0점', () => {
-    const r = rankDistricts({ fire: { score: 10, people: 1, debateWins: 0 }, water: { score: 10, people: 3, debateWins: 0 }, metal: { score: 40, people: 2, debateWins: 1 } });
-    expect(r.map((x) => x.district)).toEqual(['metal', 'water', 'fire', 'wood', 'earth']);
-    expect(r.at(-1)).toMatchObject({ district: 'earth', score: 0, people: 0 });
-    expect(contestLeader(r)).toBe('metal');
+    const r = rankDistricts({ ENFP: { score: 10, people: 1, debateWins: 0 }, ISTJ: { score: 10, people: 3, debateWins: 0 }, INTJ: { score: 40, people: 2, debateWins: 1 } });
+    expect(r).toHaveLength(16);
+    expect(r.slice(0, 4).map((x) => x.district)).toEqual(['INTJ', 'ISTJ', 'ENFP', 'INTP']);
+    expect(r.at(-1)).toMatchObject({ district: 'ESFP', score: 0, people: 0 });
+    expect(contestLeader(r)).toBe('INTJ');
     // 모두 0점이거나 1위가 같은 점수면 우승 없음
     expect(contestLeader(rankDistricts({}))).toBeNull();
-    expect(contestLeader(rankDistricts({ fire: { score: 5, people: 1, debateWins: 0 }, wood: { score: 5, people: 1, debateWins: 0 } }))).toBeNull();
+    expect(contestLeader(rankDistricts({ ENFP: { score: 5, people: 1, debateWins: 0 }, INFJ: { score: 5, people: 1, debateWins: 0 } }))).toBeNull();
   });
 
   it('남은 시간 글', () => {
@@ -43,11 +44,12 @@ describe('대항전 한 주', () => {
 });
 
 describe('우승 발표', () => {
-  it('서버 전체 공지로 우승 지역을 알린다 (지역이 아니면 받지 않는다)', () => {
-    const a = parseAnnouncement({ kind: 'contest', district: 'fire' })!;
-    expect(a).toEqual({ kind: 'contest', district: 'fire' });
-    expect(announcementText(a)).toContain('노을 지역');
-    expect(announcementBody(a)).toBe('contest:fire');
-    expect(parseAnnouncement({ kind: 'contest', district: 'moon' })).toBeNull();
+  it('서버 전체 공지로 우승 마을을 알린다 (MBTI 마을이 아니면 받지 않는다)', () => {
+    const a = parseAnnouncement({ kind: 'contest', district: 'ENFP' })!;
+    expect(a).toEqual({ kind: 'contest', district: 'ENFP' });
+    expect(announcementText(a)).toContain('ENFP 마을');
+    expect(announcementBody(a)).toBe('contest:ENFP');
+    expect(parseAnnouncement({ kind: 'contest', district: 'fire' })).toBeNull();
+    expect(parseAnnouncement({ kind: 'saju_ticket', name: '누구' })).toBeNull();
   });
 });

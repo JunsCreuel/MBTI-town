@@ -115,7 +115,7 @@ export async function migrate(sql: Sql): Promise<string[]> {
   for (const file of readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql')).sort()) {
     if (done.has(file)) continue;
     await sql.exec(readFileSync(join(MIGRATIONS_DIR, file), 'utf8'));
-    await sql.query(`insert into public.schema_migrations (name) values ($1)`, [file]);
+    await sql.query(`insert into public.schema_migrations (name) values ($1) on conflict (name) do nothing`, [file]);
     applied.push(file);
   }
   return applied;

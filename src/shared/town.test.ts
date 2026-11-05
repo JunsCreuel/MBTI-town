@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { townConfig } from '../config/game';
 import { findPath, hasLineOfSight } from './pathfinding';
 import { MOVE_BUDGET_MAX, isMoveAllowed, lerpAngle, moveWithCollision, refillMoveBudget, yawFromVector } from './movement';
-import { DISTRICTS } from './districts';
+import { DISTRICTS, THEMES, THEME_DISTRICT, themeOf } from './districts';
 import { FLORA } from './flora';
 import {
   districtAt, gateSpawnName, groundHeightAt, isBlockedAt, isBlockedTile, lotDoor, randomSpawnPoint, spawnName, withDistrict,
@@ -38,12 +38,8 @@ describe('마을 맵', () => {
     expect(isBlockedTile(map, Math.floor(screen.x), Math.floor(screen.z))).toBe(true);
   });
 
-  it('사주상담소 천막 앞(카메라 쪽)과 양옆에는 나무·덤불·돌이 없다 (천막을 가리지 않게)', () => {
-    const tent = map.props.find((p) => p.key === 'prop.plaza.saju')!;
-    expect(tent).toBeDefined();
-    const plants = map.props.filter((p) => /^prop\.nature\./.test(p.key));
-    const near = plants.filter((p) => p.x > tent.x - 3.6 && p.x < tent.x + 3.6 && p.z > tent.z - 2.4 && p.z < tent.z + 6);
-    expect(near.map((p) => p.key)).toEqual([]);
+  it('사주상담소 천막은 없다', () => {
+    expect(map.props.some((p) => p.key === 'prop.plaza.saju')).toBe(false);
   });
 
   it('레이어를 읽는다', () => {
@@ -58,24 +54,34 @@ describe('마을 맵', () => {
     expect(isBlockedTile(map, C, C)).toBe(true);
   });
 
-  it('중앙광장을 다섯 지역이 둘러싸고, 지역마다 명소가 하나씩 있다', () => {
+  it('중앙광장을 16유형 마을이 둘러싸고, 같은 기질 넷이 한 사분면에 모이며, 기질마다 명소가 하나씩 있다', () => {
     expect(districtAt(map, C + 0.5, C + 0.5)).toBeNull();
-    for (const d of DISTRICTS) {
-      const own = map.props.filter((p) => p.district === d && p.key.startsWith('prop.district.'));
+    for (const t of THEMES) {
+      const own = map.props.filter((p) => p.key.startsWith('prop.district.') && p.district && themeOf(p.district) === t);
       expect(own).toHaveLength(1);
-      expect(districtAt(map, own[0].x, own[0].z)).toBe(d);
-      // 지역 나무는 그 지역 땅에, 그 지역 식물로 심겨 있다
+      expect(own[0].district).toBe(THEME_DISTRICT[t]);
+      // 명소는 그 기질 마을 땅에 선다
+      const at = districtAt(map, own[0].x, own[0].z);
+      expect(at && themeOf(at)).toBe(t);
+    }
+    for (const d of DISTRICTS) {
+      // 마을 나무는 그 마을 땅에, 그 기질 풍경 식물로 심겨 있다
       const trees = map.props.filter((p) => p.district === d && p.key.startsWith('prop.nature.tree'));
-      expect(trees.length).toBeGreaterThan(30);
-      const kinds = new Set(FLORA[d].trees.map(([k]) => k));
+      expect(trees.length).toBeGreaterThan(5);
+      const kinds = new Set(FLORA[themeOf(d)].trees.map(([k]) => k));
       for (const t of trees) {
         expect(districtAt(map, t.x, t.z)).toBe(d);
         expect(kinds.has(t.key)).toBe(true);
       }
     }
+    // 북쪽(위)은 분석가, 남쪽(아래)은 관리자 쪽이다
+    const north = districtAt(map, C + 2, C - 25);
+    const south = districtAt(map, C - 2, C + 25);
+    expect(north && themeOf(north)).toBe('NT');
+    expect(south && themeOf(south)).toBe('SJ');
   });
 
-  it('지역마다 집터가 정해진 수만큼 있고, 집 문 앞은 광장에서 걸어갈 수 있다', () => {
+  it('마을마다 집터가 정해진 수만큼 있고, 집 문 앞은 광장에서 걸어갈 수 있다', () => {
     for (const d of DISTRICTS) {
       const lots = map.lots[d];
       expect(lots.map((l) => l.index)).toEqual([...Array(townConfig.lotsPerDistrict).keys()]);
@@ -87,7 +93,7 @@ describe('마을 맵', () => {
         expect(isBlockedAt(map, door.x, door.z)).toBe(false);
       }
     }
-    // 지역마다 가장 먼 집 하나는 실제 경로까지 확인한다
+    // 마을마다 가장 먼 집 하나는 실제 경로까지 확인한다
     for (const d of DISTRICTS) {
       const door = lotDoor(map.lots[d].at(-1)!);
       const path = findPath(map, plaza, door)!;
@@ -115,7 +121,7 @@ describe('새 동네 (2동·3동…)', () => {
   const template = loadHoodMapForTest();
   const GATE = 'prop.hood.gate';
 
-  it('본섬 지역마다 큰길 끝에 동네 길 아치가 있고, 광장에서 걸어갈 수 있다', () => {
+  it('본섬 마을마다 큰길 끝에 동네 길 아치가 있고, 광장에서 걸어갈 수 있다', () => {
     for (const d of DISTRICTS) {
       const gates = map.props.filter((p) => p.key === GATE && p.district === d);
       expect(gates).toHaveLength(1);
@@ -127,27 +133,27 @@ describe('새 동네 (2동·3동…)', () => {
     }
   });
 
-  it('동네 틀 맵에 지역을 입히면 땅·집터·지역 소품이 그 지역 것이 된다', () => {
-    expect(template.hoodLots).toHaveLength(townConfig.hoodLots);
-    expect(template.hoodLots.map((l) => l.index)).toEqual([...Array(townConfig.hoodLots).keys()]);
-    const hood = withDistrict(template, 'fire');
-    expect(hood.lots.fire).toHaveLength(townConfig.hoodLots);
-    expect(hood.lots.wood).toEqual([]);
-    expect(districtAt(hood, hood.width / 2 + 0.5, hood.height / 2 + 6.5)).toBe('fire');
-    expect(hood.props.filter((p) => p.key === GATE).map((p) => p.district)).toEqual(['fire']);
-    // 자리표시 나무·덤불이 그 지역 식물로 바뀐다
-    const fireKinds = new Set([...FLORA.fire.trees, ...FLORA.fire.bushes, ...FLORA.fire.rocks].map(([k]) => k));
+  it('동네 틀 맵에 마을을 입히면 땅·집터·마을 소품이 그 마을 것이 된다', () => {
+    expect(template.hoodLots.length).toBeGreaterThanOrEqual(townConfig.hoodLots);
+    expect(template.hoodLots.map((l) => l.index).slice(0, townConfig.hoodLots)).toEqual([...Array(townConfig.hoodLots).keys()]);
+    const hood = withDistrict(template, 'ESTP');
+    expect(hood.lots.ESTP.length).toBe(template.hoodLots.length);
+    expect(hood.lots.ENFP).toEqual([]);
+    expect(districtAt(hood, hood.width / 2 + 0.5, hood.height / 2 + 6.5)).toBe('ESTP');
+    expect(hood.props.filter((p) => p.key === GATE).map((p) => p.district)).toEqual(['ESTP']);
+    // 자리표시 나무·덤불이 그 기질(탐험가) 풍경 식물로 바뀐다
+    const kinds = new Set([...FLORA.SP.trees, ...FLORA.SP.bushes, ...FLORA.SP.rocks].map(([k]) => k));
     const plants = hood.props.filter((p) => p.district && p.key.startsWith('prop.nature.'));
     expect(plants.length).toBeGreaterThan(20);
-    for (const p of plants) expect(fireKinds.has(p.key)).toBe(true);
+    for (const p of plants) expect(kinds.has(p.key)).toBe(true);
     // 틀 맵은 그대로다
-    expect(template.lots.fire).toEqual([]);
+    expect(template.lots.ESTP).toEqual([]);
   });
 
   it('동네 집 문 앞은 모두 입구에서 걸어갈 수 있다', () => {
-    const hood = withDistrict(template, 'water');
+    const hood = withDistrict(template, 'ISFJ');
     const start = randomSpawnPoint(hood, () => 0.5);
-    for (const lot of hood.lots.water) {
+    for (const lot of hood.lots.ISFJ) {
       expect(isBlockedAt(hood, lot.x, lot.z)).toBe(true);
       const door = lotDoor(lot);
       expect(isBlockedAt(hood, door.x, door.z)).toBe(false);
@@ -156,11 +162,11 @@ describe('새 동네 (2동·3동…)', () => {
     }
   });
 
-  it('방 이름: 본섬은 town, 동네는 "지역.번호"(2부터)', () => {
+  it('방 이름: 본섬은 town, 동네는 "유형.번호"(2부터)', () => {
     expect(parseRoomPlace(undefined)).toBeNull();
     expect(parseRoomPlace('town')).toBeNull();
-    expect(parseRoomPlace('water.2')).toEqual({ district: 'water', hood: 2 });
-    for (const bad of ['water.1', 'moon.2', 'water.x', 'water.100', 'water', 3]) expect(parseRoomPlace(bad)).toBeUndefined();
+    expect(parseRoomPlace('ISFJ.2')).toEqual({ district: 'ISFJ', hood: 2 });
+    for (const bad of ['ISFJ.1', 'water.2', 'isfj.2', 'ISFJ.x', 'ISFJ.100', 'ISFJ', 3]) expect(parseRoomPlace(bad)).toBeUndefined();
   });
 });
 
@@ -262,7 +268,7 @@ describe('입체 타일', () => {
 });
 
 describe('입장 토큰', () => {
-  const pass: TownPass = { pid: townPid('user-1'), name: '하루', handle: 'haru', district: 'water', hood: 2, lot: 3, color: 'sky', acc: 'cap', exp: 2_000_000_000 };
+  const pass: TownPass = { pid: townPid('user-1'), name: '하루', handle: 'haru', district: 'ISFJ', hood: 2, lot: 3, color: 'sky', acc: 'cap', exp: 2_000_000_000 };
 
   it('서명한 토큰을 그대로 읽는다', () => {
     expect(verifyTownPass(signTownPass(pass), 1_000)).toEqual(pass);
@@ -285,11 +291,10 @@ describe('입장 토큰', () => {
   });
 
   it('이름표 둘째 줄(MBTI·일주)은 올바른 값만 받는다', () => {
-    const tagged = verifyTownPass(signTownPass({ ...pass, mbti: 'ENFP', ilju: '갑자' }), 1_000);
-    expect(tagged).toMatchObject({ mbti: 'ENFP', ilju: '갑자' });
-    const odd = verifyTownPass(signTownPass({ ...pass, mbti: 'ABCD', ilju: '<script>' }), 1_000);
+    const tagged = verifyTownPass(signTownPass({ ...pass, mbti: 'ENFP' }), 1_000);
+    expect(tagged).toMatchObject({ mbti: 'ENFP' });
+    const odd = verifyTownPass(signTownPass({ ...pass, mbti: 'ABCD' }), 1_000);
     expect(odd?.mbti).toBeUndefined();
-    expect(odd?.ilju).toBeUndefined();
   });
 
   it('사람 번호는 계정마다 같고, 계정 id를 드러내지 않는다', () => {

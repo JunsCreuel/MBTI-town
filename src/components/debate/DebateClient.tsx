@@ -153,7 +153,7 @@ function TopBar({ me }: { me: MeResponse | null }) {
             <span className="pill__dot" style={{ '--chip-color': tokens.district[me.profile.district] } as CSSProperties} />
           ) : null}
           {me.profile?.district ? `${DISTRICT[me.profile.district].name} 주민` : '주민 등록 전'}
-          {me.mbti ? ` · ${me.mbti}` : ''} · 로그아웃
+          {!me.profile?.district && me.mbti ? ` · ${me.mbti}` : ''} · 로그아웃
         </button>
       ) : me ? (
         <Link className="topbar__me" href="/login?next=/debate">로그인</Link>

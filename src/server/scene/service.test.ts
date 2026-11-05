@@ -1,12 +1,11 @@
 // 미니홈피 규칙을 실제 Postgres(PGlite, 메모리)로 확인한다. 공개 범위·차단은 서버 규칙이라 여기서 꼼꼼히 본다.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { coinConfig, contestConfig, elementConfig, marketConfig, playConfig, sajuConfig, townConfig } from '@/config/game';
+import { coinConfig, contestConfig, debateConfig, marketConfig, playConfig, townConfig } from '@/config/game';
 import type { Announcement } from '@/shared/announce';
 import { DISTRICTS, type District } from '@/shared/districts';
 import { refundFor } from '@/shared/market';
 import { verifyTownPass } from '@/shared/townToken';
-import { computeSaju, type BirthInput } from '../saju';
 import { createPgliteSql, createPostgresSql, type Sql } from '../db';
 import { SceneError, SceneService, type Viewer } from './service';
 import { SceneStore } from './store';
@@ -24,27 +23,12 @@ async function user(): Promise<Viewer> {
   return { id };
 }
 
-/** 그 지역(일간 오행)이 나오는 생일 (1990년부터 날짜를 넘기며 찾는다, 시간 모름) */
-const birthCache = new Map<District, BirthInput>();
-function birthFor(d: District, time: string | null = null): BirthInput {
-  if (!time && birthCache.has(d)) return birthCache.get(d)!;
-  for (let i = 0; i < 20; i++) {
-    const date = new Date(Date.UTC(1990, 0, 1 + i)).toISOString().slice(0, 10);
-    const b: BirthInput = { calendar: 'solar', date, time };
-    if (computeSaju(b).district === d) {
-      if (!time) birthCache.set(d, b);
-      return b;
-    }
-  }
-  throw new Error(d);
-}
-
 async function onboard(v: Viewer, name: string, extra: Record<string, unknown> = {}) {
-  // district는 테스트 편의: 그 지역이 나오는 생일로 바꿔 넣는다. 서버로는 보내지 않는다 (birth가 있으면 birth를 쓴다).
+  // district는 테스트 편의: 그 유형을 MBTI로 고른다 (사는 마을 = MBTI)
   const { district, ...rest } = extra as { district?: District };
   return service.completeOnboarding(v, {
     taste: { colors: ['sky'], moods: ['calm'], music: ['lofi'] },
-    birth: birthFor(district ?? 'water'),
+    mbti: district ?? 'ISFJ',
     avatar: { color: 'sky', accessory: 'cap' },
     starter: 'cozy',
     bgm: 'bgm.lake',
@@ -54,8 +38,12 @@ async function onboard(v: Viewer, name: string, extra: Record<string, unknown> =
   });
 }
 
-/** 생일을 고쳐 다른 지역으로 이사 */
-const moveTo = (v: Viewer, d: District, more: Record<string, unknown> = {}) => service.updateProfile(v, { birth: birthFor(d), ...more });
+/** MBTI를 바꿔 다른 마을로 이사 (테스트 편의: 바꾸기 대기 시간은 지운다) */
+async function moveTo(v: Viewer, d: District, more: Record<string, unknown> = {}) {
+  await sql.query(`update public.profiles set mbti_changed_at = null where id = $1`, [v.id]);
+  const moved = await service.changeMbti(v, d);
+  return Object.keys(more).length ? service.updateProfile(v, more) : moved;
+}
 
 async function expectError(p: Promise<unknown>, code: string) {
   await expect(p).rejects.toSatisfy((e: unknown) => e instanceof SceneError && e.code === code);
@@ -82,16 +70,12 @@ describe('미니홈피', () => {
     expect((await service.me(a)).profile.onboarded).toBe(false);
     await expectError(service.saveRoom(a, { layout: {} }), 'onboarding_required');
     await expectError(onboard(a, ''), 'bad_request');
-    await expectError(onboard(a, '하나', { birth: { calendar: 'solar', date: '2026-13-01', time: null } }), 'bad_request');
-    await expectError(onboard(a, '하나', { birth: { calendar: 'lunar', date: '1990-04-21', leap: true, time: null } }), 'bad_request');
-    await expectError(onboard(a, '하나', { birth: undefined }), 'bad_request');
+    await expectError(onboard(a, '하나', { mbti: 'XXXX' }), 'bad_request');
+    await expectError(onboard(a, '하나', { mbti: undefined }), 'bad_request');
 
-    // 사는 지역은 사주(일간 오행)로 정해진다. 화면이 다른 지역을 보내도 쓰지 않는다.
-    const pa = await onboard(a, '하나', { mbti: 'ENFP', birth: { ...birthFor('water'), time: '09:30' }, district: 'fire' as never });
-    expect(pa).toMatchObject({ onboarded: true, district: 'water', displayName: '하나', mbti: 'ENFP', roomVisibility: 'public' });
-    expect(pa.birth).toEqual({ ...birthFor('water'), leap: false, time: '09:30' });
-    expect(pa.saju?.district).toBe('water');
-    expect(pa.saju?.hour).not.toBeNull();
+    // 사는 마을 = 고른 MBTI 유형 마을
+    const pa = await onboard(a, '하나', { mbti: 'ISFJ' });
+    expect(pa).toMatchObject({ onboarded: true, district: 'ISFJ', displayName: '하나', mbti: 'ISFJ', roomVisibility: 'public', mbtiChangeableAt: null });
     expect(pa.handle).toMatch(/^[a-z0-9_]{3,20}$/);
     const me = await service.me(a);
     expect(me.room?.bgm).toBe('bgm.lake');
@@ -228,13 +212,13 @@ describe('미니홈피', () => {
     expect(Number(n)).toBe(1);
   });
 
-  it('마을 둘러보기: 공개·발견 켠 방만, 지역별로', async () => {
-    await moveTo(c, 'wood');
-    expect((await service.explore(null, 'wood')).rooms.map((r) => r.handle)).toEqual([hc]);
+  it('마을 둘러보기: 공개·발견 켠 방만, 유형 마을별로', async () => {
+    await moveTo(c, 'INFP');
+    expect((await service.explore(null, 'INFP')).rooms.map((r) => r.handle)).toEqual([hc]);
     await service.updateProfile(c, { discoverable: false });
-    expect((await service.explore(null, 'wood')).rooms).toEqual([]);
+    expect((await service.explore(null, 'INFP')).rooms).toEqual([]);
     const all = await service.explore(null, null);
-    expect(all.counts.water).toBe(2);
+    expect(all.counts.ISFJ).toBe(2);
     expect(all.newcomers.length).toBeGreaterThan(0);
   });
 
@@ -251,55 +235,55 @@ describe('미니홈피', () => {
 describe('마을 집터', () => {
   let p: Viewer, q: Viewer, r: Viewer;
 
-  it('가입하면 고른 지역의 빈 집터 가운데 가장 작은 번호에 집이 선다', async () => {
+  it('가입하면 고른 MBTI 마을의 빈 집터 가운데 가장 작은 번호에 집이 선다', async () => {
     p = await user();
     q = await user();
     r = await user();
-    expect((await onboard(p, '파랑', { district: 'fire' })).houseLot).toBe(0);
-    expect((await onboard(q, '큐', { district: 'fire' })).houseLot).toBe(1);
-    expect((await onboard(r, '알', { district: 'metal' })).houseLot).toBe(0);
+    expect((await onboard(p, '파랑', { district: 'ESTP' })).houseLot).toBe(0);
+    expect((await onboard(q, '큐', { district: 'ESTP' })).houseLot).toBe(1);
+    expect((await onboard(r, '알', { district: 'INTJ' })).houseLot).toBe(0);
   });
 
-  it('이사하면 새 지역 집터로 옮기고, 비운 집터는 다음 사람이 쓴다', async () => {
-    // 생일을 고쳐 사주가 바뀌면 그 지역 빈 집터로 이사한다
-    expect((await moveTo(p, 'metal')).houseLot).toBe(1);
-    // 같은 지역이 나오는 생일로 다시 저장해도 집터는 그대로
-    expect((await moveTo(p, 'metal', { bio: '이사 왔어요' })).houseLot).toBe(1);
-    // 지역을 직접 고를 수는 없다
-    await expectError(service.updateProfile(p, { district: 'water' }), 'bad_request');
+  it('MBTI를 바꾸면 새 마을 집터로 이사하고, 비운 집터는 다음 사람이 쓴다', async () => {
+    // MBTI를 바꾸면 그 마을 빈 집터로 이사한다
+    expect((await moveTo(p, 'INTJ')).houseLot).toBe(1);
+    // 같은 MBTI로 다시 저장해도 집터는 그대로
+    expect((await moveTo(p, 'INTJ', { bio: '이사 왔어요' })).houseLot).toBe(1);
+    // 마을을 따로 고를 수는 없다 (MBTI로 정해진다)
+    await expectError(service.updateProfile(p, { district: 'ISFJ' }), 'bad_request');
     const s = await user();
-    expect((await onboard(s, '에스', { district: 'fire' })).houseLot).toBe(0);
+    expect((await onboard(s, '에스', { district: 'ESTP' })).houseLot).toBe(0);
   });
 
   it('1동(본섬) 집터가 다 차면 2동이 열리고, 2동이 다 차면 3동이 열린다', async () => {
     const first = await Promise.all(Array.from({ length: townConfig.lotsPerDistrict }, () => user()));
-    for (const [i, v] of first.entries()) await onboard(v, `주민${i}`, { district: 'earth' });
+    for (const [i, v] of first.entries()) await onboard(v, `주민${i}`, { district: 'ESTJ' });
     const late = await user();
-    const mine = await onboard(late, '늦은 주민', { district: 'earth' });
-    expect(mine).toMatchObject({ district: 'earth', houseHood: 2, houseLot: 0 });
+    const mine = await onboard(late, '늦은 주민', { district: 'ESTJ' });
+    expect(mine).toMatchObject({ district: 'ESTJ', houseHood: 2, houseLot: 0 });
     // 2동을 채우면 다음 사람은 3동 0번
     const second = await Promise.all(Array.from({ length: townConfig.hoodLots - 1 }, () => user()));
-    for (const [i, v] of second.entries()) await onboard(v, `이웃${i}`, { district: 'earth' });
-    const third = await onboard(await user(), '셋째 동네', { district: 'earth' });
+    for (const [i, v] of second.entries()) await onboard(v, `이웃${i}`, { district: 'ESTJ' });
+    const third = await onboard(await user(), '셋째 동네', { district: 'ESTJ' });
     expect(third).toMatchObject({ houseHood: 3, houseLot: 0 });
     // 1동에 빈 집터가 생기면 다음 사람은 1동으로 (작은 동네부터 채운다)
-    await moveTo(first[4], 'wood');
-    const next = await onboard(await user(), '빈자리', { district: 'earth' });
-    expect(next).toMatchObject({ houseHood: 1, houseLot: 4 });
+    await moveTo(first[2], 'INFP');
+    const next = await onboard(await user(), '빈자리', { district: 'ESTJ' });
+    expect(next).toMatchObject({ houseHood: 1, houseLot: 2 });
     // 같은 동네·같은 집터에 두 집이 서지 않는다
     const [{ n }] = await sql.query<{ n: number }>(
       `select count(*)::int as n from (select district, house_hood, house_lot from public.profiles where house_lot is not null group by 1, 2, 3 having count(*) > 1) d`,
     );
     expect(Number(n)).toBe(0);
     // 마을 집 목록에도 동네 번호가 붙는다
-    const houses = (await service.town(null)).houses.filter((h) => h.district === 'earth');
+    const houses = (await service.town(null)).houses.filter((h) => h.district === 'ESTJ');
     expect(new Set(houses.map((h) => h.hood))).toEqual(new Set([1, 2, 3]));
     expect(houses.filter((h) => h.hood === 2)).toHaveLength(townConfig.hoodLots);
   });
 
   it('예전에 집 없이 들어온 주민은 다음 접속 때 빈 집터를 받는다', async () => {
     const v = await user();
-    await onboard(v, '집 없던 주민', { district: 'metal' });
+    await onboard(v, '집 없던 주민', { district: 'INTJ' });
     await sql.query(`update public.profiles set house_lot = null where id = $1`, [v.id]);
     const ticket = await service.townTicket(v);
     expect(ticket.pass.lot).toBeGreaterThanOrEqual(0);
@@ -311,20 +295,20 @@ describe('마을 집터', () => {
     const hq = (await service.me(q)).profile.handle;
     await service.updateProfile(q, { discoverable: false });
     const named = (v: Viewer | null) =>
-      service.town(v).then((t) => Object.fromEntries(t.houses.filter((h) => h.district !== 'earth' && h.hood === 1).map((h) => [`${h.district}.${h.lot}`, h.name])));
+      service.town(v).then((t) => Object.fromEntries(t.houses.filter((h) => h.district !== 'ESTJ' && h.hood === 1).map((h) => [`${h.district}.${h.lot}`, h.name])));
 
     // 손님: 발견을 끈 큐의 집은 이름이 없다
-    expect(await named(null)).toMatchObject({ 'metal.1': '파랑', 'fire.1': null });
+    expect(await named(null)).toMatchObject({ 'INTJ.1': '파랑', 'ESTP.1': null });
     // 친구가 되면 큐의 집 이름이 보인다
     await service.requestFriend(p, hq);
     await service.acceptFriend(q, hp);
     const forP = await service.town(p);
-    expect(forP.houses.find((h) => h.district === 'fire' && h.lot === 1)).toMatchObject({ name: '큐', friend: true, handle: hq });
-    expect(forP.houses.find((h) => h.district === 'metal' && h.lot === 1)).toMatchObject({ name: '파랑', mine: true });
+    expect(forP.houses.find((h) => h.district === 'ESTP' && h.lot === 1)).toMatchObject({ name: '큐', friend: true, handle: hq });
+    expect(forP.houses.find((h) => h.district === 'INTJ' && h.lot === 1)).toMatchObject({ name: '파랑', mine: true });
     // 차단하면 서로 이름이 지워지고, 마을에서 숨길 사람 번호가 내려간다
     await service.block(q, hp);
     const afterBlock = await service.town(p);
-    expect(afterBlock.houses.find((h) => h.district === 'fire' && h.lot === 1)).toMatchObject({ name: null, handle: null, friend: false });
+    expect(afterBlock.houses.find((h) => h.district === 'ESTP' && h.lot === 1)).toMatchObject({ name: null, handle: null, friend: false });
     expect(afterBlock.hidden).toHaveLength(1);
     const tq = await service.townTicket(q);
     expect(afterBlock.hidden).toEqual([tq.pass.pid]);
@@ -333,11 +317,9 @@ describe('마을 집터', () => {
   it('입장 토큰: 가입한 사람은 이름·집터를, 아니면 손님으로 담는다', async () => {
     const tp = await service.townTicket(p);
     expect(tp.guest).toBe(false);
-    expect(verifyTownPass(tp.token)).toMatchObject({ name: '파랑', district: 'metal', hood: 1, lot: 1, color: 'sky', acc: 'cap' });
-    // 이름표 둘째 줄: 사주 일주 (생일은 담지 않는다)
-    const mine = (await service.me(p)).profile;
-    expect(tp.pass.ilju).toBe(mine.saju?.day.ko);
-    expect(JSON.stringify(tp.pass)).not.toContain(mine.saju!.solarDate);
+    expect(verifyTownPass(tp.token)).toMatchObject({ name: '파랑', district: 'INTJ', hood: 1, lot: 1, color: 'sky', acc: 'cap' });
+    // 이름표 둘째 줄: MBTI (= 사는 마을)
+    expect(tp.pass.mbti).toBe('INTJ');
     expect(tp.pass.handle).not.toBe('');
     // 발견을 끈 사람은 방 주소를 담지 않는다
     expect((await service.townTicket(q)).pass.handle).toBe('');
@@ -368,19 +350,42 @@ describe('마을 집터', () => {
   });
 });
 
-describe('사주로 사는 지역 정하기', () => {
-  it('서버로 보낸 지역은 쓰지 않고 생일로 계산한 일간 오행을 쓴다', async () => {
+describe('사는 마을 = MBTI', () => {
+  it('가입 때 고른 MBTI는 한 번 바로 고칠 수 있고, 그 뒤로는 일주일에 한 번 바꾸며 그때마다 이사한다', async () => {
     const v = await user();
-    const sent = await service.completeOnboarding(v, {
-      birth: birthFor('metal'), district: 'water', avatar: {}, starter: 'cozy', bgm: 'bgm.lake', displayName: '직접',
-    } as never);
-    expect(sent.district).toBe('metal');
-    expect(sent.saju?.dayMaster.element).toBe('metal');
+    const joined = await onboard(v, '처음', { mbti: 'INFP' });
+    expect(joined).toMatchObject({ mbti: 'INFP', district: 'INFP', mbtiChangeableAt: null });
+    // 처음 한 번은 바로 (테스트 결과가 마음에 안 들 때)
+    const moved = await service.changeMbti(v, 'ENFP');
+    expect(moved).toMatchObject({ mbti: 'ENFP', district: 'ENFP', houseHood: 1 });
+    expect(moved.mbtiChangeableAt).not.toBeNull();
+    await expectError(service.changeMbti(v, 'ISTJ'), 'conflict');
+    // 같은 MBTI는 괜찮다
+    await service.changeMbti(v, 'ENFP');
+    await expectError(service.changeMbti(v, 'XXXX'), 'bad_request');
+    // 일주일 뒤에는 다시 바꾼다
+    const later = new SceneService(new SceneStore(sql), () => new Date(now.getTime() + (debateConfig.mbtiChangeCooldownDays + 1) * 86_400_000));
+    expect(await later.changeMbti(v, 'ISTJ')).toMatchObject({ mbti: 'ISTJ', district: 'ISTJ' });
+    await expectError(service.changeMbti(null, 'ISTJ'), 'login_required');
   });
 
-  it('미리 보기는 저장하지 않고 사주와 지역만 알려 준다', () => {
-    for (const d of DISTRICTS) expect(service.previewSaju(birthFor(d)).district).toBe(d);
-    expect(() => service.previewSaju({ calendar: 'solar', date: '1800-01-01', time: null })).toThrow();
+  it('예전 주민: MBTI가 있으면 다음 접속 때 그 마을에 집이 서고, 없으면 MBTI를 정할 때까지 손님처럼 들어온다', async () => {
+    // 마이그레이션 뒤 모습: 집터가 비고, MBTI가 있으면 사는 마을 = MBTI
+    const withMbti = await user();
+    await onboard(withMbti, '예전 주민', { mbti: 'ESFJ' });
+    await sql.query(`update public.profiles set district = null, house_lot = null where id = $1`, [withMbti.id]);
+    const me = (await service.me(withMbti)).profile;
+    expect(me).toMatchObject({ district: 'ESFJ', houseHood: 1 });
+    expect(me.houseLot).not.toBeNull();
+
+    const noMbti = await user();
+    await onboard(noMbti, 'MBTI 없던 주민', { mbti: 'ESFP' });
+    await sql.query(`update public.profiles set district = null, house_lot = null, mbti = null where id = $1`, [noMbti.id]);
+    expect((await service.townTicket(noMbti)).guest).toBe(true);
+    expect((await service.me(noMbti)).profile).toMatchObject({ onboarded: true, mbti: null, district: null, houseLot: null });
+    // 정하면 바로 그 마을로 (처음 정한 것은 대기 시간을 세지 않는다)
+    expect(await service.changeMbti(noMbti, 'ESFP')).toMatchObject({ mbti: 'ESFP', district: 'ESFP', mbtiChangeableAt: null });
+    expect((await service.townTicket(noMbti)).pass).toMatchObject({ district: 'ESFP', mbti: 'ESFP' });
   });
 });
 
@@ -388,20 +393,20 @@ describe('놀거리: 열매·운세 열매·낚시', () => {
   it('열매 나무는 하루 한 번, 운세 나무는 그날 같은 운세', async () => {
     const v = await user();
     await onboard(v, '열매꾼');
-    const first = await service.pickTree(v, 'fruit.wood.0');
+    const first = await service.pickTree(v, 'fruit.INFP.0');
     expect(first).toMatchObject({ already: false, fruit: { id: 'apple', name: '사과' }, added: playConfig.fruitsPerTree, count: playConfig.fruitsPerTree });
-    const again = await service.pickTree(v, 'fruit.wood.0');
+    const again = await service.pickTree(v, 'fruit.INFP.0');
     expect(again).toMatchObject({ already: true, added: 0, count: playConfig.fruitsPerTree });
     // 다른 나무는 또 딸 수 있다
-    expect((await service.pickTree(v, 'fruit.water.1')).fruit.name).toBe('포도');
+    expect((await service.pickTree(v, 'fruit.ISFJ.0')).fruit.name).toBe('포도');
     const luck = await service.pickTree(v, 'fortune');
     expect(luck.fortune?.line.length).toBeGreaterThan(5);
     expect((await service.pickTree(v, 'fortune')).fortune).toEqual(luck.fortune);
     await expectError(service.pickTree(v, 'fruit.moon.0'), 'bad_request');
-    await expectError(service.pickTree(v, `fruit.wood.${playConfig.fruitTreesPerDistrict}`), 'bad_request');
+    await expectError(service.pickTree(v, `fruit.INFP.${playConfig.fruitTreesPerDistrict}`), 'bad_request');
     await expectError(service.pickTree(null, 'fortune'), 'login_required');
     const state = await service.playState(v);
-    expect(state.pickedTrees.sort()).toEqual(['fortune', 'fruit.water.1', 'fruit.wood.0']);
+    expect(state.pickedTrees.sort()).toEqual(['fortune', 'fruit.INFP.0', 'fruit.ISFJ.0']);
     expect(state.fruits).toMatchObject({ apple: playConfig.fruitsPerTree, fortune: 1 });
   });
 
@@ -546,20 +551,20 @@ describe('운영자', () => {
     await expectError(service.roomView(admin, ho), 'not_found');
   });
 
-  it('운영자는 주민마다 코인·사주 이용권을 보고, 주거나 뺀다 (0 밑으로는 안 내려간다)', async () => {
+  it('운영자는 주민마다 코인을 보고, 주거나 뺀다 (0 밑으로는 안 내려간다)', async () => {
     const u = (await service.adminUsers(admin, '이웃')).find((x) => x.id === other.id)!;
-    expect(u).toMatchObject({ coins: 0, tickets: 0 });
+    expect(u).toMatchObject({ coins: 0 });
     await expectError(service.adminAdjustWallet(other, u.id, { coins: 100 }), 'not_found');
     await expectError(service.adminAdjustWallet(admin, u.id, {}), 'bad_request');
     await expectError(service.adminAdjustWallet(admin, u.id, { coins: 1.5 }), 'bad_request');
     await expectError(service.adminAdjustWallet(admin, u.id, { coins: 2_000_000 }), 'bad_request');
     await expectError(service.adminAdjustWallet(admin, '00000000-0000-0000-0000-000000000000', { coins: 10 }), 'not_found');
     await expectError(service.adminAdjustWallet(admin, 'nope', { coins: 10 }), 'not_found');
-    expect(await service.adminAdjustWallet(admin, u.id, { coins: 1500 })).toEqual({ coins: 1500, tickets: 0 });
-    expect(await service.adminAdjustWallet(admin, u.id, { coins: -500, tickets: 2 })).toEqual({ coins: 1000, tickets: 2 });
-    expect(await service.adminAdjustWallet(admin, u.id, { coins: -99_999 })).toEqual({ coins: 0, tickets: 2 });
+    expect(await service.adminAdjustWallet(admin, u.id, { coins: 1500 })).toEqual({ coins: 1500 });
+    expect(await service.adminAdjustWallet(admin, u.id, { coins: -500 })).toEqual({ coins: 1000 });
+    expect(await service.adminAdjustWallet(admin, u.id, { coins: -99_999 })).toEqual({ coins: 0 });
     expect((await service.playState(other)).coins).toBe(0);
-    expect((await service.adminUsers(admin, '이웃')).find((x) => x.id === other.id)).toMatchObject({ coins: 0, tickets: 2 });
+    expect((await service.adminUsers(admin, '이웃')).find((x) => x.id === other.id)).toMatchObject({ coins: 0 });
   });
 
   it('운영자 공지: 운영자만, 내용이 있어야 하고, 실시간 서버에 못 보내면 알려 준다', async () => {
@@ -582,8 +587,8 @@ describe('코인과 상가', () => {
     const v = await user();
     await onboard(v, '코인꾼');
     expect((await service.playState(v)).coins).toBe(0);
-    expect((await service.pickTree(v, 'fruit.earth.0')).earned).toBe(coinConfig.fruit * playConfig.fruitsPerTree);
-    expect((await service.pickTree(v, 'fruit.earth.0')).earned).toBe(0);
+    expect((await service.pickTree(v, 'fruit.ESTJ.0')).earned).toBe(coinConfig.fruit * playConfig.fruitsPerTree);
+    expect((await service.pickTree(v, 'fruit.ESTJ.0')).earned).toBe(0);
     expect((await service.pickTree(v, 'fortune')).earned).toBe(coinConfig.fortune);
     let fromFish = 0;
     for (let i = 0; i < 20; i++) {
@@ -656,104 +661,19 @@ describe('코인과 상가', () => {
   });
 });
 
-describe('사주상담소', () => {
-  const setCoins = (v: Viewer, n: number) => sql.query(`update public.profiles set coins = $2 where id = $1`, [v.id, n]);
-
-  it('복채를 내고 기간 풀이를 보고, 같은 기간은 다시 봐도 무료', async () => {
-    const v = await user();
-    await onboard(v, '사주손님');
-    await expectError(service.readSaju(null, { kind: 'today' }), 'login_required');
-    await expectError(service.readSaju(v, { kind: 'year' }), 'bad_request');
-    expect(await service.sajuOffice(v)).toMatchObject({ coins: 0, tickets: 0, seen: { today: false, week: false, premium: false } });
-    await expectError(service.readSaju(v, { kind: 'today' }), 'conflict');
-    await setCoins(v, 100);
-    const first = await service.readSaju(v, { kind: 'today' });
-    expect(first).toMatchObject({ paid: sajuConfig.fee.today, usedTicket: false, office: { coins: 100 - sajuConfig.fee.today, seen: { today: true } } });
-    expect(first.reading.kind).toBe('today');
-    expect(first.reading.sections.length).toBeGreaterThan(3);
-    const again = await service.readSaju(v, { kind: 'today' });
-    expect(again.paid).toBe(0);
-    expect(again.reading).toEqual(first.reading);
-    for (const kind of ['tomorrow', 'week', 'month'] as const) {
-      const r = await service.readSaju(v, { kind });
-      expect(r.paid).toBe(sajuConfig.fee[kind]);
-      expect(r.reading.kind).toBe(kind);
-    }
-    expect((await service.sajuOffice(v)).coins).toBe(100 - Object.values(sajuConfig.fee).reduce((a, b) => a + b, 0));
-  });
-
-  it('타로: 복채를 내고 카드를 고르면 뽑아 주고, 같은 날 같은 점은 다시 봐도 무료로 같은 카드', async () => {
-    const v = await user();
-    await onboard(v, '타로손님');
-    await expectError(service.readTarot(null, { spread: 'one' }), 'login_required');
-    await expectError(service.readTarot(v, { spread: 'five' }), 'bad_request');
-    await expectError(service.readTarot(v, { spread: 'three', topic: 'luck' }), 'bad_request');
-    expect(await service.sajuOffice(v)).toMatchObject({ tarotFee: sajuConfig.tarotFee, tarotSeen: { one: false, three: { general: false, love: false } } });
-    await expectError(service.readTarot(v, { spread: 'one', picks: [3] }), 'conflict');
-    await setCoins(v, 100);
-    const one = await service.readTarot(v, { spread: 'one', picks: [5] });
-    expect(one).toMatchObject({ paid: sajuConfig.tarotFee.one, office: { coins: 100 - sajuConfig.tarotFee.one, tarotSeen: { one: true } } });
-    expect(one.reading.cards).toHaveLength(1);
-    expect(one.reading.cards[0].role).toBe('today');
-    expect(one.reading.sections.map((x) => x.title)).toEqual(['연애', '일·공부', '재물']);
-    const oneAgain = await service.readTarot(v, { spread: 'one', picks: [9] });
-    expect(oneAgain.paid).toBe(0);
-    expect(oneAgain.reading).toEqual(one.reading);
-    // 세 장: 주제마다 따로 (고른 자리가 이상하면 앞에서부터)
-    const love = await service.readTarot(v, { spread: 'three', topic: 'love', picks: [1, 1, 99] });
-    expect(love.paid).toBe(sajuConfig.tarotFee.three);
-    expect(love.reading.cards.map((c) => c.role)).toEqual(['past', 'present', 'future']);
-    expect(new Set(love.reading.cards.map((c) => c.id)).size).toBe(3);
-    expect(love.office.tarotSeen.three).toMatchObject({ love: true, work: false });
-    expect((await service.readTarot(v, { spread: 'three', topic: 'love', picks: [0, 1, 2] })).reading).toEqual(love.reading);
-    const work = await service.readTarot(v, { spread: 'three', topic: 'work', picks: [4, 8, 12] });
-    expect(work.paid).toBe(sajuConfig.tarotFee.three);
-    expect((await service.sajuOffice(v)).coins).toBe(100 - sajuConfig.tarotFee.one - 2 * sajuConfig.tarotFee.three);
-  });
-
-  it('상세 풀이는 이용권으로만 (결제는 준비 중), 한 장 쓰면 그해에는 다시 무료', async () => {
-    const v = await user();
-    await onboard(v, '상세손님');
-    await expectError(service.readSaju(v, { kind: 'premium' }), 'conflict');
-    await expectError(service.readSaju(v, { kind: 'premium', useTicket: true }), 'conflict');
-    await sql.query(`update public.profiles set saju_tickets = 1 where id = $1`, [v.id]);
-    const r = await service.readSaju(v, { kind: 'premium', useTicket: true });
-    expect(r).toMatchObject({ usedTicket: true, office: { tickets: 0, seen: { premium: true } } });
-    expect(r.reading.sections.length).toBe(8);
-    expect((await service.readSaju(v, { kind: 'premium' })).usedTicket).toBe(false);
-  });
-
-  it('낚시에서 사주 이용권을 낚으면 이용권이 늘고 서버 전체에 공지한다', async () => {
-    const heard: Announcement[] = [];
-    const loud = new SceneService(new SceneStore(sql), () => now, async (a) => (heard.push(a), true));
-    const v = await user();
-    await onboard(v, '이용권낚시꾼');
-    // 첫 난수 = 황금 고래(안 나옴), 둘째 = 이용권(나옴)
-    const spy = vi.spyOn(Math, 'random').mockReturnValueOnce(0.5).mockReturnValueOnce(0);
-    try {
-      const r = await loud.castLine(v);
-      expect(r).toMatchObject({ fish: null, ticket: true, announced: true, earned: 0 });
-    } finally {
-      spy.mockRestore();
-    }
-    expect(heard).toEqual([{ kind: 'saju_ticket', name: '이용권낚시꾼' }]);
-    expect((await loud.playState(v)).tickets).toBe(1);
-  });
-});
-
-describe('오행 지역 대항전', () => {
+describe('MBTI 마을 대항전', () => {
   const kst = (s: string) => new Date(`${s}+09:00`);
   /** 테스트마다 다른 주를 쓴다 (다른 테스트의 점수와 섞이지 않게) */
   const at = (iso: string, heard: Announcement[] = []) =>
     new SceneService(new SceneStore(sql), () => kst(iso), async (a) => (heard.push(a), true));
 
-  it('놀이로 내 지역 점수가 쌓인다: 열매·출석·낚시·상가 (나무마다 하루 한 번, 출석은 하루 한 번)', async () => {
+  it('놀이로 내 마을 점수가 쌓인다: 열매·출석·낚시·상가 (나무마다 하루 한 번, 출석은 하루 한 번)', async () => {
     const s = at('2027-01-05T10:00:00');
     const v = await user();
-    await onboard(v, '대항전열매', { district: 'fire' });
-    const pick = await s.pickTree(v, 'fruit.wood.0');
+    await onboard(v, '대항전열매', { district: 'ESTP' });
+    const pick = await s.pickTree(v, 'fruit.INFP.0');
     expect(pick.contest).toBe(contestConfig.points.fruit);
-    expect((await s.pickTree(v, 'fruit.wood.0')).contest).toBe(0);
+    expect((await s.pickTree(v, 'fruit.INFP.0')).contest).toBe(0);
     expect((await s.pickTree(v, 'fortune')).contest).toBe(contestConfig.points.fortune);
     await s.townTicket(v);
     await s.townTicket(v);
@@ -767,10 +687,10 @@ describe('오행 지역 대항전', () => {
       }
     }
     const view = await s.contestView(v);
-    expect(view.me?.district).toBe('fire');
+    expect(view.me?.district).toBe('ESTP');
     expect(view.me?.today.fruit).toBe(contestConfig.points.fruit + contestConfig.points.fortune);
     expect(view.me?.today.checkin).toBe(contestConfig.points.checkin);
-    const fire = view.standings.districts.find((d) => d.district === 'fire')!;
+    const fire = view.standings.districts.find((d) => d.district === 'ESTP')!;
     expect(fire.people).toBe(1);
     expect(fire.score).toBe(view.me!.week);
     expect(view.standings.week).toBe('2027-01-04');
@@ -780,51 +700,51 @@ describe('오행 지역 대항전', () => {
 
   it('종류마다 하루 상한까지만 쌓이고, 다음 날에는 다시 쌓인다', async () => {
     const v = await user();
-    await onboard(v, '대항전상한', { district: 'earth' });
+    await onboard(v, '대항전상한', { district: 'ESTJ' });
     const store = new SceneStore(sql);
     const day1 = kst('2027-02-02T10:00:00');
     let added = 0;
-    for (let i = 0; i < 12; i++) added += await store.addContestPoints(v.id, 'earth', 'fish', 3, day1);
+    for (let i = 0; i < 12; i++) added += await store.addContestPoints(v.id, 'ESTJ', 'fish', 3, day1);
     expect(added).toBe(contestConfig.dailyCap.fish);
-    expect(await store.addContestPoints(v.id, 'earth', 'fish', 3, day1)).toBe(0);
-    expect(await store.addContestPoints(v.id, 'earth', 'fish', 3, kst('2027-02-03T10:00:00'))).toBe(3);
-    // 지역이 없거나 0점이면 쌓지 않는다
+    expect(await store.addContestPoints(v.id, 'ESTJ', 'fish', 3, day1)).toBe(0);
+    expect(await store.addContestPoints(v.id, 'ESTJ', 'fish', 3, kst('2027-02-03T10:00:00'))).toBe(3);
+    // 마을이 없거나 0점이면 쌓지 않는다
     expect(await store.addContestPoints(v.id, null, 'fish', 3, day1)).toBe(0);
-    expect(await store.addContestPoints(v.id, 'earth', 'fish', 0, day1)).toBe(0);
+    expect(await store.addContestPoints(v.id, 'ESTJ', 'fish', 0, day1)).toBe(0);
     const s = await store.contestStandings(day1);
-    expect(s.districts.find((d) => d.district === 'earth')).toMatchObject({ score: contestConfig.dailyCap.fish + 3, people: 1 });
+    expect(s.districts.find((d) => d.district === 'ESTJ')).toMatchObject({ score: contestConfig.dailyCap.fish + 3, people: 1 });
   });
 
-  it('일요일 21시 뒤 처음 한 번만 지난주 결과를 정하고 우승 지역을 발표한다 (늦으면 조용히 정한다)', async () => {
+  it('일요일 21시 뒤 처음 한 번만 지난주 결과를 정하고 우승 마을을 발표한다 (늦으면 조용히 정한다)', async () => {
     const store = new SceneStore(sql);
     const a = await user();
     const b = await user();
-    await onboard(a, '대항전숲', { district: 'wood' });
-    await onboard(b, '대항전호수', { district: 'water' });
-    await store.addContestPoints(a.id, 'wood', 'fish', 20, kst('2027-03-03T10:00:00'));
-    await store.addContestPoints(b.id, 'water', 'fish', 5, kst('2027-03-04T10:00:00'));
+    await onboard(a, '대항전숲', { district: 'INFP' });
+    await onboard(b, '대항전호수', { district: 'ISFJ' });
+    await store.addContestPoints(a.id, 'INFP', 'fish', 20, kst('2027-03-03T10:00:00'));
+    await store.addContestPoints(b.id, 'ISFJ', 'fish', 5, kst('2027-03-04T10:00:00'));
     // 발표 전에는 정하지 않는다 (지난주는 비어 있어 우승 없이 정해진다)
     const heard: Announcement[] = [];
     const before = at('2027-03-07T20:30:00', heard);
-    expect((await before.contestBoard()).standings.districts[0]).toMatchObject({ district: 'wood', score: 20 });
+    expect((await before.contestBoard()).standings.districts[0]).toMatchObject({ district: 'INFP', score: 20 });
     const quiet = await before.settleContest();
     expect(quiet?.winner).toBeNull();
     expect(heard).toEqual([]);
     // 21시 뒤: 숲 우승을 한 번만 발표한다
     const after = at('2027-03-07T21:10:00', heard);
-    expect(await after.settleContest()).toEqual({ week: '2027-03-01', winner: 'wood', announced: true });
-    expect(heard).toEqual([{ kind: 'contest', district: 'wood' }]);
+    expect(await after.settleContest()).toEqual({ week: '2027-03-01', winner: 'INFP', announced: true });
+    expect(heard).toEqual([{ kind: 'contest', district: 'INFP' }]);
     expect(await at('2027-03-07T21:20:00', heard).settleContest()).toBeNull();
     expect(heard).toHaveLength(1);
     // 정해 둔 결과는 그 뒤에 점수가 바뀌어도 그대로
-    await store.addContestPoints(b.id, 'water', 'fish', 30, kst('2027-03-05T10:00:00'));
+    await store.addContestPoints(b.id, 'ISFJ', 'fish', 30, kst('2027-03-05T10:00:00'));
     const board = await at('2027-03-08T09:00:00').contestBoard();
-    expect(board.last).toMatchObject({ week: '2027-03-01', winner: 'wood' });
+    expect(board.last).toMatchObject({ week: '2027-03-01', winner: 'INFP' });
     expect(board.standings.week).toBe('2027-03-08');
     // 오래 아무도 오지 않다가 늦게 정해지면 발표하지 않는다
-    await store.addContestPoints(a.id, 'wood', 'fish', 10, kst('2027-03-10T10:00:00'));
+    await store.addContestPoints(a.id, 'INFP', 'fish', 10, kst('2027-03-10T10:00:00'));
     const late = await at('2027-03-16T12:00:00', heard).settleContest();
-    expect(late).toMatchObject({ week: '2027-03-08', winner: 'wood', announced: false });
+    expect(late).toMatchObject({ week: '2027-03-08', winner: 'INFP', announced: false });
     expect(heard).toHaveLength(1);
   });
 });
@@ -871,85 +791,3 @@ describe('클럽 유튜브 신청 제한 (운영자)', () => {
   });
 });
 
-describe('오행 채우기', () => {
-  /** 타고난 오행 개수를 테스트용으로 바꿔 넣는다 (여섯 글자) */
-  const setCounts = (v: Viewer, counts: Record<District, number>) =>
-    sql.query(`update public.profiles set saju = jsonb_set(saju, '{counts}', $2::jsonb) where id = $1`, [v.id, JSON.stringify(counts)]);
-  const coins = async (v: Viewer) => Number((await sql.query<{ coins: number }>(`select coins from public.profiles where id = $1`, [v.id]))[0].coins);
-
-  it('모자란 칸만큼 그 오행 놀이로 채우고, 다 채우면 하루 한 번 코인을 받는다', async () => {
-    const v = await user();
-    await onboard(v, '오행꾼');
-    // 목 2칸, 화·토·수 1칸, 금은 넉넉
-    await setCounts(v, { wood: 0, fire: 1, earth: 1, metal: 3, water: 1 });
-    const start = await service.elementsView(v);
-    expect(start).toMatchObject({ need: { wood: 2, fire: 1, earth: 1, metal: 0, water: 1 }, balanced: false, reward: 0, balanceDays: 0 });
-    expect(Object.values(start.filled).every((n) => n === 0)).toBe(true);
-
-    // 목: 열매 나무마다 한 칸 (같은 나무를 또 따면 안 채운다)
-    expect((await service.pickTree(v, 'fruit.wood.0')).element).toMatchObject({ element: 'wood', added: true, filled: 1, need: 2 });
-    expect((await service.pickTree(v, 'fruit.wood.0')).element ?? null).toBeNull();
-    expect((await service.pickTree(v, 'fruit.fire.0')).element).toMatchObject({ added: true, filled: 2, need: 2 });
-    // 다 찬 오행은 더 채우지 않는다
-    expect((await service.pickTree(v, 'fruit.water.0')).element).toMatchObject({ element: 'wood', added: false, filled: 2 });
-
-    // 화·토: 화면이 알려 오는 놀이
-    expect((await service.reportElement(v, { element: 'fire', source: 'dance' })).fill).toMatchObject({ added: true, filled: 1, need: 1 });
-    expect((await service.reportElement(v, { element: 'fire', source: 'drink' })).fill).toMatchObject({ added: false });
-    expect((await service.reportElement(v, { element: 'earth', source: 'market' })).fill).toMatchObject({ added: true, reward: 0 });
-    // 서버가 직접 세는 놀이나 엉뚱한 짝은 받지 않는다
-    await expectError(service.reportElement(v, { element: 'water', source: 'fish' }), 'bad_request');
-    await expectError(service.reportElement(v, { element: 'metal', source: 'debate' }), 'bad_request');
-    await expectError(service.reportElement(v, { element: 'fire', source: 'market' }), 'bad_request');
-
-    // 수: 낚싯대를 던질 때마다 (꽝이어도). 마지막 칸을 채우면 보상
-    const before = await coins(v);
-    const cast = await service.castLine(v);
-    expect(cast.element).toMatchObject({ element: 'water', added: true, filled: 1, reward: elementConfig.reward });
-    expect(await coins(v)).toBe(before + cast.earned + elementConfig.reward);
-    const again = await service.castLine(v);
-    expect(again.element).toMatchObject({ added: false, reward: 0 });
-    expect(await coins(v)).toBe(before + cast.earned + elementConfig.reward + again.earned);
-
-    const done = await service.elementsView(v);
-    expect(done).toMatchObject({ filled: { wood: 2, fire: 1, earth: 1, metal: 0, water: 1 }, balanced: true, reward: elementConfig.reward, balanceDays: 1 });
-
-    // 다음 날에는 칸이 비고, 균형을 맞춘 날 수는 남는다
-    const tomorrow = new SceneService(new SceneStore(sql), () => new Date(now.getTime() + 86_400_000));
-    expect(await tomorrow.elementsView(v)).toMatchObject({ filled: { wood: 0, fire: 0, earth: 0, metal: 0, water: 0 }, balanced: false, reward: 0, balanceDays: 1 });
-  });
-
-  it('하루 한 번 세는 놀이는 같은 날 다시 해도 한 번만 (다른 놀이로는 더 채운다)', async () => {
-    const v = await user();
-    await onboard(v, '클럽오행');
-    await setCounts(v, { wood: 2, fire: 0, earth: 0, metal: 2, water: 2 });
-    expect((await service.reportElement(v, { element: 'fire', source: 'dance' })).fill).toMatchObject({ added: true, filled: 1, need: 2 });
-    expect((await service.reportElement(v, { element: 'fire', source: 'dance' })).fill).toMatchObject({ added: false, filled: 1 });
-    expect((await service.reportElement(v, { element: 'fire', source: 'request' })).fill).toMatchObject({ added: true, filled: 2 });
-    // 토: 방 꾸미기 저장은 여러 번 해도 한 칸, 상가 들르기로 한 칸 더
-    const { room } = await service.me(v);
-    await service.saveRoom(v, { layout: room!.layout });
-    await service.saveRoom(v, { layout: room!.layout });
-    expect((await service.elementsView(v)).filled.earth).toBe(1);
-    // 동시에 보내도 한 칸만
-    const both = await Promise.all([
-      service.reportElement(v, { element: 'earth', source: 'market' }),
-      service.reportElement(v, { element: 'earth', source: 'market' }),
-    ]);
-    expect(both.filter((r) => r.fill?.added)).toHaveLength(1);
-    const view = await service.elementsView(v);
-    expect(view.filled).toMatchObject({ fire: 2, earth: 2 });
-    // 마지막 칸을 채운 쪽이 보상을 받았다
-    expect(both.find((r) => r.fill?.added)?.fill?.reward).toBe(elementConfig.reward);
-    expect(view).toMatchObject({ balanced: true, balanceDays: 1 });
-  });
-
-  it('가입을 마치지 않았으면 볼 수 없고, 놀이를 해도 채우지 않는다', async () => {
-    await expectError(service.elementsView(null), 'login_required');
-    const v = await user();
-    await expectError(service.elementsView(v), 'onboarding_required');
-    await expectError(service.reportElement(v, { element: 'fire', source: 'dance' }), 'onboarding_required');
-    const store = new SceneStore(sql);
-    expect(await store.fillElement(v.id, 'metal', 'debate', now)).toBeNull();
-  });
-});

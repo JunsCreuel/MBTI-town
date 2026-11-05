@@ -1,9 +1,9 @@
 'use client';
 
-// 주민증: MBTI 마을에 집이 생기면 나온다. 닉네임 · 사는 마을 · 가입한 날짜 · MBTI · 취미.
+// 주민증: MBTI 마을에 집이 생기면 나온다. 닉네임 · 사는 마을 · 가입한 날짜 · 성향(네 글자 뜻) · 취미.
 // 1080×1350 그림으로 만들어 인스타·스레드에 공유한다 (휴대폰 공유 창, 안 되면 저장).
 import { useEffect, useState } from 'react';
-import { withMaxLightness } from '@/design/mbti';
+import { MBTI, withMaxLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import type { AvatarColor } from '@/shared/avatar';
 import { DISTRICT, type District, THEME, themeOf } from '@/shared/districts';
@@ -92,7 +92,8 @@ async function drawResidentCard(r: ResidentInfo, site: string): Promise<HTMLCanv
     ['닉네임', r.name],
     ['사는 마을', placeLabel(r)],
     ['가입한 날짜', dateLabel(r.joinedAt)],
-    ['MBTI', r.mbti || '아직 몰라요'],
+    // 사는 마을이 곧 MBTI라 유형을 한 번 더 쓰지 않고 네 글자 뜻을 쓴다
+    ['성향', MBTI[r.district].label],
     ['취미', r.hobby || '찾는 중'],
   ];
   const lx = x0 + 380;
