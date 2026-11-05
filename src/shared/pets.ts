@@ -9,3 +9,27 @@ export const PETS = [{ id: 'dog', name: '강아지', key: 'pet.dog', thumb: 'pet
 export type PetId = (typeof PETS)[number]['id'];
 export const isPetId = (v: unknown): v is PetId => PETS.some((p) => p.id === v);
 export const petDef = (id: string) => PETS.find((p) => p.id === id);
+
+/** 쓰다듬으면 하는 펫 자세 (펫 모델의 동작 이름, scripts/import-characters.ts) */
+export const PET_POSES = ['sit', 'lie', 'happy'] as const;
+export type PetPose = (typeof PET_POSES)[number];
+export const isPetPose = (v: unknown): v is PetPose => (PET_POSES as readonly unknown[]).includes(v);
+
+/** 쓰다듬으면: 앉고 → 옆으로 벌러덩 눕고 → 일어나 깡총거리며 꼬리를 흔든다 (초) */
+export const PET_REACTION: readonly { pose: PetPose; sec: number }[] = [
+  { pose: 'sit', sec: 1.6 },
+  { pose: 'lie', sec: 2.6 },
+  { pose: 'happy', sec: 1.8 },
+];
+export const PET_REACTION_SEC = PET_REACTION.reduce((s, p) => s + p.sec, 0);
+
+/** 쓰다듬은 지 elapsed초 뒤의 자세 (아직 안 했거나 끝났으면 null) */
+export function petReactionPose(elapsed: number): PetPose | null {
+  if (!(elapsed >= 0)) return null;
+  let t = elapsed;
+  for (const step of PET_REACTION) {
+    if (t < step.sec) return step.pose;
+    t -= step.sec;
+  }
+  return null;
+}

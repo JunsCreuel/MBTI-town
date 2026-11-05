@@ -71,6 +71,8 @@ export function HomeClient() {
   const [overview, setOverview] = useState(false);
   /** 강아지를 누르면 잠깐 뜨는 이름 카드 (이름 짓기로 이어진다) */
   const [petCard, setPetCard] = useState(false);
+  /** 쓰다듬기 버튼을 누른 횟수 (방 장면이 강아지 곁으로 걸어가 쓰다듬는다) */
+  const [petCall, setPetCall] = useState(0);
   useEffect(() => {
     if (!petCard) return;
     const t = setTimeout(() => setPetCard(false), 5000);
@@ -138,6 +140,8 @@ export function HomeClient() {
     setDraft(null);
     setSelected(null);
     setMode('view');
+    // 손님 화면은 저장된 방으로 돌아간다
+    presence?.sendFurni({ op: 'reset' });
   }
 
   async function saveEdit() {
@@ -151,6 +155,8 @@ export function HomeClient() {
       setSelected(null);
       setMode('view');
       setToast('방을 저장했어요');
+      // 손님 화면은 저장한 방을 다시 받는다
+      presence?.sendFurni({ op: 'reset' });
     } catch (e) {
       setToast(errorMessage(e));
     } finally {
@@ -170,6 +176,7 @@ export function HomeClient() {
     if (!spot) return setToast('둘 자리가 없어요. 다른 소품을 옮겨 보세요');
     updateItems((items) => [...items, spot]);
     setSelected(spot.id);
+    presence?.sendFurni({ op: 'set', item: spot });
   }
 
   function rotateSelected() {
@@ -178,7 +185,10 @@ export function HomeClient() {
     if (!item || furnitureDef(item.key)?.kind === 'wall') return;
     for (let k = 1; k <= 3; k++) {
       const next = { ...item, rot: ((item.rot + k) % 4) as Rot };
-      if (canPlace(draft.layout.items, next)) return updateItems((items) => items.map((i) => (i.id === item.id ? next : i)));
+      if (canPlace(draft.layout.items, next)) {
+        presence?.sendFurni({ op: 'set', item: next });
+        return updateItems((items) => items.map((i) => (i.id === item.id ? next : i)));
+      }
     }
     setToast('돌릴 자리가 없어요');
   }
@@ -186,6 +196,7 @@ export function HomeClient() {
   function removeSelected() {
     if (!selected) return;
     updateItems((items) => items.filter((i) => i.id !== selected));
+    presence?.sendFurni({ op: 'remove', id: selected });
     setSelected(null);
   }
 
@@ -212,6 +223,7 @@ export function HomeClient() {
       setLayout(saved.layout);
       setSheet(null);
       setToast(photoId ? '액자에 사진을 걸었어요' : '액자를 비웠어요');
+      presence?.sendFurni({ op: 'reset' });
     } catch (e) {
       setToast(errorMessage(e));
     }
@@ -258,6 +270,7 @@ export function HomeClient() {
             photoUrl={photoUrl}
             petName={petNameOf(profile.avatar, 'dog')}
             onPetTap={() => setPetCard(true)}
+            petCall={petCall}
             insetTop={insets.top}
             insetBottom={insets.bottom}
             onReady={() => setReady(true)}
@@ -314,7 +327,7 @@ export function HomeClient() {
 
           {welcome && (
             <div className="room-welcome">
-              <Guide>나의 방이 생겼어요! 바닥을 누르면 걸어가고, 화면을 끌면 둘러봐요. 지도 버튼은 방 전체 보기예요. 턴테이블을 누르면 음악이 나오고, 강아지를 누르면 이름을 지어 줄 수 있어요. 연필 버튼으로 꾸며 보세요.</Guide>
+              <Guide>나의 방이 생겼어요! 바닥을 누르면 걸어가고, 화면을 끌면 둘러봐요. 지도 버튼은 방 전체 보기예요. 턴테이블을 누르면 음악이 나오고, 강아지를 누르면 쓰다듬고 이름도 지어 줄 수 있어요. 연필 버튼으로 꾸며 보세요.</Guide>
             </div>
           )}
 
@@ -334,7 +347,7 @@ export function HomeClient() {
               </div>
             )}
             {presence && (
-              <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} />
+              <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} onPet={() => setPetCall((n) => n + 1)} />
             )}
             <BgmPlayer ref={player} trackKey={bgm} onPlayingChange={setPlaying} />
             <div className="quick-actions">

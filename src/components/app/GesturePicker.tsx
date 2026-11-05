@@ -2,6 +2,7 @@
 
 // 몸짓·이모티콘 고르기 (마을과 방이 같이 쓴다).
 // bar: 자주 쓰는 몸짓 몇 개 + "더보기" / button: "몸짓" 버튼 하나 (방처럼 화면이 좁은 곳)
+// onPet을 주면 "쓰다듬기" 버튼이 몸짓 버튼 옆에 붙는다 (방 강아지)
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { assetUrl } from '@/assets/manifest';
 import { townConfig } from '@/config/game';
@@ -22,11 +23,13 @@ function GestureIcon({ info, size = 22 }: { info: GestureInfo; size?: number }) 
 }
 
 export function GesturePicker({
-  onAction, onEmote, variant = 'bar',
+  onAction, onEmote, variant = 'bar', onPet,
 }: {
   onAction: (kind: ActionKind) => void;
   onEmote: (kind: EmoteKind) => void;
   variant?: 'bar' | 'button';
+  /** 강아지 쓰다듬기 (방): 내 캐릭터가 강아지 곁으로 가서 쓰다듬는다 */
+  onPet?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [cooling, setCooling] = useState(false);
@@ -85,6 +88,12 @@ export function GesturePicker({
             <span className="actionbar__sep" aria-hidden />
             {QUICK_EMOTES.map(emoteBtn)}
           </>
+        )}
+        {onPet && (
+          <button className="action-btn" onClick={onPet}>
+            <GestureIcon info={ACTION_INFO.pet} />
+            {ACTION_INFO.pet.label}
+          </button>
         )}
         <button className="action-btn" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>
           <GestureIcon info={{ label: '', icon: open ? 'ui.icon.close' : 'ui.icon.plus', color: 'currentColor' }} />

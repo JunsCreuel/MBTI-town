@@ -9,7 +9,8 @@ import type { AnnounceBroadcast } from '@/shared/announce';
 import { townConfig } from '@/config/game';
 import {
   MSG,
-  type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type HouseJoinOptions, type MoveMessage, type SnapMessage,
+  type ActionBroadcast, type ActionKind, type DogLeadMessage, type DogMessage, type EmoteBroadcast, type EmoteKind, type FurniBroadcast, type FurniMessage,
+  type HouseJoinOptions, type MoveMessage, type SnapMessage,
 } from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
 import { SELF_GESTURE, now, type Gesture, type PlayerView } from '../village/session';
@@ -34,10 +35,29 @@ export interface PresenceSnapshot {
   hidden: readonly string[];
 }
 
+/** 방 꾸미기에서 가구를 든 사람: holding = 든 가구 id (없으면 null), liftAt·dropAt = 든·내려놓은 시각 (now()) */
+export interface CarryState {
+  holding: string | null;
+  liftAt: number;
+  dropAt: number;
+}
+
+/** 강아지를 맡은 화면이 보낸 자리를 이만큼(ms) 못 받으면 내 화면이 강아지를 움직인다 (맡은 화면이 예전 판일 때 등) */
+const DOG_STALE_MS = 3000;
+
 export class HousePresence {
   room: Room | null = null;
   /** 사람 번호(세션 id, 나는 SELF_GESTURE) → 지금 하는 몸짓 */
   readonly gestures = new Map<string, Gesture>();
+  /** 사람 번호(세션 id, 나는 SELF_GESTURE) → 가구를 들고 있는지 */
+  readonly carries = new Map<string, CarryState>();
+  /** 내 화면이 방 강아지를 맡았는지 (서버가 정한다) */
+  dogLead = false;
+  /** 강아지를 맡은 화면이 마지막으로 보낸 자리와 받은 시각 */
+  dog: DogMessage | null = null;
+  private dogAt = 0;
+  private readonly furniListeners = new Set<(m: FurniBroadcast) => void>();
+  private readonly petListeners = new Set<(id: string) => void>();
   private snapshot: PresenceSnapshot = { status: 'loading', selfId: '', playerIds: [], pass: null, hidden: [] };
   private readonly listeners = new Set<() => void>();
   private readonly snapListeners = new Set<(s: SnapMessage) => void>();
@@ -110,9 +130,23 @@ export class HousePresence {
       room.onMessage(MSG.action, (m: ActionBroadcast) => this.applyAction(m.id, m.kind));
       room.onMessage(MSG.emote, (m: EmoteBroadcast) => this.applyEmote(m.id, m.kind));
       room.onMessage(MSG.announce, (m: AnnounceBroadcast) => showAnnouncement(m));
+      room.onMessage(MSG.furni, (m: FurniBroadcast) => {
+        this.applyCarry(m.by, m);
+        this.furniListeners.forEach((fn) => fn(m));
+      });
+      room.onMessage(MSG.dog, (m: DogMessage) => {
+        this.dog = m;
+        this.dogAt = Date.now();
+      });
+      room.onMessage(MSG.dogLead, (m: DogLeadMessage) => {
+        this.dogLead = !!m.lead;
+      });
       room.onLeave(() => {
         if (attempt !== this.attempt) return;
         this.room = null;
+        this.dogLead = false;
+        this.dog = null;
+        this.carries.clear();
         this.update({ status: 'offline', playerIds: [], selfId: '' });
       });
       this.update({ status: 'ready', selfId: room.sessionId });
@@ -153,6 +187,54 @@ export class HousePresence {
     if (this.connected) this.room!.send(MSG.emote, { kind });
   }
 
+  /**
+   * 방 꾸미기 알림 (집 주인만, 서버가 주인인지 다시 본다). 내 캐릭터의 드는·나르는·내려놓는 동작은 바로 보여 준다
+   */
+  sendFurni(msg: FurniMessage) {
+    this.applyCarry(SELF_GESTURE, msg);
+    if (this.connected) this.room!.send(MSG.furni, msg);
+  }
+
+  /** 다른 사람(주인)이 보낸 방 꾸미기 알림을 받는다 */
+  onFurni(fn: (m: FurniBroadcast) => void) {
+    this.furniListeners.add(fn);
+    return () => {
+      this.furniListeners.delete(fn);
+    };
+  }
+
+  /** 누가 강아지를 쓰다듬었다 (나는 SELF_GESTURE) */
+  onPet(fn: (id: string) => void) {
+    this.petListeners.add(fn);
+    return () => {
+      this.petListeners.delete(fn);
+    };
+  }
+
+  /** 강아지를 맡은 화면이 자리를 알린다 (다른 사람이 있을 때만) */
+  sendDog(msg: DogMessage) {
+    if (this.connected && this.dogLead && this.others().length > 0) this.room!.send(MSG.dog, msg);
+  }
+
+  /** 다른 화면이 맡은 강아지를 따라 그릴지 (맡은 화면이 최근에 자리를 보냈다) */
+  followsDog(): boolean {
+    return this.connected && !this.dogLead && !!this.dog && Date.now() - this.dogAt < DOG_STALE_MS;
+  }
+
+  private applyCarry(id: string, msg: FurniMessage) {
+    const c = this.carries.get(id) ?? { holding: null, liftAt: 0, dropAt: 0 };
+    if (msg.op === 'carry') {
+      c.holding = msg.item.id;
+      c.liftAt = now();
+    } else if (msg.op === 'drop') {
+      if (c.holding) c.dropAt = now();
+      c.holding = null;
+    } else if (msg.op === 'reset' || (msg.op === 'remove' && c.holding === msg.id)) {
+      c.holding = null;
+    }
+    this.carries.set(id, c);
+  }
+
   private gesture(id: string): Gesture {
     let g = this.gestures.get(id);
     if (!g) {
@@ -166,8 +248,9 @@ export class HousePresence {
     const g = this.gesture(id);
     g.action = kind;
     g.actionStart = now();
-    g.actionUntil = g.actionStart + (kind === 'fish' ? townConfig.fishActionMs : townConfig.actionDurationMs) / 1000;
+    g.actionUntil = g.actionStart + (kind === 'fish' ? townConfig.fishActionMs : kind === 'pet' ? townConfig.petActionMs : townConfig.actionDurationMs) / 1000;
     if (kind === 'clap') this.applyEmote(id, 'clap');
+    if (kind === 'pet') this.petListeners.forEach((fn) => fn(id));
   }
 
   private applyEmote(id: string, kind: EmoteKind) {

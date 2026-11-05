@@ -19,10 +19,11 @@ export const ACTION_INFO: Record<ActionKind, GestureInfo> = {
   jump: { label: '폴짝', icon: 'ui.icon.jump', color: tokens.color.accent },
   think: { label: '갸웃', icon: 'ui.icon.think', color: tokens.color.accent },
   fish: { label: '낚시', icon: 'ui.icon.fishing', color: tokens.color.accent },
+  pet: { label: '쓰다듬기', icon: 'ui.icon.paw', color: tokens.color.accent },
 };
 
-/** 고르는 화면에 보이는 동작 (낚시는 낚시터에서 던질 때만) */
-export const PICKABLE_ACTIONS = (Object.keys(ACTION_INFO) as ActionKind[]).filter((a) => a !== 'fish');
+/** 고르는 화면에 보이는 동작 (낚시는 낚시터에서 던질 때만, 쓰다듬기는 강아지 곁에서만) */
+export const PICKABLE_ACTIONS = (Object.keys(ACTION_INFO) as ActionKind[]).filter((a) => a !== 'fish' && a !== 'pet');
 
 export const EMOTE_INFO: Record<EmoteKind, GestureInfo> = {
   clap: { label: '박수', icon: 'ui.icon.clap', color: tokens.color.accent },

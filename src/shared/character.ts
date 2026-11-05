@@ -1,9 +1,16 @@
 // 3D 캐릭터·소품 GLB 규약 (PROJECT_GUIDE.md 10장). 임시 에셋 생성기와 마을 렌더러가 함께 쓴다.
 // 실제 모델로 바꿀 때도 이 이름들만 지키면 코드는 고칠 필요가 없다.
 
-/** 애니메이션 클립 이름 (모두 반복 재생) */
-export const CHARACTER_CLIPS = ['idle', 'walk', 'cheer', 'clap', 'wave', 'bow', 'dance', 'jump', 'think', 'fish'] as const;
+/**
+ * 애니메이션 클립 이름 (모두 반복 재생). pet = 강아지 쓰다듬기, lift·carry·carryWalk·place = 방 꾸미기에서 가구를 들고·나르고·내려놓기
+ * (lift·place는 한 번만 그린다: 화면이 그 길이만큼만 보여 준다)
+ */
+export const CHARACTER_CLIPS = ['idle', 'walk', 'cheer', 'clap', 'wave', 'bow', 'dance', 'jump', 'think', 'fish', 'pet', 'lift', 'carry', 'carryWalk', 'place'] as const;
 export type ClipName = (typeof CHARACTER_CLIPS)[number];
+
+/** 가구를 들어 올리는 동작(lift)·내려놓는 동작(place)의 길이 (초, 한 번만 그린다) */
+export const LIFT_SEC = 0.7;
+export const PLACE_SEC = 0.8;
 
 /** 이 이름의 재질은 유형 색을 입힌다 (캐릭터 옷, 소품의 색 부분) */
 export const TINT_MATERIAL = 'outfit';
@@ -62,6 +69,7 @@ export const CLIP_FACE: Partial<Record<ClipName, FaceName>> = {
   dance: 'excited',
   jump: 'excited',
   think: 'surprised',
+  pet: 'love',
 };
 
 /** 지금 보일 표정: 이모티콘이 떠 있으면 그 표정, 아니면 몸짓 표정, 아니면 평소 얼굴 */

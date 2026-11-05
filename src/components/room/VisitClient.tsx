@@ -38,6 +38,8 @@ export function VisitClient({ handle }: { handle: string }) {
   const [sheet, setSheet] = useState<'guestbook' | 'records' | 'more' | null>(null);
   const [playing, setPlaying] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  /** 쓰다듬기 버튼을 누른 횟수 (방 장면이 강아지 곁으로 걸어가 쓰다듬는다) */
+  const [petCall, setPetCall] = useState(0);
   const player = useRef<BgmHandle>(null);
 
   const load = useCallback(async () => {
@@ -147,6 +149,8 @@ export function VisitClient({ handle }: { handle: string }) {
             playing={playing}
             photoUrl={(id) => `/api/photos/${id}`}
             petName={petNameOf(owner.avatar, 'dog')}
+            petCall={petCall}
+            onLayoutStale={load}
             insetTop={insets.top}
             insetBottom={insets.bottom}
             onReady={() => setReady(true)}
@@ -202,7 +206,7 @@ export function VisitClient({ handle }: { handle: string }) {
 
       <div className="room-bottom" data-hud="bottom">
         {presence && (
-          <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} />
+          <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} onPet={() => setPetCall((n) => n + 1)} />
         )}
         {view.room && <BgmPlayer ref={player} trackKey={view.room.bgm} onPlayingChange={setPlaying} />}
         <div className="quick-actions">

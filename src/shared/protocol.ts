@@ -3,10 +3,12 @@
 import { townConfig } from '../config/game';
 import type { ClubLine } from './clubMusic';
 import { isDistrict, type District } from './districts';
+import { isPetPose, type PetPose } from './pets';
+import { cleanPlacedItem, type PlacedItem } from './room';
 
 /** 몸짓 (캐릭터 동작). 이름은 캐릭터 애니메이션 클립과 같다 (shared/character.ts) */
-/** 몸짓. fish(낚시)는 낚시터에서 낚싯대를 던질 때만 쓰고 몸짓 고르기에는 없다 */
-export const ACTIONS = ['cheer', 'clap', 'wave', 'bow', 'dance', 'jump', 'think', 'fish'] as const;
+/** 몸짓. fish(낚시)는 낚시터에서 낚싯대를 던질 때만, pet(쓰다듬기)은 강아지를 쓰다듬을 때만 쓰고 몸짓 고르기에는 없다 */
+export const ACTIONS = ['cheer', 'clap', 'wave', 'bow', 'dance', 'jump', 'think', 'fish', 'pet'] as const;
 export type ActionKind = (typeof ACTIONS)[number];
 
 /** 머리 위 이모티콘 (clap은 박수 동작에 같이 뜬다) */
@@ -129,7 +131,64 @@ export const MSG = {
   announce: 'announce',
   /** 펫 불러오기·돌려보내기 (화면 → 서버, PetMessage). 서버는 Player.pet으로 모두에게 알린다 */
   pet: 'pet',
+  /** 집: 방 꾸미기 실시간 (주인 화면 → 서버 → 같은 방 사람들, FurniMessage / FurniBroadcast) */
+  furni: 'furni',
+  /** 집: 방 강아지 자리·자세 (강아지를 맡은 화면 → 서버 → 다른 사람들, DogMessage) */
+  dog: 'dog',
+  /** 집: 강아지를 맡을 화면인지 (서버 → 그 사람, DogLeadMessage) */
+  dogLead: 'dog_lead',
 } as const;
+
+/**
+ * 방 꾸미기 실시간 알림 (집 주인만 보낸다). 손님 화면은 저장하기 전에도 가구가 움직이는 것을 본다.
+ * - carry: 가구를 들었다 (떠오르고, 주인 캐릭터가 들어 올린다) / move: 든 가구를 옮겼다 / drop: 내려놓았다
+ * - set: 들지 않고 놓거나 바꿨다 (새로 두기·돌리기) / remove: 치웠다
+ * - reset: 꾸미기를 끝냈다 (저장·취소·액자). 손님 화면은 저장된 방을 다시 받는다
+ */
+export type FurniMessage =
+  | { op: 'carry' | 'move' | 'drop' | 'set'; item: PlacedItem }
+  | { op: 'remove'; id: string }
+  | { op: 'reset' };
+/** by = 보낸 사람 (세션 id) */
+export type FurniBroadcast = FurniMessage & { by: string };
+
+/** 실시간 서버가 받은 방 꾸미기 알림을 검사한다 (모양이 틀리면 null) */
+export function parseFurniMessage(v: unknown): FurniMessage | null {
+  const m = v as { op?: unknown; item?: unknown; id?: unknown } | null;
+  if (!m || typeof m !== 'object') return null;
+  if (m.op === 'reset') return { op: 'reset' };
+  if (m.op === 'remove') return typeof m.id === 'string' && /^[A-Za-z0-9_-]{1,24}$/.test(m.id) ? { op: 'remove', id: m.id } : null;
+  if (m.op === 'carry' || m.op === 'move' || m.op === 'drop' || m.op === 'set') {
+    const item = cleanPlacedItem(m.item);
+    return item ? { op: m.op, item } : null;
+  }
+  return null;
+}
+
+/**
+ * 방 강아지: 방에 먼저 들어온 사람의 화면이 강아지를 걷게 하고 자리를 알린다 (다른 화면은 따라 그린다).
+ * pose = 쓰다듬어 줘서 하는 자세 (없으면 서 있기·걷기)
+ */
+export interface DogMessage {
+  x: number;
+  z: number;
+  rot: number;
+  moving: boolean;
+  pose: PetPose | null;
+}
+
+export interface DogLeadMessage {
+  lead: boolean;
+}
+
+export function isDogMessage(v: unknown): v is DogMessage {
+  const m = v as DogMessage | null;
+  return (
+    !!m && typeof m === 'object' && typeof m.x === 'number' && typeof m.z === 'number' && typeof m.rot === 'number'
+    && Number.isFinite(m.x) && Number.isFinite(m.z) && Number.isFinite(m.rot) && typeof m.moving === 'boolean'
+    && (m.pose === null || isPetPose(m.pose))
+  );
+}
 
 /** 데리고 다닐 펫 (pets.ts의 id, 돌려보내면 '') */
 export interface PetMessage {

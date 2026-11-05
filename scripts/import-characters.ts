@@ -880,6 +880,69 @@ function rigQuadruped(doc: Document) {
     ['head', 'rotation', (ph) => quat(3 * Math.sin(ph), 0, 5 * Math.sin(ph + 1))],
     ['tail', 'rotation', (ph) => quat(-12, 16 * Math.sin(3 * ph), 0)],
   ]);
+
+  // 쓰다듬으면 하는 동작: 앉기 → 옆으로 벌러덩 눕기 → 일어나 깡총거리며 꼬리 흔들기 (화면이 순서대로 잇는다)
+  const legLen = legTop - min[1];
+  const dz = frontZ - backZ + ((legAt.FL.z + legAt.FR.z) / 2 - frontZ);
+  const hold = (n: string, x: number, y = 0, z = 0): [string, 'rotation', (ph: number) => number[]] => [n, 'rotation', () => quat(x, y, z)];
+  const legs = (front: [number, number], back: [number, number]) =>
+    legNames.flatMap((n) => {
+      const [leg, kneeDeg] = n[0] === 'F' ? front : back;
+      return [hold(`leg${n}`, leg), hold(`knee${n}`, kneeDeg)];
+    });
+  {
+    // 앉기: 엉덩이를 내리고 몸 앞쪽을 든다. 앞발이 바닥에 닿도록 엉덩이 높이를 맞춘다
+    const SIT = -26;
+    const rad = SIT * deg;
+    const frontTopY = -0.06 * H * Math.cos(rad) - dz * Math.sin(rad);
+    const sitY = legLen - frontTopY;
+    clip('sit', 1.2, 24, [
+      // 앞다리는 몸이 든 만큼 되돌려 곧게, 뒷다리는 앞으로 접는다
+      ...legs([-SIT, 0], [-54, 150]),
+      ['hips', 'translation', (ph) => [hipsRest[0], sitY + 0.004 * H * Math.sin(ph), hipsRest[2]]],
+      hold('hips', SIT),
+      ['head', 'rotation', (ph) => quat(16, 0, 6 * Math.sin(ph))],
+      ['tail', 'rotation', (ph) => quat(8, 30 * Math.sin(2 * ph), 0)],
+    ]);
+  }
+  {
+    // 옆으로 눕기: 몸 전체를 옆으로 눕혀 몸통 옆면이 바닥에 닿게 하고, 다리를 버둥, 꼬리를 탁탁
+    const LIE = 84;
+    const halfW = (max[0] - min[0]) / 2;
+    const rootAt = [cx, min[1], cz];
+    clip('lie', 1.6, 32, [
+      ['root', 'translation', (ph) => [rootAt[0] + 0.42 * H, rootAt[1] + halfW * 0.92 + 0.004 * H * Math.sin(ph), rootAt[2]]],
+      hold('root', 0, 0, LIE),
+      ...legNames.flatMap((n) => {
+        const off = n === 'FL' || n === 'BR' ? 0 : Math.PI;
+        return [
+          [`leg${n}`, 'rotation', (ph: number) => quat((n[0] === 'F' ? -18 : 14) + 10 * Math.sin(2 * ph + off), 0, 0)],
+          [`knee${n}`, 'rotation', (ph: number) => quat(28 + 12 * Math.sin(2 * ph + off), 0, 0)],
+        ] as [string, 'rotation', (ph: number) => number[]][];
+      }),
+      // 고개는 바닥 쪽에서 살짝 들어 바라본다
+      ['head', 'rotation', (ph) => quat(4 * Math.sin(ph), 0, -22)],
+      ['tail', 'rotation', (ph) => quat(-12, 28 * Math.sin(2 * ph), 0)],
+    ]);
+  }
+  {
+    // 좋아하기: 앞발을 들며 깡총깡총, 엉덩이를 흔들고 꼬리를 빠르게 흔든다
+    const up = (ph: number) => Math.max(0, Math.sin(ph));
+    clip('happy', 0.7, 28, [
+      ...legNames.flatMap((n) =>
+        n[0] === 'F'
+          ? ([
+              [`leg${n}`, 'rotation', (ph: number) => quat(-28 * up(ph), 0, 0)],
+              [`knee${n}`, 'rotation', (ph: number) => quat(40 * up(ph), 0, 0)],
+            ] as [string, 'rotation', (ph: number) => number[]][])
+          : [hold(`leg${n}`, 0), hold(`knee${n}`, 0)],
+      ),
+      ['hips', 'translation', (ph) => [hipsRest[0], hipsRest[1] + 0.05 * H * up(ph), hipsRest[2]]],
+      ['hips', 'rotation', (ph) => quat(-9 * up(ph), 7 * Math.sin(ph), 0)],
+      ['head', 'rotation', (ph) => quat(-6 * up(ph), 0, 10 * Math.sin(ph))],
+      ['tail', 'rotation', (ph) => quat(-24, 42 * Math.sin(3 * ph), 0)],
+    ]);
+  }
   console.log(`  뼈대: 발 ${legNames.map((n) => `${n}(${legAt[n].x.toFixed(2)},${legAt[n].z.toFixed(2)})`).join(' ')}, 다리 반지름 ${legR.toFixed(3)}`);
 }
 

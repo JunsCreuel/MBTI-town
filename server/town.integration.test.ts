@@ -1,7 +1,7 @@
 // 실제 서버를 띄우고 SDK 클라이언트로 접속해 마을 실시간 규칙을 확인한다.
 import { Client, type Room } from '@colyseus/sdk';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { MSG, type EmoteBroadcast, type JoinOptions, type MusicResult, type MusicState, type SnapMessage } from '../src/shared/protocol';
+import { MSG, type DogMessage, type EmoteBroadcast, type FurniBroadcast, type JoinOptions, type MusicResult, type MusicState, type SnapMessage } from '../src/shared/protocol';
 import { queueKey } from '../src/shared/clubMusic';
 import { loadTownMapForTest } from '../src/shared/testMap';
 import { gateSpawnName, lotDoor, spawnName, type TownMap } from '../src/shared/townMap';
@@ -459,6 +459,82 @@ describe('집 안 (방)', () => {
     r.send(MSG.move, { x: 30, z: 2, rot: 0, moving: true });
     await new Promise((res) => setTimeout(res, 300));
     expect(near(r.state.players.get(r.sessionId), before, 0.01)).toBe(true);
+  });
+});
+
+describe('집 안: 방 꾸미기 실시간·방 강아지', () => {
+  const enter = (p: TownPass, house: string) => new Client(`http://localhost:${PORT}`).joinOrCreate('house', { token: signTownPass(p), house });
+
+  it('집 주인이 가구를 들고 옮기면 손님에게 바로 간다 (손님이 보낸 것·틀린 모양은 거른다, 주인이 나가면 처음대로)', async () => {
+    const owner = townPid('user-furni-owner');
+    const host = await enter(pass({ pid: owner, name: '주인', house: owner }), owner);
+    rooms.push(host);
+    const guest = await enter(pass({ name: '손님', house: owner }), owner);
+    rooms.push(guest);
+    const atGuest: FurniBroadcast[] = [];
+    const atHost: FurniBroadcast[] = [];
+    guest.onMessage(MSG.furni, (m: FurniBroadcast) => atGuest.push(m));
+    host.onMessage(MSG.furni, (m: FurniBroadcast) => atHost.push(m));
+    await until(() => host.state.players.size === 2);
+    const bed = { id: 'bed1', key: 'furn.bed', x: 1, z: 1, rot: 0 };
+    host.send(MSG.furni, { op: 'carry', item: bed });
+    host.send(MSG.furni, { op: 'move', item: { ...bed, x: 2, hacked: true } });
+    host.send(MSG.furni, { op: 'move', item: { ...bed, x: 99 } });
+    host.send(MSG.furni, { op: 'drop', item: { ...bed, x: 2 } });
+    guest.send(MSG.furni, { op: 'remove', id: 'bed1' });
+    await until(() => atGuest.length === 3);
+    expect(atGuest).toEqual([
+      { op: 'carry', item: bed, by: host.sessionId },
+      { op: 'move', item: { ...bed, x: 2 }, by: host.sessionId },
+      { op: 'drop', item: { ...bed, x: 2 }, by: host.sessionId },
+    ]);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(atHost).toEqual([]);
+    host.leave();
+    await until(() => atGuest.length === 4);
+    expect(atGuest[3]).toMatchObject({ op: 'reset' });
+  });
+
+  it('먼저 들어온 사람이 강아지를 맡고, 그 사람만 강아지 자리를 알린다. 나가면 다음 사람이 맡는다', async () => {
+    const house = townPid('user-dog-house');
+    const leads: string[] = [];
+    const a = await enter(pass({ house }), house);
+    rooms.push(a);
+    a.onMessage(MSG.dogLead, () => leads.push('a'));
+    const b = await enter(pass({ house }), house);
+    rooms.push(b);
+    b.onMessage(MSG.dogLead, () => leads.push('b'));
+    const atA: DogMessage[] = [];
+    const atB: DogMessage[] = [];
+    a.onMessage(MSG.dog, (m: DogMessage) => atA.push(m));
+    b.onMessage(MSG.dog, (m: DogMessage) => atB.push(m));
+    await until(() => a.state.players.size === 2);
+    b.send(MSG.dog, { x: 2, z: 2, rot: 0, moving: false, pose: null });
+    a.send(MSG.dog, { x: 99, z: 2, rot: 0, moving: false, pose: null });
+    a.send(MSG.dog, { x: 3.5, z: 2.5, rot: 1, moving: false, pose: 'sit' });
+    a.send(MSG.dog, { x: 3.5, z: 2.5, rot: 1, moving: false, pose: 'fly' });
+    await until(() => atB.length === 1);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(atB).toEqual([{ x: 3.5, z: 2.5, rot: 1, moving: false, pose: 'sit' }]);
+    expect(atA).toEqual([]);
+    a.leave();
+    await until(() => leads.includes('b'));
+    b.send(MSG.dog, { x: 1.5, z: 1.5, rot: 0, moving: true, pose: null });
+    await new Promise((r) => setTimeout(r, 100));
+    expect(leads.filter((l) => l === 'b')).toEqual(['b']);
+  });
+
+  it('강아지 쓰다듬기 몸짓도 같은 방에 간다', async () => {
+    const house = townPid('user-pet-house');
+    const a = await enter(pass({ house }), house);
+    rooms.push(a);
+    const b = await enter(pass({ house }), house);
+    rooms.push(b);
+    const got: { kind: string; id: string }[] = [];
+    a.onMessage(MSG.action, (m: { kind: string; id: string }) => got.push(m));
+    b.send(MSG.action, { kind: 'pet' });
+    await until(() => got.length === 1);
+    expect(got[0]).toEqual({ kind: 'pet', id: b.sessionId });
   });
 });
 

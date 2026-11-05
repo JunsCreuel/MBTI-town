@@ -145,7 +145,8 @@ export interface SkinnedSpec {
   /** 소켓 노드 (관절 아님): 이름 → 부모 관절과 위치 */
   sockets: Record<string, { parent: string; t: Vec3 }>;
   parts: Part[];
-  clips: Record<ClipName, ClipDef>;
+  /** 임시 모델에 없는 동작(쓰다듬기·가구 나르기 등)은 화면이 서 있기로 대신한다 */
+  clips: Partial<Record<ClipName, ClipDef>>;
   materials: Record<string, MaterialSpec>;
 }
 
@@ -181,6 +182,7 @@ export async function buildSkinned(name: string, spec: SkinnedSpec) {
 
   for (const clip of CHARACTER_CLIPS) {
     const def = spec.clips[clip];
+    if (!def) continue;
     const anim = b.doc.createAnimation(clip);
     const input = b.acc('SCALAR', new Float32Array(def.times));
     for (const [jname, keys] of Object.entries(def.tracks)) {

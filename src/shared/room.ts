@@ -193,6 +193,32 @@ export function findFreeSpot(items: readonly PlacedItem[], key: string, id: stri
 const ID = /^[A-Za-z0-9_-]{1,24}$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+/** 받은 값에서 소품 하나에 필요한 칸만 남긴다 (자리 검사는 따로) */
+function shapeItem(r: Partial<PlacedItem>, def: FurnitureDef): PlacedItem {
+  return {
+    id: String(r.id),
+    key: def.key,
+    x: Number(r.x),
+    z: def.kind === 'wall' ? 0 : Number(r.z),
+    rot: def.kind === 'wall' ? 0 : (Number(r.rot) as Rot),
+    ...(def.kind === 'wall' ? { wall: r.wall as Wall } : {}),
+    ...(def.action === 'frame' && typeof r.photoId === 'string' && UUID.test(r.photoId) ? { photoId: r.photoId } : {}),
+  };
+}
+
+/**
+ * 소품 하나를 검사한다 (실시간 방 꾸미기 알림). 있는 소품이고 방 안의 올바른 자리면 필요한 칸만 남겨 돌려준다.
+ * 다른 소품과 겹치는지는 보지 않는다 (저장할 때 validateLayout이 본다)
+ */
+export function cleanPlacedItem(v: unknown): PlacedItem | null {
+  const r = v as Partial<PlacedItem> | null;
+  if (!r || typeof r !== 'object' || typeof r.key !== 'string' || typeof r.id !== 'string' || !ID.test(r.id)) return null;
+  const def = furnitureDef(r.key);
+  if (!def) return null;
+  const item = shapeItem(r, def);
+  return canPlace([], item) ? item : null;
+}
+
 export type LayoutResult = { ok: true; layout: RoomLayout } | { ok: false; error: string };
 
 /** 저장 전에 방 배치를 검사하고 필요한 값만 남긴다 */
@@ -210,15 +236,7 @@ export function validateLayout(v: unknown): LayoutResult {
     if (!def) return { ok: false, error: '없는 소품이 있어요.' };
     if (typeof r.id !== 'string' || !ID.test(r.id) || ids.has(r.id)) return { ok: false, error: '소품 id가 올바르지 않아요.' };
     ids.add(r.id);
-    const item: PlacedItem = {
-      id: r.id,
-      key: def.key,
-      x: Number(r.x),
-      z: def.kind === 'wall' ? 0 : Number(r.z),
-      rot: def.kind === 'wall' ? 0 : (Number(r.rot) as Rot),
-      ...(def.kind === 'wall' ? { wall: r.wall as Wall } : {}),
-      ...(def.action === 'frame' && typeof r.photoId === 'string' && UUID.test(r.photoId) ? { photoId: r.photoId } : {}),
-    };
+    const item = shapeItem(r, def);
     if (!canPlace(items, item)) return { ok: false, error: `${def.name}을(를) 그 자리에 둘 수 없어요.` };
     if (def.unique && items.some((o) => o.key === def.key)) return { ok: false, error: `${def.name}은(는) 하나만 둘 수 있어요.` };
     items.push(item);

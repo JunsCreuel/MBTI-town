@@ -10,6 +10,7 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import type { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { tokens } from '@/design/tokens';
 import { ACCESSORIES, isHairColor, isSkinTone } from '@/shared/avatar';
+import type { PetPose } from '@/shared/pets';
 import { CHARACTER_CLIPS, EYES_SOCKET, FACE_MATERIAL, HAND_SOCKET, HEAD_SOCKET, TINT_MATERIAL, faceOffset, type ClipName, type FaceName } from '@/shared/character';
 
 /** 모든 GLTFLoader에 meshopt 압축 풀기를 붙인다 (캐릭터 모델은 meshopt로 압축했다) */
@@ -228,6 +229,83 @@ function buildRig(gltf: GLTF): CharacterRig {
     restoreBase();
   }
 
+  // ── 다리를 굽히는 동작 (쓰다듬기·들기·내려놓기): 굽힌 만큼 엉덩이를 내려 발이 바닥에 닿게 한다 ──
+  const feet = ['LeftToeBase', 'RightToeBase', 'LeftFoot', 'RightFoot'].map((n) => scene.getObjectByName(bone(n))).filter(Boolean) as THREE.Object3D[];
+  const lowestFoot = () => Math.min(...feet.map((f) => f.getWorldPosition(new THREE.Vector3()).y));
+  restoreBase();
+  const baseFoot = feet.length ? lowestFoot() : 0;
+  const hipsParentScale = hips.parent ? hips.parent.getWorldScale(new THREE.Vector3()).y || 1 : 1;
+  /** 자세를 입혔을 때 발이 뜬 만큼 엉덩이를 내리는 값 (엉덩이 부모 좌표) */
+  const groundLift = (pose: Pose) => {
+    if (!feet.length) return 0;
+    apply(pose);
+    const lift = -(lowestFoot() - baseFoot) / hipsParentScale;
+    restoreBase();
+    return lift;
+  };
+  /** 쪼그려 앉기: deep 0~1 (1 = 무릎을 앞으로 깊게) */
+  const squat = (deep: number): NonNullable<Pose['aim']> => {
+    const thigh = (r: boolean) => d([F, 0.25 + 0.6 * deep], [U, -1 + 0.35 * deep], [side(r), 0.12]);
+    const shin = (r: boolean) => d([U, -1], [F, -0.4 * deep], [side(r), 0.04]);
+    return {
+      RightUpLeg: thigh(true), RightLeg: shin(true), RightFoot: d([F, 1], [U, -0.25]),
+      LeftUpLeg: thigh(false), LeftLeg: shin(false), LeftFoot: d([F, 1], [U, -0.25]),
+    };
+  };
+  const lean = (k: number): NonNullable<Pose['turn']> => ({ Spine: [X, 14 * k], Spine1: [X, 10 * k], Spine2: [X, 6 * k], Head: [X, 10 * k] });
+  const withLift = (name: ClipName, keys: Key[]) => makeClip(name, keys, keys.map((k) => groundLift(k.pose)));
+
+  // 쓰다듬기: 쪼그려 앉아 오른손으로 강아지 등을 쓰다듬는다 (왼손은 무릎에)
+  {
+    const stroke = (fwd: number): Pose => ({
+      turn: lean(1.1),
+      aim: {
+        ...squat(1),
+        RightArm: d([F, 0.75], [U, -0.6], [R, 0.12]),
+        RightForeArm: d([F, 0.45 + 0.4 * fwd], [U, -0.85 + 0.3 * fwd], [L, 0.08]),
+        LeftArm: d([F, 0.45], [U, -0.8], [L, 0.3]),
+        LeftForeArm: d([F, 0.95], [U, -0.2], [R, 0.15]),
+      },
+    });
+    made.pet = withLift('pet', [{ t: 0, pose: stroke(0) }, { t: 0.45, pose: stroke(1) }, { t: 0.9, pose: stroke(0) }]);
+  }
+  // 나르기: 두 팔을 앞으로 들어 물건을 받쳐 든다 (가구가 몸 앞에 떠 있다)
+  const holdArms: NonNullable<Pose['aim']> = {
+    RightArm: d([F, 0.8], [U, 0.05], [R, 0.35]),
+    RightForeArm: d([F, 0.75], [U, 0.35], [L, 0.3]),
+    LeftArm: d([F, 0.8], [U, 0.05], [L, 0.35]),
+    LeftForeArm: d([F, 0.75], [U, 0.35], [R, 0.3]),
+  };
+  const carryPose: Pose = { aim: holdArms, turn: { Spine: [X, -4] } };
+  made.carry = makeClip('carry', [{ t: 0, pose: carryPose }, { t: 0.6, pose: { aim: holdArms, turn: { Spine: [X, -6] } } }, { t: 1.2, pose: carryPose }]);
+  // 들기: 몸을 굽혀 두 손을 아래로 뻗었다가 들어 올린다 (한 번, 0.7초)
+  const reachDown: Pose = {
+    turn: lean(1.6),
+    aim: {
+      ...squat(0.7),
+      RightArm: d([F, 0.6], [U, -0.8], [R, 0.25]),
+      RightForeArm: d([F, 0.7], [U, -0.7], [L, 0.1]),
+      LeftArm: d([F, 0.6], [U, -0.8], [L, 0.25]),
+      LeftForeArm: d([F, 0.7], [U, -0.7], [R, 0.1]),
+    },
+  };
+  made.lift = withLift('lift', [{ t: 0, pose: {} }, { t: 0.3, pose: reachDown }, { t: 0.7, pose: carryPose }]);
+  // 내려놓기: 든 채로 몸을 굽혀 내려놓고 일어선다 (한 번, 0.8초)
+  made.place = withLift('place', [{ t: 0, pose: carryPose }, { t: 0.4, pose: reachDown }, { t: 0.8, pose: {} }]);
+  // 들고 걷기: 걷기 동작에서 팔만 나르기 자세로 (어깨 아래 뼈를 바꾼다)
+  const walkSrc = have('walk');
+  if (walkSrc) {
+    apply(carryPose);
+    const armBones = new Set<string>();
+    for (const lr of ['Left', 'Right']) scene.getObjectByName(bone(`${lr}Shoulder`))?.traverse((o) => void ((o as THREE.Bone).isBone && armBones.add(o.name)));
+    const held = new Map([...armBones].map((n) => [n, scene.getObjectByName(n)!.quaternion.toArray()]));
+    restoreBase();
+    const dur = walkSrc.duration;
+    const tracks = walkSrc.tracks.filter((tr) => !armBones.has(tr.name.split('.')[0]));
+    for (const [n, q] of held) tracks.push(new THREE.QuaternionKeyframeTrack(`${n}.quaternion`, [0, dur], [...q, ...q]));
+    made.carryWalk = new THREE.AnimationClip('carryWalk', dur, tracks);
+  }
+
   const clips = Object.fromEntries(CHARACTER_CLIPS.map((n) => [n, have(n) ?? made[n] ?? idle])) as Record<ClipName, THREE.AnimationClip>;
   return { clips, rod };
 }
@@ -261,25 +339,37 @@ export function petInstance(gltf: GLTF, height: number) {
   fitHeight(model, height);
   model.traverse((o) => void ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
   const mixer = new THREE.AnimationMixer(model);
-  const clip = (name: string) => gltf.animations.find((a) => a.name === name);
-  const idleClip = clip('idle');
-  const walkClip = clip('walk');
-  const idle = idleClip ? mixer.clipAction(idleClip) : null;
-  const walk = walkClip ? mixer.clipAction(walkClip) : null;
-  let current: 'idle' | 'walk' = 'idle';
+  const action = (name: string) => {
+    const clip = gltf.animations.find((a) => a.name === name);
+    return clip ? mixer.clipAction(clip) : null;
+  };
+  const idle = action('idle');
+  const walk = action('walk');
+  const poses: Record<PetPose, THREE.AnimationAction | null> = { sit: action('sit'), lie: action('lie'), happy: action('happy') };
+  let playing: THREE.AnimationAction | null = idle;
+  let posing: PetPose | null = null;
+  /** 지금 동작에서 next로 부드럽게 넘어간다 */
+  const fadeTo = (next: THREE.AnimationAction | null, sec: number) => {
+    if (!next || next === playing) return;
+    next.reset().play();
+    if (playing) playing.crossFadeTo(next, sec, false);
+    playing = next;
+  };
   return {
     model,
     /** 다리로 걷는 동작이 있다 (없으면 화면이 통통 튀게 움직인다) */
     animated: !!(idle && walk),
+    /** 쓰다듬으면 하는 동작(앉기·눕기·좋아하기)이 있다 */
+    canPose: !!(poses.sit && poses.lie && poses.happy),
+    /** 자세를 잡는다 (null = 다시 서 있기·걷기). 자세를 잡는 동안에는 update의 빠르기를 보지 않는다 */
+    pose(name: PetPose | null) {
+      if (name === posing) return;
+      posing = name;
+      fadeTo(name ? poses[name] : idle, name === 'happy' ? 0.25 : 0.4);
+    },
     update(dt: number, speed: number) {
-      if (idle && walk) {
-        const want = speed > 0.15 ? 'walk' : 'idle';
-        if (want !== current) {
-          const next = want === 'walk' ? walk : idle;
-          next.reset().play();
-          (current === 'walk' ? walk : idle).crossFadeTo(next, 0.2, false);
-          current = want;
-        }
+      if (idle && walk && !posing) {
+        fadeTo(speed > 0.15 ? walk : idle, 0.2);
         // 빠를수록 다리를 조금 더 빨리 놀린다. 너무 빨리 놀리면 다다닥거려 보여서 1.6배까지만
         walk.timeScale = Math.min(PET_WALK_MAX_RATE, Math.max(0.6, speed / (height * 1.4)));
       }
@@ -289,13 +379,16 @@ export function petInstance(gltf: GLTF, height: number) {
     restart() {
       mixer.stopAllAction();
       idle?.reset().play();
-      current = 'idle';
+      playing = idle;
+      posing = null;
     },
     stop() {
       mixer.stopAllAction();
     },
   };
 }
+
+export type PetInstance = ReturnType<typeof petInstance>;
 
 /**
  * 펫 털을 그늘에서도 밝게: 색 텍스처를 빛나는 텍스처로도 써서 밝은 털만 조금 스스로 빛나게 한다

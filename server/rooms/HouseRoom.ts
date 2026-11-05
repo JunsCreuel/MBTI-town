@@ -1,11 +1,16 @@
 // 집 안(방) 하나 = 실시간 방 하나. 주인과 손님이 같이 들어와 서로 보인다.
 // 웹 서버가 방을 볼 수 있는 사람에게만 house가 담긴 토큰을 준다 (공개 범위·차단 검사, /api/house/token).
 // 실시간 서버는 DB를 보지 않으므로 가구 자리는 모른다. 위치는 방 안인지와 걷는 속도만 검사한다.
+// 방 꾸미기: 주인이 가구를 들고 옮기면 같은 방 사람들에게 바로 전한다 (저장은 웹 서버가 한다).
+// 방 강아지: 먼저 들어온 사람의 화면이 강아지를 걷게 하고 자리를 알린다. 그 사람이 나가면 다음 사람이 맡는다.
 import { Room, type Client } from '@colyseus/core';
 import { schema, t, type SchemaType } from '@colyseus/schema';
 import { roomConfig, townConfig } from '../../src/config/game';
 import { MOVE_BUDGET_MAX, normalizeAngle, refillMoveBudget } from '../../src/shared/movement';
-import { ACTIONS, EMOTES, MSG, type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type HouseJoinOptions, type MoveMessage } from '../../src/shared/protocol';
+import {
+  ACTIONS, EMOTES, MSG, isDogMessage, parseFurniMessage,
+  type ActionBroadcast, type ActionKind, type DogLeadMessage, type DogMessage, type EmoteBroadcast, type EmoteKind, type FurniBroadcast, type HouseJoinOptions, type MoveMessage,
+} from '../../src/shared/protocol';
 import { ROOM_BODY_RADIUS } from '../../src/shared/room';
 import type { AnnounceBroadcast } from '../../src/shared/announce';
 import { listenAnnouncements } from '../announce';
@@ -63,6 +68,8 @@ export class HouseRoom extends Room<{ state: HouseState }> {
 
   /** 이 집 주인의 마을 사람 번호 */
   private house = '';
+  /** 강아지를 맡은 화면 (세션 id) */
+  private dogLead = '';
 
   onCreate(options?: HouseJoinOptions) {
     // 집 번호(주인의 마을 사람 번호) 모양이 아니면 방을 열지 않는다
@@ -83,6 +90,28 @@ export class HouseRoom extends Room<{ state: HouseState }> {
       const payload: EmoteBroadcast = { id: client.sessionId, kind };
       this.broadcast(MSG.emote, payload, { except: client });
     });
+    // 방 꾸미기: 집 주인만. 모양을 검사해 다른 사람들에게 전한다
+    this.onMessage(MSG.furni, (client, message: unknown) => {
+      if (this.passes.get(client.sessionId)?.pid !== this.house) return;
+      const furni = parseFurniMessage(message);
+      if (!furni) return;
+      const payload: FurniBroadcast = { ...furni, by: client.sessionId };
+      this.broadcast(MSG.furni, payload, { except: client });
+    });
+    // 방 강아지: 맡은 화면만 자리를 알린다
+    this.onMessage(MSG.dog, (client, message: unknown) => {
+      if (client.sessionId !== this.dogLead || !isDogMessage(message) || !insideHouse(message)) return;
+      const dog: DogMessage = { x: message.x, z: message.z, rot: normalizeAngle(message.rot), moving: message.moving, pose: message.pose };
+      this.broadcast(MSG.dog, dog, { except: client });
+    });
+  }
+
+  /** 강아지를 맡을 화면을 정한다 (맡은 사람이 없거나 나갔으면 남은 사람 중 먼저 들어온 사람) */
+  private pickDogLead() {
+    if (this.dogLead && this.clients.some((c) => c.sessionId === this.dogLead)) return;
+    const next = this.clients.find((c) => this.state.players.has(c.sessionId));
+    this.dogLead = next?.sessionId ?? '';
+    if (next) next.send(MSG.dogLead, { lead: true } satisfies DogLeadMessage);
   }
 
   onJoin(client: Client, options?: HouseJoinOptions) {
@@ -110,6 +139,7 @@ export class HouseRoom extends Room<{ state: HouseState }> {
     player.moving = false;
     this.state.players.set(client.sessionId, player);
     this.budgets.set(client.sessionId, { value: MOVE_BUDGET_MAX, at: Date.now() });
+    this.pickDogLead();
     // 운영자가 남의 집에 들어오면 방에 있는 사람들에게 알린다
     if (pass.admin && pass.pid !== this.house) {
       const notice: AnnounceBroadcast = { kind: 'visit', text: '운영자님이 방에 들어왔어요.', at: Date.now() };
@@ -122,10 +152,20 @@ export class HouseRoom extends Room<{ state: HouseState }> {
   }
 
   onLeave(client: Client) {
+    const pass = this.passes.get(client.sessionId);
     this.state.players.delete(client.sessionId);
     this.budgets.delete(client.sessionId);
     this.passes.delete(client.sessionId);
     this.lastGestureAt.delete(client.sessionId);
+    // 주인이 꾸미다 나가면 손님 화면은 저장된 방으로 돌아간다
+    if (pass?.pid === this.house) {
+      const reset: FurniBroadcast = { op: 'reset', by: client.sessionId };
+      this.broadcast(MSG.furni, reset);
+    }
+    if (client.sessionId === this.dogLead) {
+      this.dogLead = '';
+      this.pickDogLead();
+    }
   }
 
   private handleMove(client: Client, message: unknown) {

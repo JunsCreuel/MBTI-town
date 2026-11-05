@@ -312,7 +312,7 @@ export class TownSession {
     const g = this.gesture(id);
     g.action = kind;
     g.actionStart = now();
-    g.actionUntil = g.actionStart + (kind === 'fish' ? townConfig.fishActionMs : kind === 'jump' ? townConfig.jumpMs : townConfig.actionDurationMs) / 1000;
+    g.actionUntil = g.actionStart + (kind === 'fish' ? townConfig.fishActionMs : kind === 'jump' ? townConfig.jumpMs : kind === 'pet' ? townConfig.petActionMs : townConfig.actionDurationMs) / 1000;
     // 박수 동작에는 박수 이모티콘을 같이 띄운다
     if (kind === 'clap') this.applyEmote(id, 'clap');
   }

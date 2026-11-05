@@ -45,6 +45,8 @@ export const townConfig = {
   musicQueuePerPerson: 2,
   /** 낚시 동작 길이 (ms): 던지고 기다렸다가 낚아 올릴 때까지 낚싯대를 들고 있다 (걸으면 끝난다) */
   fishActionMs: 9000,
+  /** 강아지 쓰다듬기 동작 길이 (ms): 쪼그려 앉아 쓰다듬는 동안. 강아지가 앉고·눕고·좋아하는 동안(6초, pets.ts) 곁에 있는다 */
+  petActionMs: 6000,
   /** 동작·이모티콘 재사용 대기 (ms) */
   emoteCooldownMs: 1200,
   /** 머리 위 이모티콘 표시 시간 (ms) */
@@ -208,6 +210,8 @@ export const roomConfig = {
    * 세로 시야각은 가로 시야각에 맞추되 50도~상한. 휴대폰 세로 화면은 상한에 걸린다 (위아래 끝은 메뉴에 가려 휘어 보이지 않는다)
    */
   eyeHeight: 1.45,
+  /** 쪼그려 앉았을 때 눈높이 (m, 강아지를 쓰다듬을 때) */
+  crouchEyeHeight: 0.95,
   firstPersonHFovDeg: 80,
   firstPersonMaxVFovDeg: 115,
   firstPersonPitchDeg: -12,
@@ -215,6 +219,8 @@ export const roomConfig = {
   eyeBack: 0.45,
   /** 1인칭으로 들어설 때: 현관문이 열리고 문 밖에서 방 안 내 자리까지 걸어 들어오는 시간 (초) */
   doorEnterSec: 1.8,
+  /** 다 들어온 뒤 등 뒤의 현관문이 닫히는 시간 (초) */
+  doorShutSec: 0.9,
   /** 끌어서 둘러보는 빠르기 (화면 1px당 라디안), 방향키로 도는 빠르기 (라디안/초) */
   lookPerPx: 0.0055,
   turnSpeed: 2.2,
