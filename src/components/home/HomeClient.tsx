@@ -11,7 +11,7 @@ import { recordConfig, roomConfig } from '@/config/game';
 import { tokens } from '@/design/tokens';
 import { call, errorMessage, shrinkImage } from '@/lib/api';
 import type { RoomView } from '@/server/scene/service';
-import { ACCESSORIES, AVATAR_COLORS, profileTag, type Avatar } from '@/shared/avatar';
+import { ACCESSORIES, AVATAR_COLORS, petNameOf, profileTag, type Avatar } from '@/shared/avatar';
 import { BGM_TRACKS } from '@/shared/bgm';
 import { DEFAULT_DISTRICT, DISTRICT } from '@/shared/districts';
 import {
@@ -21,6 +21,7 @@ import {
 import { BgmPlayer, type BgmHandle } from '../app/BgmPlayer';
 import { GesturePicker } from '../app/GesturePicker';
 import { Guide } from '../app/Guide';
+import { PetNameSheet } from '../app/PetNameSheet';
 import { Icon } from '../app/Icon';
 import { Sheet } from '../app/Sheet';
 import { TabBar } from '../app/TabBar';
@@ -33,7 +34,7 @@ import { useHudInsets } from '../room/useHudInsets';
 const RoomScene = dynamic(() => import('../room/RoomScene'), { ssr: false });
 const AvatarPreview = dynamic(() => import('../room/AvatarPreview'), { ssr: false });
 
-type SheetKind = 'guestbook' | 'visitors' | 'wardrobe' | 'frame' | null;
+type SheetKind = 'guestbook' | 'visitors' | 'wardrobe' | 'frame' | 'petName' | null;
 type EditTab = 'items' | 'wall' | 'floor' | 'bgm';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
@@ -58,6 +59,15 @@ export function HomeClient() {
   const [playing, setPlaying] = useState(false);
   const [welcome, setWelcome] = useState(params.get('welcome') === '1');
   const [saving, setSaving] = useState(false);
+  /** 보기: 1인칭(기본) 또는 방 전체를 위에서 */
+  const [overview, setOverview] = useState(false);
+  /** 강아지를 누르면 잠깐 뜨는 이름 카드 (이름 짓기로 이어진다) */
+  const [petCard, setPetCard] = useState(false);
+  useEffect(() => {
+    if (!petCard) return;
+    const t = setTimeout(() => setPetCard(false), 5000);
+    return () => clearTimeout(t);
+  }, [petCard]);
   const player = useRef<BgmHandle>(null);
 
   useEffect(() => {
@@ -231,12 +241,15 @@ export function HomeClient() {
             selfTag={profileTag(profile.mbti)}
             presence={presence}
             mode={mode}
+            framing={overview ? 'overview' : 'inside'}
             selectedId={selected}
             onSelect={setSelected}
             onMove={(item) => updateItems((items) => items.map((i) => (i.id === item.id ? item : i)))}
             onAction={onAction}
             playing={playing}
             photoUrl={photoUrl}
+            petName={petNameOf(profile.avatar, 'dog')}
+            onPetTap={() => setPetCard(true)}
             insetTop={insets.top}
             insetBottom={insets.bottom}
             onReady={() => setReady(true)}
@@ -263,6 +276,9 @@ export function HomeClient() {
               <span className="district-chip">{DISTRICT[district].name}</span>
             </div>
             <div className="room-top__actions">
+              <button className={`icon-btn${overview ? ' icon-btn--accent' : ''}`} aria-label={overview ? '눈높이로 보기' : '방 전체 보기'} aria-pressed={overview} onClick={() => setOverview((o) => !o)}>
+                <Icon name="map" size={20} />
+              </button>
               {/* 문을 나서면 마을의 내 집 앞이다 */}
               <Link className="icon-btn" href="/village" aria-label="마을로 나가기">
                 <Icon name="exit" size={20} />
@@ -290,11 +306,25 @@ export function HomeClient() {
 
           {welcome && (
             <div className="room-welcome">
-              <Guide>나의 방이 생겼어요! 바닥을 누르면 걸어 다니고, 두 손가락(휠)으로 다가가 볼 수 있어요. 턴테이블을 누르면 음악이 나와요. 연필 버튼으로 꾸며 보세요.</Guide>
+              <Guide>나의 방이 생겼어요! 바닥을 누르면 걸어가고, 화면을 끌면 둘러봐요. 지도 버튼은 방 전체 보기예요. 턴테이블을 누르면 음악이 나오고, 강아지를 누르면 이름을 지어 줄 수 있어요. 연필 버튼으로 꾸며 보세요.</Guide>
             </div>
           )}
 
           <div className="room-bottom" data-hud="bottom">
+            {petCard && (
+              <div className="guest-card pet-card">
+                <span>{petNameOf(profile.avatar, 'dog')}</span>
+                <button
+                  className="btn-primary btn-primary--inline"
+                  onClick={() => {
+                    setPetCard(false);
+                    setSheet('petName');
+                  }}
+                >
+                  이름 짓기
+                </button>
+              </div>
+            )}
             {presence && (
               <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} />
             )}
@@ -405,6 +435,18 @@ export function HomeClient() {
 
       {sheet === 'guestbook' && <OwnerGuestbook handle={profile.handle} onClose={() => setSheet(null)} />}
       {sheet === 'visitors' && <Visitors handle={profile.handle} onClose={() => setSheet(null)} />}
+      {sheet === 'petName' && (
+        <PetNameSheet
+          pet="dog"
+          current={profile.avatar.petNames.dog ?? ''}
+          onSaved={async (avatar) => {
+            setSheet(null);
+            setToast(`강아지 이름: ${petNameOf(avatar, 'dog')}`);
+            await reload();
+          }}
+          onClose={() => setSheet(null)}
+        />
+      )}
       {sheet === 'wardrobe' && assets && (
         <Wardrobe assets={assets} initial={profile.avatar} onSave={saveAvatar} onClose={() => setSheet(null)} />
       )}

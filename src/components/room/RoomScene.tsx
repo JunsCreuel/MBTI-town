@@ -1,9 +1,10 @@
 'use client';
 
 // 나의 방 3D 장면 (PROJECT_GUIDE.md 6장). 마을의 내 집 문으로 들어온 집 안.
-// 보기: 원근 카메라가 방 앞쪽 위에서 캐릭터를 따라가며 비스듬히 내려다본다 (앞 벽은 없고, 벽 너머는 어둡다).
-//       바닥을 누르면 캐릭터가 걸어가고, 기능 소품을 누르면 onAction.
-// 꾸미기: 방 전체가 보이게 더 높이서 본다. 소품을 눌러 고르고, 끌어서 칸에 맞춰 옮긴다 (놓을 수 있는 자리로만).
+// 보기: 1인칭. 내 눈높이에서 방을 바라보고(내 캐릭터는 그리지 않는다), 화면을 끌면 둘러본다. 앞 벽·현관문·천장이 있고,
+//       들어설 때 문이 열리며 걸어 들어온다. 바닥을 누르면 걸어가고, 기능 소품을 누르면 onAction.
+// 방 전체 보기(꾸미기·가입 미리보기·보기 전환): 앞 벽과 천장을 걷어 내고 앞쪽 위에서 비스듬히 내려다본다.
+//       꾸미기에서는 소품을 눌러 고르고, 끌어서 칸에 맞춰 옮긴다 (놓을 수 있는 자리로만).
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
@@ -38,7 +39,7 @@ const WALL_T = 0.14;
 const deg = THREE.MathUtils.degToRad;
 
 export type RoomMode = 'view' | 'edit';
-/** inside: 캐릭터를 따라 방 안을 본다 / overview: 방 전체를 본다 (꾸미기, 가입 미리보기) */
+/** inside: 1인칭으로 방 안을 본다 / overview: 방 전체를 위에서 본다 (꾸미기, 가입 미리보기, 보기 전환) */
 export type RoomFraming = 'inside' | 'overview';
 type TimeOfDay = 'day' | 'evening' | 'night';
 
@@ -67,6 +68,10 @@ export interface RoomSceneProps {
   /** 오늘의 편지를 아직 안 읽었으면 우편함 위에 편지가 뜬다 */
   mailUnread?: boolean;
   photoUrl?: (id: string) => string;
+  /** 방 강아지 이름 (방 주인이 지어 준 이름, 없으면 '강아지') */
+  petName?: string;
+  /** 강아지를 눌렀을 때 (방 주인 화면은 이름 짓기를 띄운다) */
+  onPetTap?: () => void;
   /** 화면 위아래를 가리는 HUD 높이 (px). 방이 그 사이에 들어오게 맞춘다. */
   insetTop?: number;
   insetBottom?: number;
@@ -84,18 +89,42 @@ function timeOfDay(): TimeOfDay {
 
 const UP = new THREE.Vector3(0, 1, 0);
 const clamp = THREE.MathUtils.clamp;
+const smooth = (a: number, b: number, x: number) => {
+  const t = clamp((x - a) / (b - a), 0, 1);
+  return t * t * (3 - 2 * t);
+};
+const lerpAngle = (a: number, b: number, k: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
 /**
- * 화면 크기와 HUD에 맞춘 카메라 자리: 내려다보는 각도와, 방 상자 전체가 HUD 사이에 들어오는 거리.
+ * 1인칭 보기 상태 (장면 안에서 같이 쓴다). yaw = 바라보는 방향 (0 = +z, π = 방 안쪽), pitch = 위아래 (음수 = 내려다봄).
+ * enter = 들어서기 진행 (0 = 문 밖, 1 = 내 자리), door = 현관문 열림 (0~1)
+ */
+export interface FirstPersonView {
+  yaw: number;
+  pitch: number;
+  enter: number;
+  door: number;
+  /** 화면을 끌어 둘러보는 중 (걷는 쪽으로 따라 돌지 않는다) */
+  looking: boolean;
+}
+
+/** 내 캐릭터가 지금 어느 쪽으로 걷는지 (1인칭 카메라가 길 따라 걸을 때 그쪽으로 돈다) */
+interface Heading {
+  facing: number;
+  /** 바닥을 눌러 길을 따라 걷는 중 */
+  pathWalking: boolean;
+}
+
+/**
+ * 방 전체 보기: 화면 크기와 HUD에 맞춘 카메라 자리. 내려다보는 각도와, 방 상자 전체가 HUD 사이에 들어오는 거리.
  * 화면 중심은 HUD 사이 가운데로 옮겨 둔다 (setViewOffset).
  */
-function frameFor(framing: RoomFraming, width: number, height: number, availH: number) {
+function frameFor(width: number, height: number, availH: number) {
   const tanV = Math.tan(deg(roomConfig.fovDeg) / 2);
   const tanH = tanV * (width / height);
   // HUD 사이에서 위아래로 보이는 범위
   const tanAvail = tanV * (availH / height);
-  const portrait = width < availH;
-  const pitch = deg(framing === 'overview' ? roomConfig.overviewPitchDeg : portrait ? roomConfig.portraitPitchDeg : roomConfig.pitchDeg);
+  const pitch = deg(roomConfig.overviewPitchDeg);
   const center = new THREE.Vector3(W / 2, H * 0.3, D / 2);
   const probe = new THREE.PerspectiveCamera();
   const corner = new THREE.Vector3();
@@ -113,115 +142,131 @@ function frameFor(framing: RoomFraming, width: number, height: number, availH: n
     }
     if (ok) break;
   }
-  return { pitch, dist, center, tanH, tanAvail };
+  return { pitch, dist, center };
+}
+
+/** 1인칭 세로 시야각: 가로 시야각을 맞추되, 휴대폰 세로 화면에서 너무 휘지 않게 50~85도 */
+function firstPersonFov(width: number, height: number) {
+  const v = 2 * Math.atan(Math.tan(deg(roomConfig.firstPersonHFovDeg) / 2) / (width / height));
+  return clamp(THREE.MathUtils.radToDeg(v), 50, 85);
 }
 
 /**
- * 처음에는 방 전체가 HUD 사이에 들어오게 본다. 보기에서는 휠·두 손가락으로 다가갈 수 있고,
- * 다가가면 캐릭터(focus)를 따라가되 벽 밖이 너무 보이지 않게 붙잡아 둔다.
- * 들어설 때는 조금 멀고 높은 곳에서 방 안으로 다가온다 (방에 들어서는 느낌).
+ * 보기(1인칭): 내 캐릭터 눈높이에서 바라본다. 화면을 끌면 둘러보고, 바닥을 눌러 걸으면 걷는 쪽으로 천천히 돈다.
+ * 처음 들어설 때는 현관문 밖에서 문이 열리고 방 안 내 자리까지 걸어 들어온다.
+ * 방 전체 보기(꾸미기·미리보기): 방 상자 전체가 HUD 사이에 들어오게 앞쪽 위에서 내려다본다.
  */
 function CameraRig({
-  framing, insetTop = 0, insetBottom = 0, focus,
+  framing, insetTop = 0, insetBottom = 0, focus, view, heading,
 }: {
   framing: RoomFraming;
   insetTop?: number;
   insetBottom?: number;
   focus: React.RefObject<Point>;
+  view: React.RefObject<FirstPersonView>;
+  heading: React.RefObject<Heading>;
 }) {
   const { camera, size, gl } = useThree();
   const cam = camera as THREE.PerspectiveCamera;
+  const firstPerson = framing === 'inside';
   const availH = Math.max(160, size.height - insetTop - insetBottom);
-  const frame = useMemo(() => frameFor(framing, size.width, size.height, availH), [framing, size.width, size.height, availH]);
+  const frame = useMemo(() => frameFor(size.width, size.height, availH), [size.width, size.height, availH]);
   // 움직임 줄이기를 켠 사람에게는 다가오는 연출을 하지 않는다
   const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const now = useRef({ look: new THREE.Vector3(W / 2, 0.6, D / 2), goal: new THREE.Vector3(), dist: 0, pitch: 0, enter: reduced ? 1 : 0 });
-  /** 다가간 정도 (1 = 방 전체, minZoom = 가장 가까이) */
-  const zoom = useRef(1);
+  const over = useRef({ look: new THREE.Vector3(W / 2, 0.6, D / 2), enter: reduced ? 1 : 0 });
+  const eye = useRef(new THREE.Vector3());
+  const seat = useRef(new THREE.Vector3());
+  const dir = useRef(new THREE.Vector3());
 
-  // 화면 중심을 HUD 사이 가운데로 (아래 HUD가 크면 방을 위로 올린다)
+  // 시야각과 화면 중심 (HUD 사이 가운데)
   useEffect(() => {
-    cam.fov = roomConfig.fovDeg;
-    cam.near = 0.1;
+    cam.fov = firstPerson ? firstPersonFov(size.width, size.height) : roomConfig.fovDeg;
+    cam.near = firstPerson ? 0.05 : 0.1;
     cam.far = 200;
     cam.setViewOffset(size.width, size.height, 0, (insetBottom - insetTop) / 2, size.width, size.height);
     cam.updateProjectionMatrix();
     return () => {
       cam.clearViewOffset();
     };
-  }, [cam, size.width, size.height, insetTop, insetBottom]);
+  }, [cam, size.width, size.height, insetTop, insetBottom, firstPerson]);
 
-  // 휠·두 손가락으로 다가가기 (꾸미기와 미리보기에서는 방 전체를 본다)
+  // 방 전체 보기로 바꿀 때마다 다가오는 연출을 다시 한다 (지금 카메라 자리에서 출발)
   useEffect(() => {
-    if (framing !== 'inside') {
-      zoom.current = 1;
-      return;
-    }
+    if (firstPerson) return;
+    over.current.enter = reduced ? 1 : 0;
+  }, [firstPerson, reduced]);
+  useEffect(() => {
+    if (reduced) view.current.enter = 1;
+  }, [reduced, view]);
+
+  // 1인칭: 화면을 끌어 둘러본다 (손가락 하나·마우스). 누르기와 구별하려고 조금 움직인 뒤부터 돈다
+  useEffect(() => {
+    if (!firstPerson) return;
     const el = gl.domElement;
-    const clampZoom = (z: number) => clamp(z, roomConfig.minZoom, 1);
-    const pointers = new Map<number, { x: number; y: number }>();
-    let pinch = 0;
-    let zoomStart = 1;
-    const spread = () => {
-      const [a, b] = [...pointers.values()];
-      return Math.hypot(a.x - b.x, a.y - b.y);
-    };
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      zoom.current = clampZoom(zoom.current * Math.exp(e.deltaY * 0.0012));
-    };
+    let active: { id: number; x: number; y: number; moved: boolean } | null = null;
+    const v = view.current;
     const onDown = (e: PointerEvent) => {
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 2) {
-        pinch = spread();
-        zoomStart = zoom.current;
-      }
+      if (active || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      active = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
     };
     const onMove = (e: PointerEvent) => {
-      if (!pointers.has(e.pointerId)) return;
-      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (pointers.size === 2 && pinch > 0) zoom.current = clampZoom((zoomStart * pinch) / spread());
+      if (!active || e.pointerId !== active.id) return;
+      const dx = e.clientX - active.x;
+      const dy = e.clientY - active.y;
+      if (!active.moved && Math.hypot(dx, dy) < 6) return;
+      active.moved = true;
+      v.looking = true;
+      v.yaw -= dx * roomConfig.lookPerPx;
+      v.pitch = clamp(v.pitch - dy * roomConfig.lookPerPx * 0.8, deg(-55), deg(25));
+      active.x = e.clientX;
+      active.y = e.clientY;
     };
     const onUp = (e: PointerEvent) => {
-      pointers.delete(e.pointerId);
-      if (pointers.size < 2) pinch = 0;
+      if (active?.id !== e.pointerId) return;
+      active = null;
+      v.looking = false;
     };
-    el.addEventListener('wheel', onWheel, { passive: false });
     el.addEventListener('pointerdown', onDown);
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
     window.addEventListener('pointercancel', onUp);
     return () => {
-      el.removeEventListener('wheel', onWheel);
       el.removeEventListener('pointerdown', onDown);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('pointercancel', onUp);
+      v.looking = false;
     };
-  }, [framing, gl]);
+  }, [firstPerson, gl, view]);
 
   useFrame((_, rawDt) => {
     const dt = Math.min(rawDt, 0.1);
-    const st = now.current;
-    const z = framing === 'inside' ? zoom.current : 1;
-    const dist = frame.dist * z;
-    // 다가간 만큼 캐릭터를 따라간다 (0 = 방 가운데, 1 = 캐릭터)
-    const follow = (1 - z) / (1 - roomConfig.minZoom);
     const f = focus.current;
-    const halfW = dist * frame.tanH;
-    const tx = halfW * 2 >= W + 0.6 ? W / 2 : clamp(f.x, halfW - 0.3, W - halfW + 0.3);
-    const tz = THREE.MathUtils.lerp(frame.center.z, f.z, 0.7 * follow);
-    const ty = THREE.MathUtils.lerp(frame.center.y, 0.7, follow);
-    const first = st.dist === 0;
-    const k = first ? 1 : 1 - Math.exp(-dt * 5);
-    st.look.lerp(st.goal.set(THREE.MathUtils.lerp(W / 2, tx, follow), ty, tz), k);
-    st.dist = first ? dist : st.dist + (dist - st.dist) * k;
-    st.pitch = first ? frame.pitch : st.pitch + (frame.pitch - st.pitch) * k;
-    // 들어설 때: 조금 멀고 높은 곳에서 다가온다
+    if (firstPerson) {
+      const v = view.current;
+      // 들어서기: 문이 열리고(처음 35%) 문 밖에서 내 자리까지 걸어 들어온다
+      v.enter = Math.min(1, v.enter + dt / roomConfig.doorEnterSec);
+      v.door = smooth(0, 0.35, v.enter);
+      const walkIn = smooth(0.25, 1, v.enter);
+      const e = eye.current;
+      e.set(W / 2, roomConfig.eyeHeight, D + DOOR_OUTSIDE).lerp(seat.current.set(f.x, roomConfig.eyeHeight, f.z), walkIn);
+      // 바닥을 눌러 걸어가면 걷는 쪽으로 천천히 돈다 (둘러보는 중이면 그대로)
+      const h = heading.current;
+      if (v.enter >= 1 && h.pathWalking && !v.looking) v.yaw = lerpAngle(v.yaw, h.facing, 1 - Math.exp(-dt * 3));
+      const cp = Math.cos(v.pitch);
+      dir.current.set(Math.sin(v.yaw) * cp, Math.sin(v.pitch), Math.cos(v.yaw) * cp);
+      cam.position.copy(e);
+      cam.up.copy(UP);
+      cam.lookAt(e.x + dir.current.x, e.y + dir.current.y, e.z + dir.current.z);
+      return;
+    }
+    // 방 전체 보기: 조금 멀고 높은 곳에서 방 가운데로 다가온다
+    const st = over.current;
     st.enter = Math.min(1, st.enter + dt / roomConfig.enterSec);
     const away = Math.pow(1 - st.enter, 3);
-    const d = st.dist * (1 + 0.4 * away);
-    const pitch = st.pitch + deg(12) * away;
+    const d = frame.dist * (1 + 0.4 * away);
+    const pitch = frame.pitch + deg(12) * away;
+    st.look.copy(frame.center);
     cam.position.set(st.look.x, st.look.y + Math.sin(pitch) * d, st.look.z + Math.cos(pitch) * d);
     cam.up.copy(UP);
     cam.lookAt(st.look);
@@ -266,6 +311,105 @@ function Lights({ time }: { time: TimeOfDay }) {
 }
 
 // ───────────────────────── 바닥과 벽 ─────────────────────────
+
+/** 현관문 (앞 벽 가운데): 폭·높이 (칸). 1인칭으로 들어설 때 문 밖 이만큼에서 출발한다 */
+const DOOR_W = 1.1;
+const DOOR_H = 2.15;
+const DOOR_OUTSIDE = 1.4;
+
+/** 벽지를 칠한 벽 한 조각 (안쪽 면). 벽지 무늬가 칸 크기에 맞게 반복된다 */
+function WallPanel({ wallpaper, w, h, position, rotationY = 0 }: { wallpaper: RoomLayout['wallpaper']; w: number; h: number; position: [number, number, number]; rotationY?: number }) {
+  const map = useMemo(() => {
+    const t = wallTexture(wallpaper).clone();
+    t.repeat.set(w, h);
+    t.needsUpdate = true;
+    return t;
+  }, [wallpaper, w, h]);
+  useEffect(() => () => map.dispose(), [map]);
+  return (
+    <mesh position={position} rotation-y={rotationY} receiveShadow>
+      <planeGeometry args={[w, h]} />
+      <meshStandardMaterial map={map} roughness={0.95} />
+    </mesh>
+  );
+}
+
+/**
+ * 1인칭에서만: 앞 벽(가운데 현관문), 천장, 문 밖 마당. 방 전체 보기에서는 걷어 내 방 안을 들여다본다.
+ * 현관문은 들어설 때 안쪽으로 열린다 (view.door).
+ */
+function FrontAndCeiling({ layout, view }: { layout: RoomLayout; view: React.RefObject<FirstPersonView> }) {
+  const door = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (door.current) door.current.rotation.y = view.current.door * deg(100);
+  });
+  const side = (W - DOOR_W) / 2;
+  const wallEdge = shiftLightness(R.wall[layout.wallpaper], -0.06);
+  const ceiling = shiftLightness(R.wall[layout.wallpaper], 0.04);
+  return (
+    <group>
+      {/* 앞 벽 안쪽 면 (z = D, 방 안을 본다): 문 왼쪽·오른쪽·위 */}
+      <WallPanel wallpaper={layout.wallpaper} w={side} h={H} position={[side / 2, H / 2, D - 0.006]} rotationY={Math.PI} />
+      <WallPanel wallpaper={layout.wallpaper} w={side} h={H} position={[W - side / 2, H / 2, D - 0.006]} rotationY={Math.PI} />
+      <WallPanel wallpaper={layout.wallpaper} w={DOOR_W} h={H - DOOR_H} position={[W / 2, (H + DOOR_H) / 2, D - 0.006]} rotationY={Math.PI} />
+      {/* 앞 벽 두께와 바깥 면 */}
+      <mesh position={[side / 2, H / 2, D + WALL_T / 2]}>
+        <boxGeometry args={[side + WALL_T * 2, H, WALL_T]} />
+        <meshStandardMaterial color={wallEdge} roughness={0.95} />
+      </mesh>
+      <mesh position={[W - side / 2, H / 2, D + WALL_T / 2]}>
+        <boxGeometry args={[side + WALL_T * 2, H, WALL_T]} />
+        <meshStandardMaterial color={wallEdge} roughness={0.95} />
+      </mesh>
+      <mesh position={[W / 2, (H + DOOR_H) / 2, D + WALL_T / 2]}>
+        <boxGeometry args={[DOOR_W, H - DOOR_H, WALL_T]} />
+        <meshStandardMaterial color={wallEdge} roughness={0.95} />
+      </mesh>
+      {/* 문틀 */}
+      {[-1, 1].map((k) => (
+        <mesh key={k} position={[W / 2 + k * (DOOR_W / 2 + 0.03), DOOR_H / 2, D + WALL_T / 2]}>
+          <boxGeometry args={[0.06, DOOR_H, WALL_T + 0.04]} />
+          <meshStandardMaterial color={R.trim} />
+        </mesh>
+      ))}
+      <mesh position={[W / 2, DOOR_H + 0.03, D + WALL_T / 2]}>
+        <boxGeometry args={[DOOR_W + 0.12, 0.06, WALL_T + 0.04]} />
+        <meshStandardMaterial color={R.trim} />
+      </mesh>
+      {/* 현관문: 왼쪽 경첩에서 안쪽으로 열린다 */}
+      <group ref={door} position={[W / 2 - DOOR_W / 2, 0, D + 0.02]}>
+        <mesh position={[DOOR_W / 2, DOOR_H / 2, 0]} castShadow>
+          <boxGeometry args={[DOOR_W - 0.02, DOOR_H - 0.02, 0.05]} />
+          <meshStandardMaterial color={R.door} roughness={0.7} />
+        </mesh>
+        {[-1, 1].map((k) => (
+          <mesh key={k} position={[DOOR_W - 0.14, 1.0, k * 0.04]}>
+            <sphereGeometry args={[0.035, 12, 8]} />
+            <meshStandardMaterial color={R.doorKnob} metalness={0.3} roughness={0.4} />
+          </mesh>
+        ))}
+      </group>
+      {/* 천장 */}
+      <mesh position={[W / 2, H, D / 2]} rotation-x={Math.PI / 2}>
+        <planeGeometry args={[W, D]} />
+        <meshStandardMaterial color={ceiling} roughness={1} side={THREE.DoubleSide} />
+      </mesh>
+      {/* 문 밖: 마당과 햇빛 (들어서기 전에 서 있는 곳, 문 너머로 보인다) */}
+      <mesh position={[W / 2, -0.005, D + 2.5]} rotation-x={-Math.PI / 2}>
+        <planeGeometry args={[W + 6, 5]} />
+        <meshStandardMaterial color={tokens.scene.grass} roughness={1} />
+      </mesh>
+      <mesh position={[W / 2, 0.002, D + 1.2]} rotation-x={-Math.PI / 2}>
+        <planeGeometry args={[DOOR_W + 0.2, 2.4]} />
+        <meshStandardMaterial color={tokens.scene.path} roughness={1} />
+      </mesh>
+      <mesh position={[W / 2, H / 2, D + 4.5]} rotation-y={Math.PI}>
+        <planeGeometry args={[W + 10, H + 6]} />
+        <meshBasicMaterial color={tokens.scene.skyHorizon} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
 
 function Shell({ layout, onFloorClick }: { layout: RoomLayout; onFloorClick: (e: ThreeEvent<MouseEvent>) => void }) {
   const floorMap = useMemo(() => {
@@ -750,11 +894,11 @@ function EmoteBubble({
 }
 
 /**
- * 내 캐릭터: 바닥을 누르면 길을 찾아 걷고, 방향키(WASD)로도 걷는다. 카메라가 방 앞에서 보므로 위쪽 키 = 방 안쪽.
- * 같은 방에 다른 사람이 있으면 내 위치를 보낸다.
+ * 내 캐릭터: 바닥을 누르면 길을 찾아 걷고, 방향키(WASD)로도 걷는다. 위쪽 키 = 바라보는 쪽 (방 전체 보기는 방 안쪽).
+ * 1인칭에서는 캐릭터를 그리지 않는다 (다른 사람 화면에는 보인다). 같은 방에 다른 사람이 있으면 내 위치를 보낸다.
  */
 function RoomAvatar({
-  assets, avatar, layout, walkTo, focus, mode, presence, name, tag, together, emotes,
+  assets, avatar, layout, walkTo, focus, mode, presence, name, tag, together, emotes, firstPerson, view, heading,
 }: {
   assets: RoomAssets;
   avatar: Avatar;
@@ -770,6 +914,10 @@ function RoomAvatar({
   /** 다른 사람이 함께 있는지 (이름표를 띄운다) */
   together: boolean;
   emotes: EmoteTextures | null;
+  /** 1인칭: 내 캐릭터는 그리지 않고, 방향키는 바라보는 쪽 기준 (←→ 돌기, A·D 옆걸음) */
+  firstPerson: boolean;
+  view: React.RefObject<FirstPersonView>;
+  heading: React.RefObject<Heading>;
 }) {
   const m = useAvatarModel(assets, avatar.body, avatar.color, avatar.accessory);
   const blocked = useMemo(() => blockedCells(layout.items), [layout.items]);
@@ -829,10 +977,24 @@ function RoomAvatar({
     }
     const step = roomConfig.walkSpeed * dt;
     let walking = false;
+    let pathWalking = false;
     const k = keys.current;
-    const kx = (k.has('ArrowRight') || k.has('KeyD') ? 1 : 0) - (k.has('ArrowLeft') || k.has('KeyA') ? 1 : 0);
-    const kz = (k.has('ArrowDown') || k.has('KeyS') ? 1 : 0) - (k.has('ArrowUp') || k.has('KeyW') ? 1 : 0);
-    if (kx || kz) {
+    const v = view.current;
+    // 들어서는 동안에는 서 있는다 (카메라가 문 밖에서 걸어 들어온다)
+    const entering = firstPerson && v.enter < 1;
+    // 방향키는 바라보는 쪽 기준. 방 전체 보기는 카메라가 방 앞에서 보므로 바라보는 쪽 = 방 안쪽 (π)
+    const yaw = firstPerson ? v.yaw : Math.PI;
+    const fwd = (k.has('ArrowUp') || k.has('KeyW') ? 1 : 0) - (k.has('ArrowDown') || k.has('KeyS') ? 1 : 0);
+    const right = firstPerson
+      ? (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0)
+      : (k.has('ArrowRight') || k.has('KeyD') ? 1 : 0) - (k.has('ArrowLeft') || k.has('KeyA') ? 1 : 0);
+    if (firstPerson && !entering) v.yaw += ((k.has('ArrowLeft') ? 1 : 0) - (k.has('ArrowRight') ? 1 : 0)) * roomConfig.turnSpeed * dt;
+    const kx = Math.sin(yaw) * fwd - Math.cos(yaw) * right;
+    const kz = Math.cos(yaw) * fwd + Math.sin(yaw) * right;
+    if (entering) {
+      s.path = null;
+      walkTo.current = null;
+    } else if (kx || kz) {
       s.path = null;
       const len = Math.hypot(kx, kz);
       const next = moveInRoom(blocked, s.pos.x, s.pos.z, (kx / len) * step, (kz / len) * step);
@@ -840,6 +1002,7 @@ function RoomAvatar({
       s.pos = next;
       s.facing = Math.atan2(kx, kz);
     } else if (s.path?.length) {
+      pathWalking = true;
       const next = s.path[0];
       const dx = next.x - s.pos.x;
       const dz = next.z - s.pos.z;
@@ -853,12 +1016,17 @@ function RoomAvatar({
       if (dist > 1e-4) s.facing = Math.atan2(dx, dz);
       walking = true;
     }
+    // 1인칭에서 서 있으면 바라보는 쪽을 본다 (다른 사람 화면에서 내가 보는 쪽을 향한다)
+    if (firstPerson && !walking) s.facing = v.yaw;
     s.rot += Math.atan2(Math.sin(s.facing - s.rot), Math.cos(s.facing - s.rot)) * (1 - Math.exp(-dt * TURN_RATE));
     playClip(m, clipFor(presence, SELF_GESTURE, walking), activeEmote(presence, SELF_GESTURE));
     m.mixer.update(dt);
     m.model.position.set(s.pos.x, 0, s.pos.z);
     m.model.rotation.y = s.rot;
+    m.model.visible = !firstPerson;
     focus.current = s.pos;
+    heading.current.facing = s.facing;
+    heading.current.pathWalking = pathWalking;
 
     // 같은 방 사람들에게 내 자리를 보낸다 (초당 moveSendHz회 이하, 바뀐 것만)
     if (presence) {
@@ -876,8 +1044,8 @@ function RoomAvatar({
   return (
     <group>
       <primitive object={m.model} />
-      {together && name && <FollowTag model={m.model} label={name} color={m.color} self sub={tag} />}
-      {presence && <EmoteBubble presence={presence} gid={SELF_GESTURE} model={m.model} textures={emotes} />}
+      {!firstPerson && together && name && <FollowTag model={m.model} label={name} color={m.color} self sub={tag} />}
+      {!firstPerson && presence && <EmoteBubble presence={presence} gid={SELF_GESTURE} model={m.model} textures={emotes} />}
     </group>
   );
 }
@@ -992,7 +1160,6 @@ function FirstFrame({ onFrame }: { onFrame?: () => void }) {
 // ───────────────────────── 펫 (강아지) ─────────────────────────
 
 /** 펫 이름표 (지금은 강아지 한 종류) */
-const PET_NAME = '강아지';
 /** 방 강아지 키 (마을에서 데리고 다니는 강아지와 같다) */
 const PET_HEIGHT = petDef('dog')!.height;
 const PET_SPEED = 1.3;
@@ -1014,13 +1181,13 @@ function loadPetModel(): Promise<THREE.Object3D> {
  * 방에 사는 강아지. 빈 칸을 골라 깡총깡총 돌아다니다 잠깐 쉰다. 누르면 폴짝 뛰고 하트와 이름이 뜬다.
  * 자리는 화면마다 따로 정한다 (서버로 맞추지 않는다). 모델은 방을 그린 뒤에 받는다.
  */
-function PetDog({ layout }: { layout: RoomLayout }) {
+function PetDog({ layout, name, onTap }: { layout: RoomLayout; name: string; onTap?: () => void }) {
   const [model, setModel] = useState<THREE.Object3D | null>(null);
   const [heart, setHeart] = useState<THREE.Texture | null>(null);
   const blocked = useMemo(() => blockedCells(layout.items), [layout.items]);
   const group = useRef<THREE.Group>(null);
   const bubble = useRef<THREE.Group>(null);
-  const tag = useMemo(() => tagTexture(PET_NAME, tokens.color.accent, false), []);
+  const tag = useMemo(() => tagTexture(name, tokens.color.accent, false), [name]);
   const state = useRef({
     pos: { x: W / 2 + 1, z: D - 1.2 } as Point, path: null as Point[] | null, rest: 1.5, facing: 0, rot: 0, petAt: -10, petted: false,
   });
@@ -1107,6 +1274,7 @@ function PetDog({ layout }: { layout: RoomLayout }) {
           if (e.delta > 8) return;
           e.stopPropagation();
           state.current.petted = true;
+          onTap?.();
         }}
         onPointerOver={() => (document.body.style.cursor = 'pointer')}
         onPointerOut={() => (document.body.style.cursor = '')}
@@ -1133,6 +1301,9 @@ function SceneContent(props: RoomSceneProps) {
   const time = useMemo(timeOfDay, []);
   const walkTo = useRef<Point | null>(null);
   const focus = useRef<Point>({ x: W / 2, z: D - 1.5 });
+  const firstPerson = framing === 'inside';
+  const view = useRef<FirstPersonView>({ yaw: Math.PI, pitch: deg(roomConfig.firstPersonPitchDeg), enter: 0, door: 0, looking: false });
+  const heading = useRef<Heading>({ facing: Math.PI, pathWalking: false });
   // 같은 방에 들어간다 (화면은 먼저 뜨고, 붙는 순간의 내 자리를 알린다)
   useEffect(() => {
     if (presence) void presence.join(() => ({ ...focus.current }));
@@ -1155,8 +1326,9 @@ function SceneContent(props: RoomSceneProps) {
 
   return (
     <>
-      <CameraRig framing={framing} insetTop={props.insetTop} insetBottom={props.insetBottom} focus={focus} />
+      <CameraRig framing={framing} insetTop={props.insetTop} insetBottom={props.insetBottom} focus={focus} view={view} heading={heading} />
       <Lights time={time} />
+      {firstPerson && <FrontAndCeiling layout={layout} view={view} />}
       <Shell
         layout={layout}
         onFloorClick={(e) => {
@@ -1196,9 +1368,12 @@ function SceneContent(props: RoomSceneProps) {
         tag={props.selfTag}
         together={together}
         emotes={emotes}
+        firstPerson={firstPerson}
+        view={view}
+        heading={heading}
       />
       {presence && <RemoteAvatars presence={presence} assets={assets} emotes={emotes} />}
-      {mode !== 'edit' && <PetDog layout={layout} />}
+      {mode !== 'edit' && <PetDog layout={layout} name={props.petName || petDef('dog')!.name} onTap={props.onPetTap} />}
       {mode === 'edit' && <DragController drag={drag} items={itemsRef} onMove={onMoveRef} />}
       <FirstFrame onFrame={props.onReady} />
     </>

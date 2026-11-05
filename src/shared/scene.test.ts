@@ -13,8 +13,11 @@ describe('입력 정리', () => {
   it('모르는 값은 버린다', () => {
     expect(cleanTaste({ colors: ['sky', 'sky', 'nope'], moods: 'x', music: [1] })).toEqual({ colors: ['sky'], moods: [], music: [] });
     // 몸을 모르면(예전에 저장한 캐릭터) 남자로
-    expect(cleanAvatar({ color: 'gold', accessory: 'cap' })).toEqual({ body: 'male', color: 'mint', accessory: 'cap', pet: '' });
-    expect(cleanAvatar({ body: 'female', color: 'sky', accessory: 'none', pet: 'dog' })).toEqual({ body: 'female', color: 'sky', accessory: 'none', pet: 'dog' });
+    expect(cleanAvatar({ color: 'gold', accessory: 'cap' })).toEqual({ body: 'male', color: 'mint', accessory: 'cap', pet: '', petNames: {} });
+    expect(cleanAvatar({ body: 'female', color: 'sky', accessory: 'none', pet: 'dog' })).toEqual({ body: 'female', color: 'sky', accessory: 'none', pet: 'dog', petNames: {} });
+    // 펫 이름: 아는 펫만, 10자까지, 공백 정리
+    expect(cleanAvatar({ petNames: { dog: '  몽이  ', dragon: '용', cat: 3 } }).petNames).toEqual({ dog: '몽이' });
+    expect(cleanAvatar({ petNames: { dog: '아주아주아주아주긴이름' } }).petNames.dog).toHaveLength(10);
     expect(cleanAvatar({ body: 'robot' }).body).toBe('male');
     // 모르는 펫은 데리고 다니지 않는 것으로
     expect(cleanAvatar({ pet: 'dragon' }).pet).toBe('');

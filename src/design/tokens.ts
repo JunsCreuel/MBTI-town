@@ -141,6 +141,9 @@ export const tokens = {
     night: '#8E99C9',
     /** BGM이 나올 때 턴테이블 위 음표 */
     note: '#2E9E86',
+    /** 현관문(나무)과 손잡이 (1인칭으로 들어설 때 열린다) */
+    door: '#C8976A',
+    doorKnob: '#E8C36A',
     /** 고른 소품·놓을 자리 표시 */
     select: '#2E9E86',
     invalid: '#E5484D',

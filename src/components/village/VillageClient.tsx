@@ -15,11 +15,13 @@ import { Icon } from '@/components/app/Icon';
 import { InventorySheet, ItemIcon } from '@/components/app/Inventory';
 import { GesturePicker } from '@/components/app/GesturePicker';
 import { PetSheet } from './PetSheet';
+import { PetNameSheet } from '@/components/app/PetNameSheet';
 import { TabBar } from '@/components/app/TabBar';
 import type { HouseView, TownView } from '@/server/scene/service';
 import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
 import { withEulReul, withGwa, withRo } from '@/shared/josa';
-import { petDef } from '@/shared/pets';
+import { isPetId, petDef, type PetId } from '@/shared/pets';
+import { cleanPetNames, petNameOf, type Avatar } from '@/shared/avatar';
 import { shopLabel, type MarketView } from '@/shared/market';
 import { SPOT_NAME, parseRoomPlace, parseSpot, type RoomPlace, type Spot, type TownPlace } from '@/shared/protocol';
 import { castTarget, districtAt, lotDoor, nearWater, parseTownMap, randomSpawnPoint, withDistrict, type Lot, type PropPlacement, type TownMap } from '@/shared/townMap';
@@ -119,6 +121,9 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   /** 데리고 다니는 펫 ('' = 없음)과 펫 불러오기 시트 */
   const [pet, setPet] = useState('');
   const [petOpen, setPetOpen] = useState(false);
+  /** 펫마다 지어 준 이름 (입장 토큰에서 받고, 이름을 지으면 바꾼다)와 이름 짓기 시트 */
+  const [petNames, setPetNames] = useState<Avatar['petNames']>({});
+  const [naming, setNaming] = useState<PetId | null>(null);
   const [picking, setPicking] = useState(false);
   /** 잠깐 뜨는 알림. 아이템을 얻었으면 아이콘을 함께 보인다 */
   const [toast, setToast] = useState<string | { text: string; fruit: string } | null>(null);
@@ -212,6 +217,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     setSpawn(p);
     // 계정에 저장된 펫과 함께 들어간다 (집이 있는 주민만)
     const saved = snap.guest ? '' : (snap.pass.pet ?? '');
+    if (!snap.guest) setPetNames(cleanPetNames(snap.pass.petNames));
     if (saved) {
       session.setPet(saved);
       setPet(saved);
@@ -864,16 +870,34 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         />
       )}
       {basketOpen && <InventorySheet state={play} onClose={() => setBasketOpen(false)} />}
+      {naming && (
+        <PetNameSheet
+          pet={naming}
+          current={petNames[naming] ?? ''}
+          onSaved={(avatar) => {
+            setPetNames(avatar.petNames);
+            setNaming(null);
+            setToast(`${petDef(naming)?.name} 이름: ${petNameOf(avatar, naming)}`);
+          }}
+          onClose={() => setNaming(null)}
+        />
+      )}
       {petOpen && (
         <PetSheet
           current={pet}
+          petNames={petNames}
+          onRename={(id) => {
+            if (!isPetId(id)) return;
+            setPetOpen(false);
+            setNaming(id);
+          }}
           onPick={(id) => {
-            const before = petDef(pet);
+            const before = isPetId(pet) ? petNameOf({ petNames }, pet) : null;
             session.setPet(id);
             setPet(id);
             setPetOpen(false);
-            const def = petDef(id);
-            setToast(def ? `${withGwa(def.name)} 산책을 시작해요` : before ? `${withEulReul(before.name)} 집에 보냈어요` : null);
+            const now = isPetId(id) ? petNameOf({ petNames }, id) : null;
+            setToast(now ? `${withGwa(now)} 산책을 시작해요` : before ? `${withEulReul(before)} 집에 보냈어요` : null);
             // 계정에 저장한다 (다른 기기에서 들어와도 같이 나온다). 못 하면 이번 산책만
             call('PATCH', '/api/me', { pet: id }).catch(() => setToast('펫을 저장하지 못했어요. 다음에 들어오면 다시 불러 주세요'));
           }}

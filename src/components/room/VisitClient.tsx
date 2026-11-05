@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { tokens } from '@/design/tokens';
 import { ApiError, call, errorMessage } from '@/lib/api';
 import type { RoomView } from '@/server/scene/service';
-import { DEFAULT_AVATAR, profileTag, type Avatar } from '@/shared/avatar';
+import { DEFAULT_AVATAR, petNameOf, profileTag, type Avatar } from '@/shared/avatar';
 import { DEFAULT_DISTRICT, DISTRICT } from '@/shared/districts';
 import type { FurnitureAction } from '@/shared/room';
 import { RecordCard } from '../archive/RecordCard';
@@ -33,6 +33,8 @@ export function VisitClient({ handle }: { handle: string }) {
   const [missing, setMissing] = useState(false);
   const [assets, setAssets] = useState<RoomAssets | null>(null);
   const [ready, setReady] = useState(false);
+  /** 보기: 1인칭(기본) 또는 방 전체를 위에서 */
+  const [overview, setOverview] = useState(false);
   const [sheet, setSheet] = useState<'guestbook' | 'records' | 'more' | null>(null);
   const [playing, setPlaying] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -101,7 +103,7 @@ export function VisitClient({ handle }: { handle: string }) {
   const { presence, snap: presenceSnap, others } = useHousePresence(view?.room ? handle : null);
   const pass = presenceSnap?.pass;
   const myAvatar: Avatar | null = pass
-    ? { body: pass.body, color: pass.color, accessory: pass.acc, pet: '' }
+    ? { body: pass.body, color: pass.color, accessory: pass.acc, pet: '', petNames: {} }
     : presenceSnap?.status === 'denied'
       ? DEFAULT_AVATAR
       : null;
@@ -140,9 +142,11 @@ export function VisitClient({ handle }: { handle: string }) {
             selfTag={profileTag(pass?.mbti)}
             presence={presence}
             mode="view"
+            framing={overview ? 'overview' : 'inside'}
             onAction={onAction}
             playing={playing}
             photoUrl={(id) => `/api/photos/${id}`}
+            petName={petNameOf(owner.avatar, 'dog')}
             insetTop={insets.top}
             insetBottom={insets.bottom}
             onReady={() => setReady(true)}
@@ -171,6 +175,9 @@ export function VisitClient({ handle }: { handle: string }) {
           <span className="district-chip">{DISTRICT[district].name}</span>
         </div>
         <div className="room-top__actions">
+          <button className={`icon-btn${overview ? ' icon-btn--accent' : ''}`} aria-label={overview ? '눈높이로 보기' : '방 전체 보기'} aria-pressed={overview} onClick={() => setOverview((o) => !o)}>
+            <Icon name="map" size={20} />
+          </button>
           {/* 문을 나서면 이 집이 있는 마을로 돌아간다 */}
           <Link className="icon-btn" href={`/village?at=${district}`} aria-label="마을로 나가기">
             <Icon name="exit" size={20} />

@@ -333,6 +333,24 @@ describe('마을 집터', () => {
     expect((await service.townTicket(v)).pass.pet).toBeUndefined();
   });
 
+  it('펫 이름: 금지어를 거르고 계정에 저장되며, 모습을 바꿔도 남고 비우면 종류 이름으로 돌아간다', async () => {
+    const v = await user();
+    await onboard(v, '이름짓기', { district: 'ISFP', avatar: { body: 'female', color: 'sky', accessory: 'none', petNames: { dog: '몰래 지은 이름' } } });
+    // 가입 때 보낸 펫 이름은 받지 않는다 (금지어 검사를 거치지 않으므로)
+    expect((await service.me(v)).profile.avatar.petNames).toEqual({});
+    const named = await service.updateProfile(v, { petNames: { dog: '  몽이 ' } });
+    expect(named.avatar).toMatchObject({ body: 'female', color: 'sky', petNames: { dog: '몽이' } });
+    expect((await service.townTicket(v)).pass.petNames).toEqual({ dog: '몽이' });
+    await expectError(service.updateProfile(v, { petNames: { dog: '멍청이' } }), 'rejected');
+    await expectError(service.updateProfile(v, { petNames: { dog: '열한글자가넘는긴이름이에요' } }), 'bad_request');
+    await expectError(service.updateProfile(v, { petNames: { dragon: '용용' } }), 'bad_request');
+    // 옷장에서 모습을 바꿀 때 보낸 펫 이름은 무시한다 (이름은 petNames로만)
+    await service.updateProfile(v, { avatar: { ...named.avatar, color: 'navy', petNames: { dog: '바보' } } });
+    expect((await service.me(v)).profile.avatar).toMatchObject({ color: 'navy', petNames: { dog: '몽이' } });
+    await service.updateProfile(v, { petNames: { dog: '' } });
+    expect((await service.me(v)).profile.avatar.petNames).toEqual({});
+  });
+
   it('입장 토큰: 가입한 사람은 이름·집터를, 아니면 손님으로 담는다', async () => {
     const tp = await service.townTicket(p);
     expect(tp.guest).toBe(false);

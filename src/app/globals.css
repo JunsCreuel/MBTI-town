@@ -5240,3 +5240,12 @@ canvas {
   height: 84px;
   object-fit: contain;
 }
+.pet-name {
+  display: grid;
+  gap: var(--space-3);
+}
+.pets__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}

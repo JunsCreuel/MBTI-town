@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { recordConfig, socialConfig, townConfig } from '@/config/game';
 import { isMbtiType, type MbtiType } from '@/design/mbti';
 import { NOTICE_MAX, parseAnnouncement, type Announcement } from '@/shared/announce';
-import { AVATAR_COLORS, cleanAvatar, type Avatar } from '@/shared/avatar';
+import { AVATAR_COLORS, PET_NAME_MAX, cleanAvatar, type Avatar } from '@/shared/avatar';
 import { isPetId } from '@/shared/pets';
 import { isShopColor, isShopSlot, refundFor, shopLabel, type MarketView, type ShopColor } from '@/shared/market';
 import { bgmTrack } from '@/shared/bgm';
@@ -446,7 +446,8 @@ export class SceneService {
       display_name: displayName,
       bio,
       taste: cleanTaste(input.taste),
-      avatar: cleanAvatar(input.avatar),
+      // 가입 때는 펫 이름을 받지 않는다 (펫 이름은 금지어 검사를 거쳐 따로 짓는다)
+      avatar: { ...cleanAvatar(input.avatar), petNames: {} },
       hobby,
       onboarded_at: p.onboarded_at ?? now,
     });
@@ -478,11 +479,27 @@ export class SceneService {
     if ('district' in patch) {
       throw new SceneError('bad_request', '사는 마을은 MBTI로 정해져요. MBTI를 바꾸면 그 마을로 이사해요.');
     }
-    if ('avatar' in patch) next.avatar = cleanAvatar(patch.avatar);
-    // 펫만 바꾸기 (마을의 펫 불러오기): 모습은 그대로 두고 펫만 고친다. 모르는 펫이면 돌려보낸 것('')으로 본다
+    // 모습 바꾸기 (옷장). 펫 이름은 여기로 바꾸지 않는다 (petNames로만, 금지어 검사를 거친다)
+    if ('avatar' in patch) next.avatar = { ...cleanAvatar(patch.avatar), petNames: cleanAvatar(p.avatar).petNames };
+    // 펫만 바꾸기 (마을의 펫 불러오기): 모습은 그대로 두고 펫만 고친다
     if ('pet' in patch) {
       if (patch.pet !== '' && !isPetId(patch.pet)) throw new SceneError('bad_request', '없는 펫이에요.');
       next.avatar = { ...(next.avatar ?? cleanAvatar(p.avatar)), pet: patch.pet as Avatar['pet'] };
+    }
+    // 펫 이름 짓기 (방·마을): { petNames: { dog: '몽이' } }. 빈 이름이면 종류 이름(강아지)으로 돌아간다
+    if ('petNames' in patch) {
+      const given = (patch.petNames && typeof patch.petNames === 'object' ? patch.petNames : null) as Record<string, unknown> | null;
+      if (!given) throw new SceneError('bad_request', '펫 이름이 올바르지 않아요.');
+      const base = next.avatar ?? cleanAvatar(p.avatar);
+      const names = { ...base.petNames };
+      for (const [pet, raw] of Object.entries(given)) {
+        if (!isPetId(pet)) throw new SceneError('bad_request', '없는 펫이에요.');
+        const name = cleanText(raw, PET_NAME_MAX, '펫 이름').replace(/\s+/g, ' ');
+        if (name && !moderate(name).allowed) throw new SceneError('rejected', '펫 이름에는 거친 표현이나 링크·연락처를 넣을 수 없어요.');
+        if (name) names[pet] = name;
+        else delete names[pet];
+      }
+      next.avatar = { ...base, petNames: names };
     }
     if ('taste' in patch) next.taste = cleanTaste(patch.taste);
     if ('roomVisibility' in patch) {
@@ -985,8 +1002,9 @@ export class SceneService {
         exp,
         // 이름표 둘째 줄: MBTI
         ...(p.mbti ? { mbti: p.mbti } : {}),
-        // 데리고 다니는 펫 (계정에 저장)
+        // 데리고 다니는 펫과 펫 이름 (계정에 저장)
         ...(avatar.pet ? { pet: avatar.pet } : {}),
+        ...(Object.keys(avatar.petNames).length ? { petNames: avatar.petNames } : {}),
         ...((await this.isAdmin(viewer)) ? { admin: true as const } : {}),
       };
     } else {
