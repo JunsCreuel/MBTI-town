@@ -1,7 +1,7 @@
 'use client';
 
 // 펫 불러오기: 펫을 고르면 내 옆을 따라다닌다 (지금은 강아지 하나, src/shared/pets.ts에 하나씩 늘려 간다).
-import { Icon } from '@/components/app/Icon';
+import { assetUrl } from '@/assets/manifest';
 import { Sheet } from '@/components/app/Sheet';
 import { PETS, petDef } from '@/shared/pets';
 
@@ -16,7 +16,7 @@ export function PetSheet({ current, onPick, onClose }: { current: string; onPick
             return (
               <li key={p.id}>
                 <button className={`inventory__item${on ? ' inventory__item--on' : ''}`} aria-pressed={on} onClick={() => onPick(p.id)} disabled={on}>
-                  <Icon name="paw" size={34} className="pets__icon" />
+                  <img className="pets__photo" src={assetUrl(p.thumb)} alt="" width={84} height={84} draggable={false} />
                   {p.name}
                   {on && <span className="tag">산책 중</span>}
                 </button>

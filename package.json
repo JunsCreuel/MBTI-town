@@ -22,7 +22,8 @@
     "test": "vitest run",
     "test:postgres": "tsx scripts/test-postgres.ts",
     "db:bundle": "tsx scripts/bundle-sql.ts",
-    "assets:characters": "tsx scripts/import-characters.ts"
+    "assets:characters": "tsx scripts/import-characters.ts",
+    "assets:pet-thumbs": "tsx scripts/render-pet-thumbs.ts"
   },
   "dependencies": {
     "@colyseus/core": "0.18.25",

@@ -5231,6 +5231,12 @@ canvas {
   display: grid;
   gap: var(--space-3);
 }
-.pets__icon {
-  color: var(--color-accent);
+/* 펫 칸은 사진이 크게 보이게 가방 칸보다 넓다 */
+.pets .inventory__grid {
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+}
+.pets__photo {
+  width: 84px;
+  height: 84px;
+  object-fit: contain;
 }

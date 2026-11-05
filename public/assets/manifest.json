@@ -831,5 +831,8 @@
   },
   "ui.icon.paw": {
     "file": "ui/ui_icon_paw_ph.svg"
+  },
+  "pet.dog.thumb": {
+    "file": "pets/pet_dog_thumb.webp"
   }
 }
