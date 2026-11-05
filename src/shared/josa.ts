@@ -20,3 +20,6 @@ export const withIGa = (word: string) => `${word}${jong(word) === 0 ? '가' : '�
 
 /** "을/를" (받침이 있으면 을): 강아지를, 고양이를, 곰을 */
 export const withEulReul = (word: string) => `${word}${jong(word) === 0 ? '를' : '을'}`;
+
+/** "은/는" (받침이 있으면 은): 닉네임은, 취미는 */
+export const withEunNeun = (word: string) => `${word}${jong(word) === 0 ? '는' : '은'}`;

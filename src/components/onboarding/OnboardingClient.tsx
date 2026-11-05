@@ -287,11 +287,11 @@ export function OnboardingClient() {
       )}
       {!issued && step === 5 && (
         <section className="onboarding__body">
-          <Guide>마지막이에요! 마을에서 보일 이름과 한 줄 소개를 적으면 내 집이 생겨요.</Guide>
+          <Guide>마지막이에요! 마을에서 보일 닉네임과 한 줄 소개를 적으면 내 집이 생겨요.</Guide>
           <label className="field">
-            <span>마을에서 보일 이름</span>
-            <input value={name} maxLength={socialConfig.displayNameMax} onChange={(e) => setName(e.target.value)} placeholder="방과 이름표에 보일 이름" />
-            <small className="muted">다른 주민에게 보여요. 실명이 싫으면 별명으로 바꿔도 돼요.</small>
+            <span>마을에서 보일 닉네임</span>
+            <input value={name} maxLength={socialConfig.displayNameMax} onChange={(e) => setName(e.target.value)} placeholder="방과 이름표에 보일 닉네임" />
+            <small className="muted">닉네임은 처음 정한 뒤 딱 한 번까지만 바꿀 수 있어요. 그 뒤로는 바꿀 수 없으니 신중하게 정해 주세요.</small>
           </label>
           <label className="field">
             <span>취미 (선택, 주민증에 보여요)</span>

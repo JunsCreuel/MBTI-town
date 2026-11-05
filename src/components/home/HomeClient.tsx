@@ -20,6 +20,7 @@ import {
 } from '@/shared/room';
 import { BgmPlayer, type BgmHandle } from '../app/BgmPlayer';
 import { LookPickers } from '../app/LookPickers';
+import { PANEL_CLOSED_EVENT, openPanel } from '../app/panelState';
 import { GesturePicker } from '../app/GesturePicker';
 import { Guide } from '../app/Guide';
 import { PetNameSheet } from '../app/PetNameSheet';
@@ -45,6 +46,12 @@ export function HomeClient() {
   const router = useRouter();
   const params = useSearchParams();
   const { me, reload } = useMe({ require: 'onboarded' });
+  // 위에 연 창(캐릭터·MY 등)을 닫으면 바뀐 모습·이름을 다시 읽는다
+  useEffect(() => {
+    const on = () => void reload();
+    window.addEventListener(PANEL_CLOSED_EVENT, on);
+    return () => window.removeEventListener(PANEL_CLOSED_EVENT, on);
+  }, [reload]);
   const [assets, setAssets] = useState<RoomAssets | null>(null);
   const [progress, setProgress] = useState(0);
   const [ready, setReady] = useState(false);
@@ -102,7 +109,7 @@ export function HomeClient() {
     (action: FurnitureAction, item: PlacedItem) => {
       setWelcome(false);
       if (action === 'bgm') player.current?.toggle();
-      else if (action === 'archive') router.push('/archive');
+      else if (action === 'archive') openPanel('archive');
       // 우편함: 방명록
       else if (action === 'guestbook') setSheet('guestbook');
       else if (action === 'wardrobe') setSheet('wardrobe');
@@ -331,7 +338,7 @@ export function HomeClient() {
             )}
             <BgmPlayer ref={player} trackKey={bgm} onPlayingChange={setPlaying} />
             <div className="quick-actions">
-              <button className="quick" onClick={() => router.push('/archive?new=1')}>
+              <button className="quick" onClick={() => openPanel('archive', { startNew: true })}>
                 <Icon name="edit" size={20} />
                 기록 쓰기
               </button>
@@ -349,7 +356,7 @@ export function HomeClient() {
               </button>
             </div>
           </div>
-          <TabBar />
+          <TabBar stay />
         </>
       )}
 

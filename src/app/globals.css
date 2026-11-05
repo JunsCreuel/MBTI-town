@@ -1204,6 +1204,32 @@ a:focus-visible {
   padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 
+/* 마을·방 위에 여는 탭 창 (가방·도감·캐릭터·기록·MY): 장면은 뒤에 그대로, 아래 탭은 창 위에 */
+.tab-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 36;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: var(--color-bg);
+  animation: tab-panel-in 0.22s ease-out;
+}
+.tab-panel .page__head {
+  padding-right: 52px;
+}
+.tab-panel__close {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + var(--space-4));
+  right: max(var(--space-3), calc(50vw - 280px + var(--space-3)));
+  z-index: 37;
+}
+@keyframes tab-panel-in {
+  from { opacity: 0; transform: translateY(16px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tab-panel { animation: none; }
+}
+
 .page--center {
   justify-content: center;
   align-items: center;
@@ -1245,8 +1271,16 @@ a:focus-visible {
   font-weight: 700;
   text-decoration: none;
 }
+/* 창으로 여는 탭(마을·방 화면)은 버튼이다: 링크와 똑같이 보이게 */
+button.tabbar__item {
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  cursor: pointer;
+}
 
-.tabbar__item--on {
+.tabbar__item--on,
+button.tabbar__item.tabbar__item--on {
   background: var(--color-accentSoft);
   color: var(--color-accentInk);
 }
@@ -4094,17 +4128,35 @@ a:focus-visible {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  width: max-content;
-  max-width: calc(100vw - 32px);
-  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
-  border-radius: 999px;
+  gap: var(--space-3);
+  width: min(560px, calc(100vw - 24px));
+  min-height: 64px;
+  padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
   background: var(--color-surface);
   color: var(--color-text);
-  box-shadow: 0 6px 24px var(--color-shadow);
-  font-size: 14px;
+  box-shadow: 0 0 0 2px var(--color-accentSoft), 0 10px 32px var(--color-shadow);
+  font-size: 17px;
   font-weight: 700;
   transform: translateX(-50%);
   animation: announce-in 0.35s ease-out;
+}
+/* 공지 띠: 무슨 알림인지 작은 이름표 + 글 (크게) */
+.announce__body {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.announce__label {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--color-accentInk);
+}
+.announce--golden_whale .announce__label,
+.announce--saju_ticket .announce__label,
+.announce--contest .announce__label {
+  color: var(--color-goldInk);
 }
 .announce--golden_whale,
 .announce--saju_ticket,
@@ -4130,8 +4182,8 @@ a:focus-visible {
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 28px;
-  height: 28px;
+  width: 40px;
+  height: 40px;
   border: 0;
   border-radius: 50%;
   background: transparent;

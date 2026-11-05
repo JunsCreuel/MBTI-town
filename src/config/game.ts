@@ -244,6 +244,8 @@ export const recordConfig = {
 // 소셜 (9장)
 export const socialConfig = {
   displayNameMax: 20,
+  /** 가입한 뒤 닉네임을 바꿀 수 있는 횟수 (그 뒤로는 바꿀 수 없다) */
+  nameChangesMax: 1,
   bioMax: 80,
   /** 주민증 취미 한 줄 */
   hobbyMax: 30,

@@ -151,8 +151,9 @@ export function ClubMusic({ distance }: { distance: () => number }) {
     [ensurePlayer, setStatus],
   );
 
-  /** 시계로 정한 곡·위치에서 튼다 (곡이 같으면 위치만 맞춘다) */
+  /** 시계로 정한 곡·위치에서 튼다 (곡이 같으면 위치만 맞춘다). 클럽을 나간 뒤에는 아무것도 하지 않는다 */
   const play = useCallback(() => {
+    if (!alive.current) return;
     const s = clubSchedule();
     if (!s) return;
     setSong(s.yt ? { index: -1, yt: s.yt } : { index: s.index });
@@ -223,13 +224,15 @@ export function ClubMusic({ distance }: { distance: () => number }) {
     };
   }, [element, play]);
 
-  // 들어오면 튼다 (꺼 둔 사람은 그대로). 나가면 멈추고 비운다
+  // 들어오면 튼다 (꺼 둔 사람은 그대로). 나가면 멈추고 비운다.
+  // 먼저 alive를 끈다: 아래 setClubDj(null)이 신청곡 흐름 듣기(onClubDj)를 깨워 play()를 부르면, 광장에서도 클럽 곡이 다시 나와 마을 음악과 겹쳤다
   useEffect(() => {
     alive.current = true;
     want.current = wantMusic();
     if (want.current) play();
     return () => {
       alive.current = false;
+      want.current = false;
       const a = audio.current;
       if (a) {
         a.pause();
@@ -248,6 +251,7 @@ export function ClubMusic({ distance }: { distance: () => number }) {
   // 신청곡 흐름이 바뀌면 (대기열에 곡이 들어오면) 곡 정보를 다시 읽는다. 지금 곡은 끝까지 튼다. 클럽을 나가면 흐름은 잊는다
   useEffect(() => {
     const off = onClubDj(() => {
+      if (!alive.current) return;
       const s = clubSchedule();
       if (s) {
         setSong(s.yt ? { index: -1, yt: s.yt } : { index: s.index });

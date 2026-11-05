@@ -17,7 +17,8 @@ import { loadRoomAssets, type RoomAssets } from '../room/assets';
 
 const AvatarPreview = dynamic(() => import('../room/AvatarPreview'), { ssr: false });
 
-export function CharacterClient() {
+/** embedded: 마을·방 위에 창으로 열 때 (아래 탭은 그 화면의 것을 쓴다) */
+export function CharacterClient({ embedded = false }: { embedded?: boolean } = {}) {
   const { me, setMe } = useMe({ require: 'onboarded' });
   const [assets, setAssets] = useState<RoomAssets | null>(null);
   const [avatar, setAvatar] = useState<Avatar | null>(null);
@@ -114,7 +115,7 @@ export function CharacterClient() {
           </div>
         ))}
       </section>
-      <TabBar />
+      {!embedded && <TabBar />}
     </main>
   );
 }

@@ -29,6 +29,7 @@ import { ClubScreen } from './ClubScreen';
 import { ClubLights } from './ClubLights';
 import { PlazaScreen } from './PlazaScreen';
 import { MarketStalls } from './Market';
+import { panelOpen } from '../app/panelState';
 
 const S = tokens.scene;
 /** 저가폰을 고려해 휴대폰에서는 그림자 해상도를 낮춘다 */
@@ -453,7 +454,10 @@ function KeyboardInput() {
     /** 스페이스바 점프: 다른 사람에게도 보인다 (서버가 몸짓 간격을 지키므로 화면도 같은 간격으로) */
     let lastJump = 0;
     const down = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || input.view !== 'walk') return;
+      // 위에 창(가방 등)이 열려 있거나 글을 쓰는 중이면 걷지 않는다
+      if (e.metaKey || e.ctrlKey || e.altKey || input.view !== 'walk' || panelOpen()) return;
+      const typing = (e.target as HTMLElement | null)?.closest?.('input, textarea, select, [contenteditable="true"]');
+      if (typing) return;
       if (e.code === 'Space') {
         // 글을 쓰거나 버튼에 초점이 있을 때는 원래 동작 (띄어쓰기·누르기)
         const el = e.target as HTMLElement | null;

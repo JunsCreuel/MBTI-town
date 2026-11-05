@@ -113,7 +113,7 @@ export function VisitClient({ handle }: { handle: string }) {
       <main className="page page--center">
         <Guide who="monnyang">방을 찾을 수 없어요. 주소가 바뀌었거나 볼 수 없는 방이에요.</Guide>
         <Link className="btn-secondary" href="/village">마을로 가기</Link>
-        <TabBar />
+        <TabBar stay />
       </main>
     );
   }
@@ -228,7 +228,7 @@ export function VisitClient({ handle }: { handle: string }) {
           </button>
         </div>
       </div>
-      <TabBar />
+      <TabBar stay />
 
       {sheet === 'guestbook' && (
         <Sheet title={`${owner.displayName}의 방명록`} onClose={() => setSheet(null)}>

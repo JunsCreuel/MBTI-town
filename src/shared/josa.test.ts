@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { withEulReul, withGwa, withIGa, withIeyo, withRo } from './josa';
+import { withEulReul, withEunNeun, withGwa, withIGa, withIeyo, withRo } from './josa';
 
 describe('조사', () => {
   it('받침에 맞춰 로/으로', () => {
@@ -32,5 +32,11 @@ describe('이/가', () => {
 describe('을/를', () => {
   it('받침이 있으면 을, 없으면 를', () => {
     expect(['강아지', '곰', '고양이'].map(withEulReul)).toEqual(['강아지를', '곰을', '고양이를']);
+  });
+});
+
+describe('은/는', () => {
+  it('받침이 있으면 은, 없으면 는', () => {
+    expect(['닉네임', '취미', '방명록', '프로필 문구'].map(withEunNeun)).toEqual(['닉네임은', '취미는', '방명록은', '프로필 문구는']);
   });
 });

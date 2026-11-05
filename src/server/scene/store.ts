@@ -282,6 +282,44 @@ export class SceneStore {
     return rows.map((r) => r.id);
   }
 
+  // ───────── 내게 온 알림 (운영자 코인 선물·방문) ─────────
+
+  /** 알림 하나 남기기. onceWithinMinutes: 그 안에 같은 종류를 남겼으면 또 남기지 않는다 (방문 알림 겹치기 막기) */
+  async insertNotice(userId: string, kind: 'gift' | 'visit', text: string, onceWithinMinutes = 0): Promise<void> {
+    await this.sql.query(
+      `insert into public.user_notices (user_id, kind, text)
+       select $1, $2, $3
+       where $4::int = 0 or not exists (
+         select 1 from public.user_notices where user_id = $1 and kind = $2 and created_at > now() - make_interval(mins => $4::int))`,
+      [userId, kind, text.slice(0, 200), onceWithinMinutes],
+    );
+  }
+
+  /** 안 본 알림을 꺼내고 본 것으로 표시한다 (오래된 것부터 limit개) */
+  async takeNotices(userId: string, limit: number): Promise<{ kind: 'gift' | 'visit'; text: string; created_at: Date }[]> {
+    return this.sql.query(
+      `update public.user_notices set read_at = now()
+       where id in (select id from public.user_notices where user_id = $1 and read_at is null order by created_at limit $2)
+       returning kind, text, created_at`,
+      [userId, limit],
+    );
+  }
+
+  /** 가입 뒤 닉네임을 바꾼 횟수 */
+  async nameChanges(id: string): Promise<number> {
+    const [r] = await this.sql.query<{ n: number }>(`select name_changes as n from public.profiles where id = $1`, [id]);
+    return Number(r?.n ?? 0);
+  }
+
+  /** 바꾼 횟수가 max보다 적을 때만 닉네임을 바꾼다 (한 문장이라 동시에 두 번 눌러도 한 번만). 바꿨으면 새 횟수, 못 바꾸면 null */
+  async renameOnce(id: string, name: string, max: number): Promise<number | null> {
+    const [r] = await this.sql.query<{ n: number }>(
+      `update public.profiles set display_name = $2, name_changes = name_changes + 1 where id = $1 and name_changes < $3 returning name_changes as n`,
+      [id, name, max],
+    );
+    return r ? Number(r.n) : null;
+  }
+
   /** 마지막 접속 시각. 화면마다 부르므로 5분에 한 번만 쓴다 (DB 쓰기 줄이기) */
   async touch(id: string, at: Date): Promise<void> {
     await this.sql.query(

@@ -18,7 +18,8 @@ function usePlay(ready: boolean) {
   return { state, error };
 }
 
-export function BagClient() {
+/** embedded: 마을·방 위에 창으로 열 때 (아래 탭은 그 화면의 것을 쓴다) */
+export function BagClient({ embedded = false }: { embedded?: boolean } = {}) {
   const { me } = useMe({ require: 'onboarded' });
   const { state, error } = usePlay(!!me);
   return (
@@ -27,12 +28,12 @@ export function BagClient() {
         <h1>가방</h1>
       </header>
       {error ? <p className="notice">가방을 열지 못했어요. 잠시 뒤에 다시 열어 주세요.</p> : state ? <BagContent state={state} /> : <div className="loader" aria-hidden />}
-      <TabBar />
+      {!embedded && <TabBar />}
     </main>
   );
 }
 
-export function DexClient() {
+export function DexClient({ embedded = false }: { embedded?: boolean } = {}) {
   const { me } = useMe({ require: 'onboarded' });
   const { state, error } = usePlay(!!me);
   return (
@@ -41,7 +42,7 @@ export function DexClient() {
         <h1>도감</h1>
       </header>
       {error ? <p className="notice">도감을 열지 못했어요. 잠시 뒤에 다시 열어 주세요.</p> : state ? <DexContent state={state} /> : <div className="loader" aria-hidden />}
-      <TabBar />
+      {!embedded && <TabBar />}
     </main>
   );
 }

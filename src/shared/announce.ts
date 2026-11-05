@@ -13,9 +13,12 @@ export type Announcement =
   /** MBTI 마을 대항전 우승 마을 (일요일 21시) */
   | { kind: 'contest'; district: District };
 
-/** 방에서 화면으로 보내는 공지 (MSG.announce) */
+/** 한 사람에게만 가는 알림: 운영자가 코인을 선물했다, 운영자가 방에 다녀갔다 (user_notices) */
+export type PersonalNoticeKind = 'gift' | 'visit';
+
+/** 방에서 화면으로 보내는 공지 (MSG.announce). 한 사람 알림도 같은 띠로 보인다 */
 export interface AnnounceBroadcast {
-  kind: Announcement['kind'];
+  kind: Announcement['kind'] | PersonalNoticeKind;
   text: string;
   /** 보낸 시각 (ms) */
   at: number;

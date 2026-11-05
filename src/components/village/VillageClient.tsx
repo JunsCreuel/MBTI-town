@@ -40,6 +40,7 @@ import { clubBar } from './club';
 import { NPC_NAME, NPC_TALK_REACH, clubNpcSpots, guideNpcSpot, markNpcSeen, npcSeen } from './npc';
 import { GATE_KEY, loadTownAssets, type TownAssets } from './assets';
 import { VillageMusicButton, useVillageMusic } from './VillageMusic';
+import { panelOpen } from '../app/panelState';
 import {
   CLUB_FLOOR_RADIUS, FishingPanel, FortuneFruitSheet, beaconsOf, treesOf,
   type FishResult, type PickResult, type PlayState, type TreeInfo,
@@ -485,7 +486,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     const onKey = (e: KeyboardEvent) => {
       if (view !== 'walk' || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
       const t = e.target as HTMLElement | null;
-      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (panelOpen() || (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)))) return;
       const cam = input.camera;
       if (e.code === 'KeyQ') rotateCamera(cam, -1);
       else if (e.code === 'KeyE') rotateCamera(cam, 1);
@@ -503,7 +504,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   // Esc로 지도·집 카드를 닫는다
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
+      if (e.key !== 'Escape' || panelOpen()) return;
       if (view === 'map') openMap(false);
       else {
         setPicked(null);
@@ -852,7 +853,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
         </div>
       )}
 
-      {value && rendered && view === 'walk' && !guest && <TabBar />}
+      {value && rendered && view === 'walk' && !guest && <TabBar stay />}
 
       {!rendered && !failed && (
         <div className="overlay">

@@ -518,3 +518,18 @@ describe('실시간 서버 막기', () => {
     expect(big.status).toBe(413);
   });
 });
+
+describe('운영자 방문 알림', () => {
+  it('운영자가 남의 집에 들어오면 그 방 사람들에게 알린다 (주인 집이면 알리지 않는다)', async () => {
+    const owner = townPid('user-admin-visit-owner');
+    const enter = (p: TownPass) => new Client(`http://localhost:${PORT}`).joinOrCreate('house', { token: signTownPass(p), house: owner });
+    const host = await enter(pass({ pid: owner, name: '주인', house: owner }));
+    rooms.push(host);
+    const got: AnnounceBroadcast[] = [];
+    host.onMessage(MSG.announce, (m: AnnounceBroadcast) => got.push(m));
+    const admin = await enter(pass({ name: '운영자', house: owner, admin: true }));
+    rooms.push(admin);
+    await until(() => got.length === 1);
+    expect(got[0]).toMatchObject({ kind: 'visit', text: '운영자님이 방에 들어왔어요.' });
+  });
+});

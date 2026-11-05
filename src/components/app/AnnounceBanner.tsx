@@ -9,7 +9,10 @@ import { ItemIcon } from './Inventory';
 
 const EVENT = 'scene:announce';
 /** 띠가 보이는 시간 (ms) */
-const SHOW_MS = 7000;
+const SHOW_MS = 10000;
+
+/** 띠 위쪽 작은 이름표 */
+const LABEL: Record<string, string> = { notice: '운영자 공지', golden_whale: '황금 고래', contest: 'MBTI 마을 대항전', saju_ticket: '이용권', gift: '선물이 왔어요', visit: '운영자 방문' };
 
 export function showAnnouncement(b: AnnounceBroadcast) {
   window.dispatchEvent(new CustomEvent<AnnounceBroadcast>(EVENT, { detail: b }));
@@ -41,16 +44,20 @@ export function AnnounceBanner() {
     <div className={`announce announce--${current.kind}`} role="status" aria-live="polite" key={`${current.at}:${current.text}`}>
       <span className="announce__icon" aria-hidden>
         {current.kind === 'golden_whale' ? (
-          <ItemIcon kind="fish" id="golden_whale" size={34} />
+          <ItemIcon kind="fish" id="golden_whale" size={42} />
         ) : current.kind === 'contest' ? (
-          <Icon name="crown" size={22} />
+          <Icon name="crown" size={28} />
         ) : (
-          <Icon name="sparkle" size={20} />
+          <Icon name="sparkle" size={26} />
         )}
       </span>
-      <span className="announce__text">{current.text}</span>
+      <span className="announce__body">
+        {LABEL[current.kind] && <span className="announce__label">{LABEL[current.kind]}</span>}
+        {/* 위에 이름표가 있으니 글 앞의 "(공지)"는 뺀다 */}
+        <span className="announce__text">{LABEL[current.kind] ? current.text.replace(/^\(공지\)\s*/, '') : current.text}</span>
+      </span>
       <button className="announce__close" onClick={() => setQueue((q) => q.slice(1))} aria-label="공지 닫기">
-        <Icon name="close" size={14} />
+        <Icon name="close" size={18} />
       </button>
     </div>
   );

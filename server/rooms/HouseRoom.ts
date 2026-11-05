@@ -7,6 +7,7 @@ import { roomConfig, townConfig } from '../../src/config/game';
 import { MOVE_BUDGET_MAX, normalizeAngle, refillMoveBudget } from '../../src/shared/movement';
 import { ACTIONS, EMOTES, MSG, type ActionBroadcast, type ActionKind, type EmoteBroadcast, type EmoteKind, type HouseJoinOptions, type MoveMessage } from '../../src/shared/protocol';
 import { ROOM_BODY_RADIUS } from '../../src/shared/room';
+import type { AnnounceBroadcast } from '../../src/shared/announce';
 import { listenAnnouncements } from '../announce';
 import { verifyTownPass, type TownPass } from '../../src/shared/townToken';
 import { Player } from './TownState';
@@ -60,9 +61,13 @@ export class HouseRoom extends Room<{ state: HouseState }> {
     return pass;
   }
 
+  /** 이 집 주인의 마을 사람 번호 */
+  private house = '';
+
   onCreate(options?: HouseJoinOptions) {
     // 집 번호(주인의 마을 사람 번호) 모양이 아니면 방을 열지 않는다
     if (typeof options?.house !== 'string' || !/^[A-Za-z0-9_-]{8,32}$/.test(options.house)) throw new Error('집이 올바르지 않습니다');
+    this.house = options.house;
     this.autoDispose = true;
     this.stopAnnouncements = listenAnnouncements(this);
     this.onMessage(MSG.move, (client, message: unknown) => this.handleMove(client, message));
@@ -105,6 +110,11 @@ export class HouseRoom extends Room<{ state: HouseState }> {
     player.moving = false;
     this.state.players.set(client.sessionId, player);
     this.budgets.set(client.sessionId, { value: MOVE_BUDGET_MAX, at: Date.now() });
+    // 운영자가 남의 집에 들어오면 방에 있는 사람들에게 알린다
+    if (pass.admin && pass.pid !== this.house) {
+      const notice: AnnounceBroadcast = { kind: 'visit', text: '운영자님이 방에 들어왔어요.', at: Date.now() };
+      this.broadcast(MSG.announce, notice, { except: client });
+    }
   }
 
   onDispose() {

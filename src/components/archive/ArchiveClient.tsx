@@ -127,14 +127,20 @@ function Composer({ onSaved }: { onSaved: () => void }) {
   );
 }
 
-export function ArchiveClient() {
+/** 기록 화면 (/archive): ?new=1이면 바로 쓰기 */
+export function ArchiveRoute() {
   const params = useSearchParams();
+  return <ArchiveClient startNew={params.get('new') === '1'} />;
+}
+
+/** embedded: 마을·방 위에 창으로 열 때 (아래 탭은 그 화면의 것을 쓴다). startNew: 바로 쓰기 */
+export function ArchiveClient({ embedded = false, startNew = false }: { embedded?: boolean; startNew?: boolean } = {}) {
   const { me } = useMe({ require: 'onboarded' });
   const [tab, setTab] = useState<'records' | 'album'>('records');
   const [records, setRecords] = useState<RecordView[] | null>(null);
   const [more, setMore] = useState(false);
   const [photos, setPhotos] = useState<{ id: string }[] | null>(null);
-  const [writing, setWriting] = useState(params.get('new') === '1');
+  const [writing, setWriting] = useState(startNew);
 
   const load = useCallback(async (before?: string) => {
     const r = await call<{ records: RecordView[] }>('GET', `/api/records${before ? `?before=${encodeURIComponent(before)}` : ''}`);
@@ -222,7 +228,7 @@ export function ArchiveClient() {
             ))}
           </div>
         ))}
-      <TabBar />
+      {!embedded && <TabBar />}
     </main>
   );
 }

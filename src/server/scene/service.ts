@@ -11,6 +11,7 @@ import { isShopColor, isShopSlot, refundFor, shopLabel, type MarketView, type Sh
 import { bgmTrack } from '@/shared/bgm';
 import { cleanTaste, isDistrict, type District, type Taste } from '@/shared/districts';
 import { moderate } from '@/shared/moderation';
+import { withEulReul, withEunNeun } from '@/shared/josa';
 import {
   VISIBILITIES, canView, isVisibility, validateRecord, visibleLevels,
   type Emotion, type RecordKind, type Relation, type Visibility,
@@ -121,6 +122,8 @@ export interface MyProfile extends PublicProfile {
   houseHood: number;
   /** 동네 안 집터 번호 (가입 전이면 null) */
   houseLot: number | null;
+  /** 닉네임을 앞으로 바꿀 수 있는 횟수 (가입 뒤 한 번). 알 수 없으면 null (DB 칸을 아직 안 만들었을 때) */
+  nameChangesLeft: number | null;
 }
 
 /** 마을에 서 있는 집 하나. 이름은 볼 수 있는 사람에게만 붙는다. */
@@ -333,8 +336,8 @@ function cleanShopInput(input: Record<string, unknown>): { name: string; intro: 
 
 function cleanText(v: unknown, max: number, what: string, required = false): string {
   const s = typeof v === 'string' ? v.trim().replace(/\s+\n/g, '\n') : '';
-  if (required && !s) throw new SceneError('bad_request', `${what}을(를) 써 주세요.`);
-  if (s.length > max) throw new SceneError('bad_request', `${what}은(는) ${max}자까지 쓸 수 있어요.`);
+  if (required && !s) throw new SceneError('bad_request', `${withEulReul(what)} 써 주세요.`);
+  if (s.length > max) throw new SceneError('bad_request', `${withEunNeun(what)} ${max}자까지 쓸 수 있어요.`);
   return s;
 }
 
@@ -450,7 +453,7 @@ export class SceneService {
     await this.store.touch(viewer.id, this.now());
     const p = await this.ensureHouse((await this.store.getProfile(viewer.id))!);
     const room = await this.store.getRoom(viewer.id);
-    return { profile: this.toMine(p, await this.store.isAdmin(viewer.id)), room: room ? { layout: room.layout, bgm: room.bgm } : null };
+    return { profile: await this.mine(p, await this.store.isAdmin(viewer.id)), room: room ? { layout: room.layout, bgm: room.bgm } : null };
   }
 
   /** 운영자인지 (로그인하지 않았으면 아니다) */
@@ -468,8 +471,15 @@ export class SceneService {
     return (await this.store.getProfile(p.id))!;
   }
 
+  /** 내 프로필 + 닉네임을 바꿀 수 있는 횟수 (따로 읽는다: DB 칸이 없어도 나머지는 그대로 보이게) */
+  private async mine(p: ProfileRow, admin = false): Promise<MyProfile> {
+    const used = await this.store.nameChanges(p.id).catch(() => null);
+    return { ...this.toMine(p, admin), nameChangesLeft: used === null ? null : Math.max(0, socialConfig.nameChangesMax - used) };
+  }
+
   private toMine(p: ProfileRow, admin = false): MyProfile {
     return {
+      nameChangesLeft: null,
       ...toPublic(p),
       onboarded: !!p.onboarded_at,
       admin,
@@ -513,7 +523,7 @@ export class SceneService {
     const mbti = input.mbti;
     const bgm = bgmTrack(typeof input.bgm === 'string' ? input.bgm : null);
     if (!bgm) throw new SceneError('bad_request', '대표 BGM을 골라 주세요.');
-    const displayName = cleanPublicText(input.displayName, socialConfig.displayNameMax, '이름', true);
+    const displayName = cleanPublicText(input.displayName, socialConfig.displayNameMax, '닉네임', true);
     const bio = cleanPublicText(input.bio, socialConfig.bioMax, '프로필 문구');
     const hobby = cleanHobby(input.hobby);
     const layout = starterLayout(String(input.starter ?? ''), String(input.wallpaper ?? ''), String(input.floor ?? ''));
@@ -535,7 +545,7 @@ export class SceneService {
       await this.store.moveHouse(viewer.id, mbti, townConfig.lotsPerDistrict, townConfig.hoodLots);
     }
     if (!(await this.store.getRoom(viewer.id))) await this.store.saveRoom(viewer.id, layout, bgm.key, now);
-    return this.toMine((await this.store.getProfile(viewer.id))!);
+    return this.mine((await this.store.getProfile(viewer.id))!);
   }
 
   /** 프로필·설정 바꾸기. 보낸 칸만 바꾼다. */
@@ -543,7 +553,12 @@ export class SceneService {
     const p = await this.requireOnboarded(viewer);
     const id = p.id;
     const next: Parameters<SceneStore['updateProfile']>[1] = {};
-    if ('displayName' in patch) next.display_name = cleanPublicText(patch.displayName, socialConfig.displayNameMax, '이름', true);
+    // 닉네임: 가입 뒤 한 번만 바꿀 수 있다 (같은 이름이면 그대로 두고 세지 않는다). 다른 칸을 다 확인한 뒤 맨 끝에 바꾼다
+    let renameTo: string | null = null;
+    if ('displayName' in patch) {
+      const name = cleanPublicText(patch.displayName, socialConfig.displayNameMax, '닉네임', true);
+      if (name !== (p.display_name ?? '')) renameTo = name;
+    }
     if ('bio' in patch) next.bio = cleanPublicText(patch.bio, socialConfig.bioMax, '프로필 문구');
     if ('hobby' in patch) next.hobby = cleanHobby(patch.hobby);
     if ('handle' in patch) {
@@ -598,8 +613,14 @@ export class SceneService {
     }
     if ('showVisits' in patch) next.show_visits = patch.showVisits === true;
     if ('discoverable' in patch) next.discoverable = patch.discoverable === true;
+    if (renameTo !== null) {
+      const changed = await this.store.renameOnce(id, renameTo, socialConfig.nameChangesMax).catch(() => {
+        throw new SceneError('conflict', '지금은 닉네임을 바꿀 수 없어요. 잠시 뒤에 다시 해 주세요.');
+      });
+      if (changed === null) throw new SceneError('forbidden', '닉네임은 한 번만 바꿀 수 있어요. 이미 바꿔서 더 바꿀 수 없어요.');
+    }
     await this.store.updateProfile(id, next);
-    return this.toMine((await this.store.getProfile(id))!);
+    return this.mine((await this.store.getProfile(id))!);
   }
 
   /**
@@ -621,7 +642,7 @@ export class SceneService {
     if (p.district !== mbti || p.house_lot === null) {
       await this.store.moveHouse(p.id, mbti, townConfig.lotsPerDistrict, townConfig.hoodLots);
     }
-    return this.toMine((await this.store.getProfile(p.id))!, await this.store.isAdmin(p.id));
+    return this.mine((await this.store.getProfile(p.id))!, await this.store.isAdmin(p.id));
   }
 
   // ───────────────────────── 나의 방 ─────────────────────────
@@ -679,6 +700,8 @@ export class SceneService {
     const relation = await this.relationTo(viewer, owner);
     // 운영자는 공개 범위와 상관없이 다 본다 (방문 기록은 남기지 않는다)
     const admin = relation !== 'self' && (await this.isAdmin(viewer));
+    // 운영자가 다녀가면 방 주인에게 알린다 (한 시간에 한 번)
+    if (admin) await this.store.insertNotice(owner.id, 'visit', '운영자님이 방에 방문했어요.', 60).catch(() => {});
     const canSeeRoom = admin || canView(owner.room_visibility, relation);
     const room = canSeeRoom ? await this.store.getRoom(owner.id) : null;
     const levels = admin ? [...VISIBILITIES] : visibleLevels(relation);
@@ -1045,6 +1068,13 @@ export class SceneService {
     await this.store.deleteAccount(id);
   }
 
+  /** 내게 온 알림 (운영자 코인 선물·방문). 꺼내면 본 것으로 표시한다. 로그인 안 했으면 없음 */
+  async takeNotices(viewer: Viewer | null): Promise<{ kind: 'gift' | 'visit'; text: string; at: string }[]> {
+    if (!viewer) return [];
+    const rows = await this.store.takeNotices(viewer.id, 10).catch(() => []);
+    return rows.map((r) => ({ kind: r.kind, text: r.text, at: new Date(r.created_at).toISOString() }));
+  }
+
   /** 매일 예약 작업: 오래된 기록 정리, 30일 지난 가입 막힘 기록 지우기 */
   async cleanup(): Promise<Record<string, number>> {
     const now = this.now();
@@ -1097,6 +1127,8 @@ export class SceneService {
     if (typeof userId !== 'string' || !/^[0-9a-f-]{36}$/i.test(userId)) throw new SceneError('not_found', '주민을 찾지 못했어요.');
     const r = await this.store.adjustWallet(userId, coins);
     if (!r) throw new SceneError('not_found', '주민을 찾지 못했어요.');
+    // 받은 사람에게 알림 (다음에 들어오거나 1분 안에 화면 위에 크게 보인다)
+    if (coins > 0) await this.store.insertNotice(userId, 'gift', `운영자님이 코인 ${coins.toLocaleString('ko-KR')}개를 선물했어요.`).catch(() => {});
     return r;
   }
 

@@ -9,6 +9,7 @@ import { tokens } from '@/design/tokens';
 import { call, errorMessage } from '@/lib/api';
 import type { MyProfile, PlayState, RoomCard } from '@/server/scene/service';
 import { DISTRICT } from '@/shared/districts';
+import { withRo } from '@/shared/josa';
 import { VISIBILITY_LABEL, type Visibility } from '@/shared/records';
 import { ResidentCard } from '../app/ResidentCard';
 import { InventorySheet, ItemIcon } from '../app/Inventory';
@@ -36,7 +37,8 @@ function Toggle({ checked, onChange, label, sub }: { checked: boolean; onChange:
   );
 }
 
-export function MyClient() {
+/** embedded: 마을·방 위에 창으로 열 때 (아래 탭은 그 화면의 것을 쓴다) */
+export function MyClient({ embedded = false }: { embedded?: boolean } = {}) {
   const { me, reload } = useMe({ require: 'onboarded' });
   const [profile, setProfile] = useState<MyProfile | null>(null);
   const [name, setName] = useState('');
@@ -86,6 +88,15 @@ export function MyClient() {
     } catch (e) {
       setToast(errorMessage(e));
     }
+  }
+
+  /** 프로필 저장. 닉네임을 바꾸면 한 번뿐이라 한 번 더 묻는다 */
+  async function saveProfile() {
+    if (!profile) return;
+    const next = name.trim();
+    const renaming = next !== profile.displayName;
+    if (renaming && !confirm(`닉네임은 가입한 뒤 딱 한 번만 바꿀 수 있어요. ${withRo(next)} 바꾸면 다시는 바꿀 수 없어요.\n정말 바꿀까요?`)) return;
+    await patch(renaming ? { displayName: next, bio, hobby, handle } : { bio, hobby, handle }, renaming ? '닉네임을 바꿨어요' : '저장했어요');
   }
 
   async function friendAction(h: string, action: 'request' | 'accept' | 'remove') {
@@ -192,8 +203,11 @@ export function MyClient() {
       <section className="section card">
         <h2 className="section-title">프로필</h2>
         <label className="field">
-          <span>이름</span>
-          <input value={name} maxLength={socialConfig.displayNameMax} onChange={(e) => setName(e.target.value)} />
+          <span>닉네임</span>
+          <input value={name} maxLength={socialConfig.displayNameMax} disabled={profile.nameChangesLeft === 0} onChange={(e) => setName(e.target.value)} />
+          <small className="muted">
+            {profile.nameChangesLeft === 0 ? '닉네임은 이미 한 번 바꿔서 더 바꿀 수 없어요.' : '닉네임은 가입한 뒤 딱 한 번만 바꿀 수 있어요.'}
+          </small>
         </label>
         <label className="field">
           <span>프로필 문구</span>
@@ -211,7 +225,7 @@ export function MyClient() {
           </div>
           <small className="muted">영문 소문자·숫자·밑줄 3~20자</small>
         </label>
-        <button className="btn-primary" onClick={() => patch({ displayName: name, bio, hobby, handle })}>프로필 저장</button>
+        <button className="btn-primary" onClick={() => void saveProfile()}>프로필 저장</button>
       </section>
 
       <section className="section card">
@@ -353,7 +367,7 @@ export function MyClient() {
         <button className="btn-danger" onClick={() => void leave()}>탈퇴하기</button>
       </section>
       {toast && <div className="toast" role="status">{toast}</div>}
-      <TabBar />
+      {!embedded && <TabBar />}
     </main>
   );
 }

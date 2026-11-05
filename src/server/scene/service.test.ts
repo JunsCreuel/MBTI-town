@@ -1000,3 +1000,46 @@ describe('쓰기 상한', () => {
     expect(await sql.query(`select 1 from public.reports where reporter = $1 and target_id = $2`, [v.id, other.id])).toHaveLength(1);
   });
 });
+
+describe('닉네임 한 번 바꾸기', () => {
+  it('가입 뒤 한 번만 바꿀 수 있고, 같은 이름은 세지 않는다', async () => {
+    const v = await user();
+    await onboard(v, '처음이름', { district: 'ENFJ' });
+    expect((await service.me(v)).profile.nameChangesLeft).toBe(1);
+    // 같은 이름으로 저장(다른 칸만 바꾸기)은 세지 않는다
+    await service.updateProfile(v, { displayName: '처음이름', bio: '안녕' });
+    expect((await service.me(v)).profile.nameChangesLeft).toBe(1);
+    const renamed = await service.updateProfile(v, { displayName: '고친이름' });
+    expect([renamed.displayName, renamed.nameChangesLeft]).toEqual(['고친이름', 0]);
+    await expectError(service.updateProfile(v, { displayName: '또바꿈' }), 'forbidden');
+    expect((await service.me(v)).profile.displayName).toBe('고친이름');
+    // 다른 칸이 틀리면 닉네임도 바뀌지 않는다 (횟수를 쓰지 않는다)
+    const w = await user();
+    await onboard(w, '둘째', { district: 'ENFJ' });
+    await expectError(service.updateProfile(w, { displayName: '새이름', handle: 'X!' }), 'bad_request');
+    expect((await service.me(w)).profile).toMatchObject({ displayName: '둘째', nameChangesLeft: 1 });
+  });
+});
+
+describe('내게 온 알림 (운영자)', () => {
+  it('운영자가 코인을 선물하거나 방에 다녀가면 알림이 남고, 꺼내면 본 것이 된다 (방문은 한 시간에 한 번)', async () => {
+    const admin = await user();
+    const v = await user();
+    await onboard(admin, '알림운영자', { district: 'INTJ' });
+    await onboard(v, '알림받는이', { district: 'INTJ' });
+    await sql.query(`insert into public.admins (user_id) values ($1) on conflict do nothing`, [admin.id]);
+    await service.adminAdjustWallet(admin, v.id, { coins: 1500 });
+    await service.adminAdjustWallet(admin, v.id, { coins: -100 });
+    const handle = (await service.me(v)).profile.handle!;
+    await service.roomView(admin, handle);
+    await service.roomView(admin, handle);
+    const got = await service.takeNotices(v);
+    // 같은 순간에 남으면 순서가 바뀔 수 있어 정렬해서 본다
+    expect(got.map((n) => [n.kind, n.text]).sort()).toEqual([
+      ['gift', '운영자님이 코인 1,500개를 선물했어요.'],
+      ['visit', '운영자님이 방에 방문했어요.'],
+    ]);
+    expect(await service.takeNotices(v)).toEqual([]);
+    expect(await service.takeNotices(null)).toEqual([]);
+  });
+});

@@ -15,6 +15,7 @@ import { tokens } from '@/design/tokens';
 import { profileTag, type Avatar, type AvatarBody } from '@/shared/avatar';
 import { useBodyModel } from './useBodyModel';
 import { CHARACTER_HEIGHT, faceFor, type ClipName } from '@/shared/character';
+import { panelOpen } from '../app/panelState';
 import { attachAccessory, bodyTintOf, brightenFur, characterActions, cloneCharacter, faceControl, petInstance, tintOutfit, withMeshopt } from '@/lib/characterRig';
 import { petDef } from '@/shared/pets';
 import { themeOf, type District } from '@/shared/districts';
@@ -744,9 +745,16 @@ function DragController({
         const left = ray.ray.intersectPlane(LEFT_PLANE, new THREE.Vector3());
         const onBack = back && back.x >= -0.2 && back.x <= W && back.y >= 0 && back.y <= H + 0.5;
         const onLeft = left && left.z >= -0.2 && left.z <= D && left.y >= 0 && left.y <= H + 0.5;
-        const wall = onBack && (!onLeft || back!.x >= 0.3) ? 'back' : onLeft ? 'left' : null;
+        let wall: 'back' | 'left' | null = onBack && (!onLeft || back!.x >= 0.3) ? 'back' : onLeft ? 'left' : null;
+        let along = wall === 'back' ? back!.x : wall === 'left' ? left!.z : 0;
+        // 위에서 내려다보면 벽이 화면에 얇게 보여 손가락이 바닥 쪽으로 내려가기 쉽다 (그러면 벽에 닿지 않아 안 옮겨졌다).
+        // 바닥을 끌고 있으면 바닥에 닿은 자리에서 가까운 벽을 따라 옮긴다 (지금 벽을 조금 더 좋아한다)
+        if (!wall && ray.ray.intersectPlane(FLOOR_PLANE, hit)) {
+          const preferLeft = item.wall === 'left';
+          wall = preferLeft ? (hit.x <= hit.z + 1 ? 'left' : 'back') : hit.z <= hit.x + 1 ? 'back' : 'left';
+          along = wall === 'back' ? hit.x : hit.z;
+        }
         if (wall) {
-          const along = wall === 'back' ? back!.x : left!.z;
           const len = wall === 'back' ? W : D;
           const x = Math.max(0, Math.min(len - def.size[0], Math.round(along - def.size[0] / 2)));
           next = { ...item, wall, x };
@@ -945,7 +953,7 @@ function RoomAvatar({
       return;
     }
     const down = (e: KeyboardEvent) => {
-      if (!MOVE_KEYS.includes(e.code) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!MOVE_KEYS.includes(e.code) || e.metaKey || e.ctrlKey || e.altKey || panelOpen()) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(t.tagName))) return;
       e.preventDefault();
