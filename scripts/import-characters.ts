@@ -8,8 +8,9 @@
 // - 동작: 손가락·끝 뼈 채널, 엉덩이 말고 다른 뼈의 위치·크기 채널을 뺀다.
 //   원본에 없는 몸짓(응원·박수·안녕…)은 화면이 뼈를 돌려 만든다 (src/lib/characterRig.ts).
 // - 붙는 자리: socket_head (머리 가운데, 머리 소품), socket_hand_r (오른손 가운데, 낚싯대). 선 자세에서 축이 모델 축과 같다.
-// - 베이스 캐릭터: 티셔츠 자리를 색 텍스처 알파에 표시하고(사용자가 고른 색을 입힌다), 표정 아틀라스를 얼굴에 붙인다(face).
-//   머리카락·살 자리는 따로 텍스처(발광 텍스처 칸, 세기 0)에 담는다: 사용자가 고른 머리 색·피부색을 입힌다 (regions).
+// - 베이스 캐릭터: 티셔츠·머리카락·살 자리를 따로 자리 텍스처(발광 텍스처 칸, 세기 0)에 담는다 (R 머리, G 살, B 티셔츠).
+//   화면이 그 자리에만 사용자가 고른 티셔츠 색·머리 색·피부색을 입힌다 (regions). 표정 아틀라스를 얼굴에 붙인다(face).
+//   색 텍스처에는 알파를 두지 않는다 (아이폰 브라우저가 알파 0인 칸의 색을 버려 검게 그린다).
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { type Accessor, type Document, NodeIO, type Node, type Primitive } from '@gltf-transform/core';
@@ -354,9 +355,8 @@ function whitenFur(rgb: Buffer) {
   }
 }
 
-/** 색 텍스처 한 장만 남기고 1024px WebP로. 베이스는 티셔츠 자리를 알파에 표시하고, 티셔츠 평균 밝기를 돌려준다 */
 /**
- * 머리카락·살 자리 텍스처: R = 머리카락, G = 살 (0~255, 경계는 부드럽게). 티셔츠 자리는 둘 다 0.
+ * 자리 텍스처: R = 머리카락, G = 살, B = 티셔츠 (0~255, 경계는 부드럽게). 티셔츠 자리는 머리·살이 0.
  * 조각 밖 빈 칸은 가까운 조각 값으로 채운다 (텍스처 거르기로 조각 가장자리에 원래 색이 비치지 않게).
  * 화면은 이 자리에만 고른 머리 색·피부색을 입힌다 (밝기 무늬는 살린다). 자리마다 평균 밝기(선형)를 같이 돌려준다
  */
@@ -376,7 +376,10 @@ async function regionTexture(doc: Document, rgb: Buffer, shirt: Uint8Array, w: n
   };
   const sum = { hair: 0, hairW: 0, skin: 0, skinW: 0 };
   for (let i = 0; i < w * h; i++) {
-    if (shirt[i]) continue;
+    if (shirt[i]) {
+      out[i * 3 + 2] = 255;
+      continue;
+    }
     const px = [rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]];
     const dist = (list: number[][]) => Math.min(...list.map((c) => Math.hypot(c[0] - px[0], c[1] - px[1], c[2] - px[2])));
     const dh = dist(refs.hair);
@@ -402,6 +405,11 @@ async function regionTexture(doc: Document, rgb: Buffer, shirt: Uint8Array, w: n
 /** 베이스 캐릭터 재질에 적어 두는 색 입히기 값 (티셔츠·머리·살 평균 밝기) */
 type TintExtras = { shirtLum: number; hairLum?: number; skinLum?: number };
 
+/**
+ * 색 텍스처 한 장만 남기고 1024px WebP로 (알파 없이). 베이스 캐릭터는 티셔츠·머리·살 자리를 따로 자리 텍스처에 담고,
+ * 자리마다 평균 밝기를 돌려준다. 자리를 색 텍스처 알파에 담으면 안 된다: 아이폰 브라우저(WebKit)는 알파가 0인 칸의 색을
+ * 버려서(검게) 살·머리가 까맣게 나온다
+ */
 async function slimTextures(doc: Document, spec: ModelSpec): Promise<TintExtras | null> {
   let shirtLum: number | null = null;
   let regionLums: { hairLum: number; skinLum: number } | null = null;
@@ -425,8 +433,8 @@ async function slimTextures(doc: Document, spec: ModelSpec): Promise<TintExtras 
     const { data, info } = await sharp(Buffer.from(tex.getImage()!)).resize(size, size).removeAlpha().raw().toBuffer({ resolveWithObject: true });
     {
       // 티셔츠: 윗몸(척추·어깨·윗팔)에 붙은 자리 중 살색·어두운 색(머리카락)이 아닌 곳
+      if (!spec.regions) throw new Error(`${spec.src}: 베이스 캐릭터는 머리·살 대표 색(regions)이 있어야 합니다`);
       const upper = upperBodyUvMask(doc, info.width);
-      const rgba = Buffer.alloc(info.width * info.height * 4);
       const shirtMask = new Uint8Array(info.width * info.height);
       let sum = 0;
       let n = 0;
@@ -437,10 +445,6 @@ async function slimTextures(doc: Document, spec: ModelSpec): Promise<TintExtras 
         const { h, l, s: sat } = hsl(r, g, b);
         const skin = h > 8 && h < 48 && sat > 0.3 && l < 0.93;
         const shirt = upper[i] === 1 && l > 0.4 && !skin;
-        rgba[i * 4] = data[i * 3];
-        rgba[i * 4 + 1] = data[i * 3 + 1];
-        rgba[i * 4 + 2] = data[i * 3 + 2];
-        rgba[i * 4 + 3] = shirt ? 255 : 0;
         shirtMask[i] = shirt ? 1 : 0;
         if (shirt) {
           sum += 0.299 * r + 0.587 * g + 0.114 * b;
@@ -448,16 +452,13 @@ async function slimTextures(doc: Document, spec: ModelSpec): Promise<TintExtras 
         }
       }
       shirtLum = n ? sum / n : 1;
-      // exact: 투명한 칸(티셔츠가 아닌 곳)의 색도 그대로 둔다 (기본값은 버려서 머리·얼굴 색이 깨진다)
-      out = await sharp(rgba, { raw: { width: info.width, height: info.height, channels: 4 } }).webp({ quality: 86, alphaQuality: 90, exact: true }).toBuffer();
-      if (spec.regions) {
-        // 머리·살 자리는 빛을 내지 않는 발광 텍스처 칸에 담는다 (발광 세기 0이라 그대로 그려도 티가 안 난다. 화면이 꺼내 쓴다)
-        const r = await regionTexture(doc, data, shirtMask, info.width, info.height, spec.regions);
-        const tex = doc.createTexture('regions').setImage(new Uint8Array(r.image)).setMimeType('image/webp');
-        mat.setEmissiveTexture(tex).setEmissiveFactor([0, 0, 0]);
-        regionLums = { hairLum: r.hairLum, skinLum: r.skinLum };
-        console.log(`  머리·살 자리: 머리 밝기 ${r.hairLum.toFixed(3)}, 살 밝기 ${r.skinLum.toFixed(3)}, ${(r.image.byteLength / 1024).toFixed(0)}KB`);
-      }
+      out = await sharp(data, { raw: { width: info.width, height: info.height, channels: 3 } }).webp({ quality: 86 }).toBuffer();
+      // 자리 텍스처는 빛을 내지 않는 발광 텍스처 칸에 담는다 (발광 세기 0이라 그대로 그려도 티가 안 난다. 화면이 꺼내 쓴다)
+      const r = await regionTexture(doc, data, shirtMask, info.width, info.height, spec.regions);
+      const regions = doc.createTexture('regions').setImage(new Uint8Array(r.image)).setMimeType('image/webp');
+      mat.setEmissiveTexture(regions).setEmissiveFactor([0, 0, 0]);
+      regionLums = { hairLum: r.hairLum, skinLum: r.skinLum };
+      console.log(`  자리 텍스처(머리·살·티셔츠): 머리 밝기 ${r.hairLum.toFixed(3)}, 살 밝기 ${r.skinLum.toFixed(3)}, ${(r.image.byteLength / 1024).toFixed(0)}KB`);
     }
     tex.setImage(new Uint8Array(out)).setMimeType('image/webp').setURI('');
   }

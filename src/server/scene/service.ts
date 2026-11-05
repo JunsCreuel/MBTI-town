@@ -5,7 +5,7 @@ import { randomBytes } from 'node:crypto';
 import { recordConfig, socialConfig, townConfig } from '@/config/game';
 import { isMbtiType, type MbtiType } from '@/design/mbti';
 import { NOTICE_MAX, parseAnnouncement, type Announcement } from '@/shared/announce';
-import { AVATAR_COLORS, PET_NAME_MAX, cleanAvatar, type Avatar } from '@/shared/avatar';
+import { AVATAR_COLORS, PET_NAME_MAX, cleanAvatar, isAvatarBody, type Avatar } from '@/shared/avatar';
 import { isPetId } from '@/shared/pets';
 import { isShopColor, isShopSlot, refundFor, shopLabel, type MarketView, type ShopColor } from '@/shared/market';
 import { bgmTrack } from '@/shared/bgm';
@@ -489,7 +489,8 @@ export class SceneService {
       bio,
       taste: cleanTaste(input.taste),
       // 가입 때는 펫 이름을 받지 않는다 (펫 이름은 금지어 검사를 거쳐 따로 짓는다)
-      avatar: { ...cleanAvatar(input.avatar), petNames: {} },
+      // 성별은 가입할 때 정한 그대로 (bodyFixed)
+      avatar: { ...cleanAvatar(input.avatar), petNames: {}, bodyFixed: true },
       hobby,
       onboarded_at: p.onboarded_at ?? now,
     });
@@ -521,11 +522,19 @@ export class SceneService {
     if ('district' in patch) {
       throw new SceneError('bad_request', '사는 마을은 MBTI로 정해져요. MBTI를 바꾸면 그 마을로 이사해요.');
     }
-    // 모습 바꾸기 (옷장·내 캐릭터): 티셔츠 색·피부색·머리 색·소품. 남자·여자는 가입할 때 정한 그대로 둔다.
-    // 펫 이름은 여기로 바꾸지 않는다 (petNames로만, 금지어 검사를 거친다)
+    // 모습 바꾸기 (옷장·내 캐릭터): 티셔츠 색·피부색·머리 색·소품. 성별은 여기로 바꾸지 않는다 (body로 한 번만).
+    // 펫 이름도 여기로 바꾸지 않는다 (petNames로만, 금지어 검사를 거친다)
     if ('avatar' in patch) {
       const now = cleanAvatar(p.avatar);
-      next.avatar = { ...cleanAvatar(patch.avatar), body: p.onboarded_at ? now.body : cleanAvatar(patch.avatar).body, petNames: now.petNames };
+      const { bodyFixed } = now;
+      next.avatar = { ...cleanAvatar(patch.avatar), body: now.body, petNames: now.petNames, ...(bodyFixed ? { bodyFixed } : {}) };
+    }
+    // 성별 정하기: 성별을 정하지 않은 예전 계정만 한 번 (가입자의 성별대로). 정하면 바꿀 수 없다
+    if ('body' in patch) {
+      const base = next.avatar ?? cleanAvatar(p.avatar);
+      if (base.bodyFixed) throw new SceneError('bad_request', '성별은 가입할 때 정해서 바꿀 수 없어요.');
+      if (!isAvatarBody(patch.body)) throw new SceneError('bad_request', '성별을 골라 주세요.');
+      next.avatar = { ...base, body: patch.body, bodyFixed: true };
     }
     // 펫만 바꾸기 (마을의 펫 불러오기): 모습은 그대로 두고 펫만 고친다
     if ('pet' in patch) {

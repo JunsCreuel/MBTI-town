@@ -1,5 +1,6 @@
 // 나의 캐릭터: 남자·여자 캐릭터를 고르고, 티셔츠 색·피부색·머리 색과 소품을 바꾼다 (PROJECT_GUIDE.md 5장 4단계, 16장 아바타 규약).
-// 남자·여자는 가입할 때 한 번 고르고 바꿀 수 없다. 나머지는 내 캐릭터 화면에서 언제든 바꾼다.
+// 성별(남자·여자)은 가입자의 성별대로 가입할 때 한 번 고르고 바꿀 수 없다 (bodyFixed). 나머지는 내 캐릭터 화면에서 언제든 바꾼다.
+// 여자 캐릭터가 생기기 전에 가입해 성별이 정해지지 않은 계정(bodyFixed 없음)은 내 캐릭터 화면에서 한 번만 정한다.
 // 마을에서 데리고 다니는 펫도 여기에 둔다 (profiles.avatar jsonb, DB를 바꾸지 않는다).
 import { PETS, isPetId, petDef, type PetId } from './pets';
 
@@ -55,8 +56,10 @@ export const ACCESSORIES = [
 export type AccessoryId = (typeof ACCESSORIES)[number]['id'];
 
 export interface Avatar {
-  /** 남자·여자 (가입할 때만 고른다) */
+  /** 남자·여자 = 가입자의 성별 (가입할 때만 고른다) */
   body: AvatarBody;
+  /** 성별을 정했다 (그 뒤로는 바꿀 수 없다). 예전 계정은 없다 → 한 번 정할 수 있다 */
+  bodyFixed?: true;
   /** 티셔츠 색 */
   color: AvatarColor;
   skin: SkinTone;
@@ -101,5 +104,6 @@ export function cleanAvatar(v: unknown): Avatar {
     accessory: ACCESSORIES.some((x) => x.id === a.accessory) ? (a.accessory as AccessoryId) : DEFAULT_AVATAR.accessory,
     pet: isPetId(a.pet) ? a.pet : '',
     petNames: cleanPetNames(a.petNames),
+    ...(a.bodyFixed === true ? { bodyFixed: true as const } : {}),
   };
 }

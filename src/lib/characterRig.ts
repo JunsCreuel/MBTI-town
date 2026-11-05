@@ -381,8 +381,10 @@ function emptyRegions(): THREE.DataTexture {
 }
 
 /**
- * 옷 재질에 색을 입힌다 (재질을 복제한다). 새 모델: 티셔츠 자리(알파)에만, 밝기 무늬는 살린다.
- * 머리 색·피부색을 주면 머리카락·살 자리(발광 텍스처 칸에 담긴 자리 텍스처, scripts/import-characters.ts)에도 입힌다.
+ * 옷 재질에 색을 입힌다 (재질을 복제한다). 새 모델: 티셔츠 자리에만, 밝기 무늬는 살린다.
+ * 머리 색·피부색을 주면 머리카락·살 자리에도 입힌다. 자리는 발광 텍스처 칸에 담긴 자리 텍스처(R 머리, G 살, B 티셔츠,
+ * scripts/import-characters.ts)에서 읽는다. 자리 텍스처가 없는 예전 모델은 티셔츠 자리를 색 텍스처 알파에서 읽는다
+ * (아이폰 브라우저는 알파 0인 칸의 색을 버려 검게 그리므로 새 모델은 알파를 쓰지 않는다).
  * 예전 임시 모델(티셔츠 표시가 없음): 재질 색을 바꾼다. 복제한 재질 목록을 돌려준다 (정리할 때 dispose).
  */
 export function tintOutfit(root: THREE.Object3D, color: string, body?: BodyTint): THREE.Material[] {
@@ -411,6 +413,7 @@ export function tintOutfit(root: THREE.Object3D, color: string, body?: BodyTint)
         uTint: { value: tint },
         uShirtLum: { value: base },
         uRegions: { value: regions ?? emptyRegions() },
+        uHasRegions: { value: regions ? 1 : 0 },
         uHair: { value: new THREE.Color(hairOn ? body!.hair! : '#000000') },
         uHairLum: { value: extras.hairLum || 1 },
         uHairOn: { value: hairOn ? 1 : 0 },
@@ -427,6 +430,7 @@ export function tintOutfit(root: THREE.Object3D, color: string, body?: BodyTint)
 uniform vec3 uTint;
 uniform float uShirtLum;
 uniform sampler2D uRegions;
+uniform float uHasRegions;
 uniform vec3 uHair;
 uniform float uHairLum;
 uniform float uHairOn;
@@ -439,9 +443,11 @@ uniform float uSkinOn;`,
             `#include <map_fragment>
 #ifdef USE_MAP
   float lumNow = dot( sampledDiffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+  vec3 regionTex = texture2D( uRegions, vMapUv ).rgb;
+  float shirtMix = uHasRegions > 0.5 ? regionTex.b : sampledDiffuseColor.a;
   vec3 shirtTinted = uTint * clamp( lumNow / uShirtLum, 0.55, 1.2 );
-  diffuseColor.rgb = mix( diffuseColor.rgb, shirtTinted, sampledDiffuseColor.a );
-  vec2 regionMix = texture2D( uRegions, vMapUv ).rg * vec2( uHairOn, uSkinOn );
+  diffuseColor.rgb = mix( diffuseColor.rgb, shirtTinted, shirtMix );
+  vec2 regionMix = regionTex.rg * vec2( uHairOn, uSkinOn );
   diffuseColor.rgb = mix( diffuseColor.rgb, uHair * clamp( lumNow / uHairLum, 0.5, 1.6 ), regionMix.r );
   diffuseColor.rgb = mix( diffuseColor.rgb, uSkin * clamp( lumNow / uSkinLum, 0.6, 1.25 ), regionMix.g );
   diffuseColor.a = 1.0;

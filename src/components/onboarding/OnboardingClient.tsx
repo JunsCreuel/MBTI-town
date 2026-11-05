@@ -163,9 +163,9 @@ export function OnboardingClient() {
 
       {step === 2 && (
         <section className="onboarding__body">
-          <Guide>나를 닮은 캐릭터를 만들어 봐요. 남자·여자는 지금만 고를 수 있고, 피부색·머리 색·옷은 나중에도 언제든 바꿀 수 있어요.</Guide>
+          <Guide>나를 닮은 캐릭터를 만들어 봐요. 성별은 지금 한 번만 정하고, 피부색·머리 색·옷은 나중에도 언제든 바꿀 수 있어요.</Guide>
           <div className="avatar-stage">{assets ? <AvatarPreview assets={assets} avatar={avatar} /> : <div className="loader" aria-hidden />}</div>
-          <h2 className="field-title">캐릭터</h2>
+          <h2 className="field-title">성별</h2>
           <div className="chips">
             {AVATAR_BODIES.map((b) => (
               <button key={b.id} className={`chip${avatar.body === b.id ? ' chip--on' : ''}`} aria-pressed={avatar.body === b.id} onClick={() => setAvatar({ ...avatar, body: b.id })}>

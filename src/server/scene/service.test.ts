@@ -362,6 +362,28 @@ describe('마을 집터', () => {
     expect(next.avatar).toMatchObject({ body: 'female', skin: 'deep', hair: 'silver' });
     expect(verifyTownPass((await service.townTicket(v)).token)).toMatchObject({ body: 'female', skin: 'deep', hair: 'silver' });
     expect((await service.updateProfile(v, { avatar: { ...next.avatar, skin: 'green', hair: 42 } })).avatar).toMatchObject({ skin: 'natural', hair: 'natural' });
+    // 성별을 따로 바꾸려 해도 안 된다 (가입할 때 정했다)
+    expect(next.avatar.bodyFixed).toBe(true);
+    await expectError(service.updateProfile(v, { body: 'male' }), 'bad_request');
+    expect((await service.me(v)).profile.avatar.body).toBe('female');
+  });
+
+  it('성별을 정하지 않은 예전 계정은 한 번만 정할 수 있다 (옷장 저장으로는 안 바뀐다)', async () => {
+    const v = await user();
+    await onboard(v, '예전주민', { district: 'ESFJ' });
+    // 여자 캐릭터가 생기기 전 가입: 성별 표시 없이 남자로 저장돼 있다
+    await sql.query(`update public.profiles set avatar = $2 where id = $1`, [v.id, JSON.stringify({ body: 'male', color: 'mint', accessory: 'none' })]);
+    const before = (await service.me(v)).profile.avatar;
+    expect(before.bodyFixed).toBeUndefined();
+    // 옷장 저장(성별 없이)은 성별을 바꾸지도, 정하지도 않는다
+    const dressed = await service.updateProfile(v, { avatar: { ...before, body: 'female', hair: 'black' } });
+    expect(dressed.avatar).toMatchObject({ body: 'male', hair: 'black' });
+    expect(dressed.avatar.bodyFixed).toBeUndefined();
+    await expectError(service.updateProfile(v, { body: 'robot' }), 'bad_request');
+    const fixed = await service.updateProfile(v, { avatar: { ...dressed.avatar, skin: 'tan' }, body: 'female' });
+    expect(fixed.avatar).toMatchObject({ body: 'female', skin: 'tan', hair: 'black', bodyFixed: true });
+    expect((await service.townTicket(v)).pass.body).toBe('female');
+    await expectError(service.updateProfile(v, { body: 'male' }), 'bad_request');
   });
 
   it('입장 토큰: 가입한 사람은 이름·집터를, 아니면 손님으로 담는다', async () => {

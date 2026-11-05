@@ -17,6 +17,8 @@ describe('입력 정리', () => {
     expect(cleanAvatar({ body: 'female', color: 'sky', accessory: 'none', pet: 'dog' })).toEqual({ body: 'female', color: 'sky', skin: 'natural', hair: 'natural', accessory: 'none', pet: 'dog', petNames: {} });
     expect(cleanAvatar({ skin: 'deep', hair: 'pink' })).toMatchObject({ skin: 'deep', hair: 'pink' });
     expect(cleanAvatar({ skin: 'blue', hair: '#fff' })).toMatchObject({ skin: 'natural', hair: 'natural' });
+    expect(cleanAvatar({ body: 'female', bodyFixed: true }).bodyFixed).toBe(true);
+    expect('bodyFixed' in cleanAvatar({ bodyFixed: 'yes' })).toBe(false);
     // 펫 이름: 아는 펫만, 10자까지, 공백 정리
     expect(cleanAvatar({ petNames: { dog: '  몽이  ', dragon: '용', cat: 3 } }).petNames).toEqual({ dog: '몽이' });
     expect(cleanAvatar({ petNames: { dog: '아주아주아주아주긴이름' } }).petNames.dog).toHaveLength(10);
