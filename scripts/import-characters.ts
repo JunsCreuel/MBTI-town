@@ -9,6 +9,7 @@
 //   원본에 없는 몸짓(응원·박수·안녕…)은 화면이 뼈를 돌려 만든다 (src/lib/characterRig.ts).
 // - 붙는 자리: socket_head (머리 가운데, 머리 소품), socket_hand_r (오른손 가운데, 낚싯대). 선 자세에서 축이 모델 축과 같다.
 // - 베이스 캐릭터: 티셔츠 자리를 색 텍스처 알파에 표시하고(사용자가 고른 색을 입힌다), 표정 아틀라스를 얼굴에 붙인다(face).
+//   머리카락·살 자리는 따로 텍스처(발광 텍스처 칸, 세기 0)에 담는다: 사용자가 고른 머리 색·피부색을 입힌다 (regions).
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { type Accessor, type Document, NodeIO, type Node, type Primitive } from '@gltf-transform/core';
@@ -38,6 +39,16 @@ interface FaceSpec {
   sticker: boolean;
 }
 
+/**
+ * 머리카락·살 자리 (사용자가 머리 색·피부색을 바꾼다): 색 텍스처의 대표 색들 (16진수 RGB).
+ * 칸마다 가장 가까운 대표 색으로 머리·살·나머지를 가른다 (경계는 부드럽게). 대표 색은 모델 텍스처의 색 묶음에서 골랐다
+ */
+interface RegionSpec {
+  hair: string[];
+  skin: string[];
+  other: string[];
+}
+
 interface ModelSpec {
   src: string;
   key: string;
@@ -46,6 +57,8 @@ interface ModelSpec {
   height: number;
   /** 베이스 캐릭터: 티셔츠 색 입히기 + 표정 */
   face?: FaceSpec;
+  /** 베이스 캐릭터: 머리 색·피부색 바꾸기 */
+  regions?: RegionSpec;
   /** 펫 (뼈 없는 모델) */
   pet?: boolean;
   /**
@@ -109,8 +122,16 @@ const FEMALE_FACE: FaceSpec = {
 };
 
 const MODELS: ModelSpec[] = [
-  { src: 'base_blank_face.glb', key: 'char.base', file: 'characters/char_base.glb', height: CHARACTER_HEIGHT, face: MALE_FACE, armSpread: 15, old: 'characters/char_base_ph.glb' },
-  { src: 'base_blank_face_female.glb', key: 'char.base.female', file: 'characters/char_base_female.glb', height: CHARACTER_HEIGHT, face: FEMALE_FACE, armSpread: 20 },
+  {
+    src: 'base_blank_face.glb', key: 'char.base', file: 'characters/char_base.glb', height: CHARACTER_HEIGHT, face: MALE_FACE, armSpread: 15, old: 'characters/char_base_ph.glb',
+    // 갈색 머리, 살구색 살, 반바지(살색과 비슷한 황토색)·신발·티셔츠
+    regions: { hair: ['754134', '8e5b4d'], skin: ['fdcbac', 'f5c2a3'], other: ['dadaeb', 'e9ba99', 'f2e0f4', 'bcc8df', 'efd0d7'] },
+  },
+  {
+    src: 'base_blank_face_female.glb', key: 'char.base.female', file: 'characters/char_base_female.glb', height: CHARACTER_HEIGHT, face: FEMALE_FACE, armSpread: 20,
+    // 짙은 갈색 긴 머리, 살구색 살, 흰 티셔츠·황토색 반바지·신발
+    regions: { hair: ['31160c', '3d2217'], skin: ['fcb993', 'f7b38c', 'f8c5a3'], other: ['fefcf9', 'daad88', 'ecdcc0', '836555'] },
+  },
   // 동물 주민 (MBTI 마을에 집이 있다). 광장 몬냥이·클럽 DJ 너굴·바텐더 곰돌은 예전 임시 모델 그대로 (scripts/gen-placeholders.ts)
   { src: 'animal_cat.glb', key: 'char.resident.cat', file: 'characters/char_resident_cat.glb', height: 1.3 },
   { src: 'animal_fox.glb', key: 'char.resident.fox', file: 'characters/char_resident_fox.glb', height: 1.32 },
@@ -121,6 +142,8 @@ const MODELS: ModelSpec[] = [
 
 /** 표정 그림 한 칸 (px) */
 const FACE_CELL = 256;
+/** 머리·살 자리 텍스처 크기 (px). 색 텍스처보다 작아도 경계가 부드러워 티가 안 난다 */
+const REGION_TEXTURE = 512;
 /** 예전 임시 캐릭터의 머리 반지름. 머리 소품은 이 머리에 맞춰 만들었다 */
 const OLD_HEAD_RADIUS = 0.34;
 
@@ -332,8 +355,56 @@ function whitenFur(rgb: Buffer) {
 }
 
 /** 색 텍스처 한 장만 남기고 1024px WebP로. 베이스는 티셔츠 자리를 알파에 표시하고, 티셔츠 평균 밝기를 돌려준다 */
-async function slimTextures(doc: Document, spec: ModelSpec): Promise<number | null> {
+/**
+ * 머리카락·살 자리 텍스처: R = 머리카락, G = 살 (0~255, 경계는 부드럽게). 티셔츠 자리는 둘 다 0.
+ * 조각 밖 빈 칸은 가까운 조각 값으로 채운다 (텍스처 거르기로 조각 가장자리에 원래 색이 비치지 않게).
+ * 화면은 이 자리에만 고른 머리 색·피부색을 입힌다 (밝기 무늬는 살린다). 자리마다 평균 밝기(선형)를 같이 돌려준다
+ */
+async function regionTexture(doc: Document, rgb: Buffer, shirt: Uint8Array, w: number, h: number, spec: RegionSpec): Promise<{ image: Buffer; hairLum: number; skinLum: number }> {
+  const parse = (list: string[]) => list.map((x) => [0, 2, 4].map((k) => parseInt(x.slice(k, k + 2), 16)));
+  const refs = { hair: parse(spec.hair), skin: parse(spec.skin), other: parse(spec.other) };
+  const used = uvCoverage(doc, w, h);
+  const out = Buffer.alloc(w * h * 3);
+  const lin = (v: number) => {
+    const c = v / 255;
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  /** 내 대표 색까지 거리 a, 다른 대표 색까지 거리 b → 내 몫 (가운데에서 부드럽게 넘어간다) */
+  const share = (a: number, b: number) => {
+    const t = Math.min(1, Math.max(0, (b / (a + b + 1e-6) - 0.35) / 0.3));
+    return t * t * (3 - 2 * t);
+  };
+  const sum = { hair: 0, hairW: 0, skin: 0, skinW: 0 };
+  for (let i = 0; i < w * h; i++) {
+    if (shirt[i]) continue;
+    const px = [rgb[i * 3], rgb[i * 3 + 1], rgb[i * 3 + 2]];
+    const dist = (list: number[][]) => Math.min(...list.map((c) => Math.hypot(c[0] - px[0], c[1] - px[1], c[2] - px[2])));
+    const dh = dist(refs.hair);
+    const ds = dist(refs.skin);
+    const dOther = dist(refs.other);
+    const hair = share(dh, Math.min(ds, dOther));
+    const skin = share(ds, Math.min(dh, dOther));
+    out[i * 3] = Math.round(hair * 255);
+    out[i * 3 + 1] = Math.round(skin * 255);
+    if (used[i]) {
+      const lum = 0.2126 * lin(px[0]) + 0.7152 * lin(px[1]) + 0.0722 * lin(px[2]);
+      sum.hair += lum * hair;
+      sum.hairW += hair;
+      sum.skin += lum * skin;
+      sum.skinW += skin;
+    }
+  }
+  bleedEdges(out, w, h, used, 24);
+  const image = await sharp(out, { raw: { width: w, height: h, channels: 3 } }).resize(REGION_TEXTURE, REGION_TEXTURE).webp({ lossless: true }).toBuffer();
+  return { image, hairLum: sum.hairW ? sum.hair / sum.hairW : 0.05, skinLum: sum.skinW ? sum.skin / sum.skinW : 0.5 };
+}
+
+/** 베이스 캐릭터 재질에 적어 두는 색 입히기 값 (티셔츠·머리·살 평균 밝기) */
+type TintExtras = { shirtLum: number; hairLum?: number; skinLum?: number };
+
+async function slimTextures(doc: Document, spec: ModelSpec): Promise<TintExtras | null> {
   let shirtLum: number | null = null;
+  let regionLums: { hairLum: number; skinLum: number } | null = null;
   for (const mat of doc.getRoot().listMaterials()) {
     mat.setNormalTexture(null).setMetallicRoughnessTexture(null).setOcclusionTexture(null).setEmissiveTexture(null);
     mat.setMetallicFactor(0).setRoughnessFactor(0.85);
@@ -356,6 +427,7 @@ async function slimTextures(doc: Document, spec: ModelSpec): Promise<number | nu
       // 티셔츠: 윗몸(척추·어깨·윗팔)에 붙은 자리 중 살색·어두운 색(머리카락)이 아닌 곳
       const upper = upperBodyUvMask(doc, info.width);
       const rgba = Buffer.alloc(info.width * info.height * 4);
+      const shirtMask = new Uint8Array(info.width * info.height);
       let sum = 0;
       let n = 0;
       for (let i = 0; i < info.width * info.height; i++) {
@@ -369,6 +441,7 @@ async function slimTextures(doc: Document, spec: ModelSpec): Promise<number | nu
         rgba[i * 4 + 1] = data[i * 3 + 1];
         rgba[i * 4 + 2] = data[i * 3 + 2];
         rgba[i * 4 + 3] = shirt ? 255 : 0;
+        shirtMask[i] = shirt ? 1 : 0;
         if (shirt) {
           sum += 0.299 * r + 0.587 * g + 0.114 * b;
           n++;
@@ -377,10 +450,18 @@ async function slimTextures(doc: Document, spec: ModelSpec): Promise<number | nu
       shirtLum = n ? sum / n : 1;
       // exact: 투명한 칸(티셔츠가 아닌 곳)의 색도 그대로 둔다 (기본값은 버려서 머리·얼굴 색이 깨진다)
       out = await sharp(rgba, { raw: { width: info.width, height: info.height, channels: 4 } }).webp({ quality: 86, alphaQuality: 90, exact: true }).toBuffer();
+      if (spec.regions) {
+        // 머리·살 자리는 빛을 내지 않는 발광 텍스처 칸에 담는다 (발광 세기 0이라 그대로 그려도 티가 안 난다. 화면이 꺼내 쓴다)
+        const r = await regionTexture(doc, data, shirtMask, info.width, info.height, spec.regions);
+        const tex = doc.createTexture('regions').setImage(new Uint8Array(r.image)).setMimeType('image/webp');
+        mat.setEmissiveTexture(tex).setEmissiveFactor([0, 0, 0]);
+        regionLums = { hairLum: r.hairLum, skinLum: r.skinLum };
+        console.log(`  머리·살 자리: 머리 밝기 ${r.hairLum.toFixed(3)}, 살 밝기 ${r.skinLum.toFixed(3)}, ${(r.image.byteLength / 1024).toFixed(0)}KB`);
+      }
     }
     tex.setImage(new Uint8Array(out)).setMimeType('image/webp').setURI('');
   }
-  return shirtLum;
+  return shirtLum === null ? null : { shirtLum, ...(regionLums ?? {}) };
 }
 
 function skinnedPrimitive(doc: Document): { node: Node; prim: Primitive } {
@@ -806,14 +887,14 @@ async function convert(spec: ModelSpec) {
   const doc = await io.read(join(SRC, spec.src));
   doc.createExtension(EXTTextureWebP).setRequired(true);
   if (!spec.pet) trimAnimations(doc);
-  const shirtLum = await slimTextures(doc, spec);
+  const tint = await slimTextures(doc, spec);
   const b = getBounds(doc.getRoot().listScenes()[0]);
   bakeScale(doc, spec.height / (b.max[1] - b.min[1]));
   await doc.transform(dedup(), prune(), weld(), simplify({ simplifier: MeshoptSimplifier, ratio: spec.simplify ?? 0.5, error: spec.simplifyError ?? 0.0008 }), resample());
   if (spec.quadruped) rigQuadruped(doc);
 
   let headRadius = 0;
-  if (!spec.pet) headRadius = await addRigParts(doc, spec, shirtLum);
+  if (!spec.pet) headRadius = await addRigParts(doc, spec, tint);
   if (spec.armSpread) doc.getRoot().listScenes()[0].setExtras({ armSpread: spec.armSpread });
 
   // 붙는 자리(socket_*)는 빈 노드라 prune이 지우지 않게 한다
@@ -826,9 +907,9 @@ async function convert(spec: ModelSpec) {
 }
 
 /** 뼈 있는 캐릭터: 티셔츠 밝기 기록, 머리·손 자리, 표정. 머리 반지름을 돌려준다 */
-async function addRigParts(doc: Document, spec: ModelSpec, shirtLum: number | null): Promise<number> {
+async function addRigParts(doc: Document, spec: ModelSpec, tint: TintExtras | null): Promise<number> {
   const { prim } = skinnedPrimitive(doc);
-  if (shirtLum !== null) prim.getMaterial()!.setExtras({ shirtLum: Number(shirtLum.toFixed(3)) });
+  if (tint) prim.getMaterial()!.setExtras(Object.fromEntries(Object.entries(tint).map(([k, v]) => [k, Number(v.toFixed(4))])));
   // 머리 소품 자리: 머리 가운데, 예전 머리 크기에 맞춘 소품이 맞게 크기를 정한다
   const headBox = boneVerticesBox(doc, prim, jointNode(doc, 'Head'));
   const headCenter = headBox.getCenter(new THREE.Vector3());

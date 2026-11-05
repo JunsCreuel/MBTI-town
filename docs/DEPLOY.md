@@ -145,12 +145,22 @@ Supabase **Authentication → URL Configuration**:
 - 그다음부터는 **이메일 + 비밀번호**로 바로 들어옵니다 (메일을 보내지 않음).
 - 비밀번호를 잊으면 "비밀번호를 잊었어요"에서 재설정 메일을 받아 새 비밀번호를 만듭니다 (`/login/reset`).
 - 예전(메일 링크 로그인) 계정은 `supabase/scripts/reset_user_data.sql` 로 모두 초기화했습니다. 다시 초기화해야 하면 SQL Editor에서 같은 파일을 실행합니다 (되돌릴 수 없음).
-- Supabase **Authentication → Sign In / Providers → Email** 에서 **Enable Email provider**, **Confirm email** 이 켜져 있어야 합니다 (기본값).
+- Supabase **Authentication → Sign In / Providers → Email** 에서 **Enable Email provider** 를 켭니다. **Confirm email**(가입 메일 인증)은 아래 메일 발송 서비스를 연결한 뒤에 켭니다.
+
+**메일 발송 서비스가 아직 없으면 Confirm email을 끄세요 (가입이 막히지 않게)**: 끄면 메일 없이 바로 가입되고 곧장 MBTI 고르기로 넘어갑니다. 가입 화면은 이 설정을 읽어 버튼을 "가입하기"로 바꿉니다. 단점은 이메일 주소가 진짜인지 확인하지 않는 것과, 비밀번호 재설정 메일은 여전히 메일 발송 서비스가 있어야 간다는 것입니다.
+
+**가입이 막혔다는 연락을 받으면**: 운영 화면 `/admin` → **가입 도움**.
+- 위쪽에 지금 메일 인증을 하는지와 경고가 보입니다.
+- **막힌 기록**: 가입·로그인 화면에서 막히면(메일 발송 실패, 메일 인증 전 로그인 등) 저절로 여기에 남습니다. 주소·이유·횟수가 보입니다.
+- 이메일로 찾아 **메일 인증 전** 계정이면 **인증 처리**를 누릅니다. 그분은 가입할 때 정한 비밀번호로 바로 로그인하면 됩니다.
+- 찾아도 계정이 없으면 메일 발송에서 막혀 계정이 만들어지지 않은 것입니다. Confirm email을 끄거나 메일 발송 서비스를 연결한 뒤 다시 가입하게 합니다.
+- SQL로 하려면: `update auth.users set email_confirmed_at = now() where email = '<이메일>' and email_confirmed_at is null;`
 
 **메일 발송 서비스 연결 (실제로 사람을 받기 전에 꼭)**: Supabase 기본 메일 발송은 테스트용이라 **프로젝트 팀원 주소로만** 보내고, 시간당 보낼 수 있는 수도 아주 적습니다. 그래서 다른 사람 주소로 가입하면 "지금은 이 주소로 메일을 보낼 수 없어요"가 뜹니다.
 **Authentication → Emails → SMTP Settings** 에서 메일 서비스(예: Resend, 무료 월 3,000통)를 연결하고, **Rate Limits** 에서 시간당 메일 수를 늘리세요.
 
-- Resend 예: Host `smtp.resend.com`, Port `465`, Username `resend`, Password = Resend에서 만든 API 키, 보내는 주소는 Resend에 등록한 도메인 주소.
+- Resend 예: Host `smtp.resend.com`, Port `465`, Username `resend`, Password = Resend에서 만든 API 키, 보내는 주소는 Resend에 등록한 도메인 주소. Resend는 **내 도메인을 등록해야** 다른 사람 주소로 보낼 수 있습니다 (`vercel.app` 주소로는 등록할 수 없음).
+- 도메인이 없으면 Gmail SMTP도 됩니다: Host `smtp.gmail.com`, Port `465`, Username = Gmail 주소, Password = Google 계정의 **앱 비밀번호**(2단계 인증을 켜야 만들 수 있음). 하루 약 500통까지.
 - 키는 Supabase 화면에만 넣습니다 (저장소·채팅에 붙이지 않기).
 
 ### 5-3. 카카오 로그인 (선택)
@@ -235,4 +245,5 @@ insert into public.admins (user_id) select id from auth.users where email = '<�
 | 로그인 뒤 `/login?error=1` | 5-1의 Redirect URLs에 `…/auth/callback` 이 있는지 |
 | 카카오·구글 버튼을 누르면 오류 | Supabase에서 그 로그인을 켰는지, `NEXT_PUBLIC_AUTH_PROVIDERS` 에 켠 것만 적었는지 |
 | 로그인 메일이 안 옴 | Supabase 기본 메일 발송 한도. 5-2의 SMTP 설정 |
+| 가입이 막힌다 ("이 주소로 메일을 보낼 수 없어요" 등) | 메일 발송 서비스 없이 Confirm email이 켜져 있음. 5-2대로 Confirm email을 끄거나 SMTP 연결. 이미 만들어진 계정은 운영 화면 가입 도움의 **인증 처리** |
 | 일주일 뒤 사이트가 안 됨 | Supabase Free 프로젝트가 일시 정지됨. Supabase 대시보드에서 다시 시작 |

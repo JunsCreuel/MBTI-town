@@ -2,7 +2,7 @@
 // 두 서버가 같은 비밀값(TOWN_TOKEN_SECRET)을 쓴다. 토큰에는 마을에서 보여 줄 것만 담는다 (계정 id는 담지 않는다).
 // node:crypto를 쓰므로 서버에서만 불러온다.
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { cleanAvatar, type AccessoryId, type AvatarBody, type AvatarColor } from './avatar';
+import { cleanAvatar, type AccessoryId, type AvatarBody, type AvatarColor, type HairColor, type SkinTone } from './avatar';
 import { isDistrict, type District } from './districts';
 
 export interface TownPass {
@@ -22,6 +22,9 @@ export interface TownPass {
   body: AvatarBody;
   color: AvatarColor;
   acc: AccessoryId;
+  /** 피부색·머리 색 (natural = 모델 원래 색) */
+  skin: SkinTone;
+  hair: HairColor;
   /** 만료 (유닉스 초) */
   exp: number;
   /**
@@ -81,7 +84,7 @@ export function verifyTownPass(token: unknown, nowSec = Math.floor(Date.now() / 
   }
   if (typeof raw.exp !== 'number' || raw.exp < nowSec) return null;
   if (typeof raw.pid !== 'string' || !raw.pid || typeof raw.name !== 'string') return null;
-  const avatar = cleanAvatar({ body: raw.body, color: raw.color, accessory: raw.acc, pet: raw.pet, petNames: raw.petNames });
+  const avatar = cleanAvatar({ body: raw.body, color: raw.color, skin: raw.skin, hair: raw.hair, accessory: raw.acc, pet: raw.pet, petNames: raw.petNames });
   return {
     pid: raw.pid.slice(0, 32),
     name: raw.name.slice(0, 40),
@@ -92,6 +95,8 @@ export function verifyTownPass(token: unknown, nowSec = Math.floor(Date.now() / 
     body: avatar.body,
     color: avatar.color,
     acc: avatar.accessory,
+    skin: avatar.skin,
+    hair: avatar.hair,
     exp: raw.exp,
     ...(typeof raw.house === 'string' && raw.house ? { house: raw.house.slice(0, 32) } : {}),
     ...(typeof raw.mbti === 'string' && /^[EI][SN][TF][JP]$/.test(raw.mbti) ? { mbti: raw.mbti } : {}),

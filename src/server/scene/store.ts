@@ -146,6 +146,31 @@ export interface ReportRow {
   room_handle: string | null;
 }
 
+/** 가입 계정 (auth.users + 프로필). 운영 화면 가입 도움이 쓴다 */
+export interface SignupRow {
+  id: string;
+  email: string;
+  created_at: Date;
+  email_confirmed_at: Date | null;
+  last_sign_in_at: Date | null;
+  handle: string | null;
+  display_name: string | null;
+  onboarded_at: Date | null;
+  is_admin: boolean;
+}
+
+/** 가입·로그인이 막힌 기록 하나 (app_settings 'signup_failures'에 최근 것부터 모아 둔다) */
+export interface SignupFailure {
+  email: string;
+  /** Supabase Auth 오류 코드 (없으면 status_<HTTP 상태>) */
+  code: string;
+  step: 'signup' | 'login' | 'resend';
+  /** 마지막으로 막힌 때 (ISO) */
+  at: string;
+  /** 같은 주소·오류로 막힌 횟수 */
+  count: number;
+}
+
 export interface AdminUserRow {
   id: string;
   handle: string | null;
@@ -524,6 +549,60 @@ export class SceneStore {
        where $1 = '%%' or p.display_name ilike $1 or p.handle ilike $1
        order by p.onboarded_at desc nulls last limit $2`,
       [like, limit],
+    );
+  }
+
+  // ───────── 가입 도움 (운영자) ─────────
+
+  /** 최근 가입 계정 (이메일이 있는 계정만). q가 있으면 이메일에 그 글자가 든 계정만 */
+  async listSignups(q: string, limit: number): Promise<SignupRow[]> {
+    const like = q ? `%${q.toLowerCase().replace(/[%_\\]/g, (c) => `\\${c}`)}%` : '';
+    return this.sql.query<SignupRow>(
+      `select u.id, u.email, u.created_at, u.email_confirmed_at, u.last_sign_in_at,
+              p.handle, p.display_name, p.onboarded_at,
+              exists (select 1 from public.admins a where a.user_id = u.id) as is_admin
+       from auth.users u left join public.profiles p on p.id = u.id
+       where u.email is not null and ($1 = '' or lower(u.email) like $1)
+       order by u.created_at desc limit $2`,
+      [like, limit],
+    );
+  }
+
+  async getSignup(id: string): Promise<SignupRow | null> {
+    const [r] = await this.sql.query<SignupRow>(
+      `select u.id, u.email, u.created_at, u.email_confirmed_at, u.last_sign_in_at,
+              p.handle, p.display_name, p.onboarded_at,
+              exists (select 1 from public.admins a where a.user_id = u.id) as is_admin
+       from auth.users u left join public.profiles p on p.id = u.id
+       where u.id = $1 and u.email is not null`,
+      [id],
+    );
+    return r ?? null;
+  }
+
+  /** 메일 인증을 아직 안 한 계정 수 */
+  async countPendingSignups(): Promise<number> {
+    const [r] = await this.sql.query<{ n: number }>(`select count(*)::int as n from auth.users where email is not null and email_confirmed_at is null`);
+    return Number(r?.n ?? 0);
+  }
+
+  /** 메일 인증을 끝낸 것으로 친다 (이미 끝났으면 그대로 둔다) */
+  async confirmSignup(id: string, at: Date): Promise<void> {
+    await this.sql.query(`update auth.users set email_confirmed_at = $2 where id = $1 and email_confirmed_at is null`, [id, at]);
+  }
+
+  async signupFailures(): Promise<SignupFailure[]> {
+    const [r] = await this.sql.query<{ value: SignupFailure[] | string }>(`select value from public.app_settings where key = 'signup_failures'`);
+    if (!r) return [];
+    const v = typeof r.value === 'string' ? JSON.parse(r.value) : r.value;
+    return Array.isArray(v) ? v : [];
+  }
+
+  async saveSignupFailures(list: SignupFailure[], at: Date): Promise<void> {
+    await this.sql.query(
+      `insert into public.app_settings (key, value, updated_at) values ('signup_failures', $1, $2)
+       on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at`,
+      [JSON.stringify(list), at],
     );
   }
 

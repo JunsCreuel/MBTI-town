@@ -15,7 +15,7 @@ import { tokens } from '@/design/tokens';
 import { profileTag, type Avatar, type AvatarBody } from '@/shared/avatar';
 import { useBodyModel } from './useBodyModel';
 import { CHARACTER_HEIGHT, faceFor, type ClipName } from '@/shared/character';
-import { attachAccessory, brightenFur, characterActions, cloneCharacter, faceControl, petInstance, tintOutfit, withMeshopt } from '@/lib/characterRig';
+import { attachAccessory, bodyTintOf, brightenFur, characterActions, cloneCharacter, faceControl, petInstance, tintOutfit, withMeshopt } from '@/lib/characterRig';
 import { petDef } from '@/shared/pets';
 import { themeOf, type District } from '@/shared/districts';
 import {
@@ -794,14 +794,14 @@ function startSpot(blocked: Uint8Array): Point {
   return best;
 }
 
-/** 캐릭터 모델: 몸 색을 입히고 머리 소품을 단다 */
-function useAvatarModel(assets: RoomAssets, body: AvatarBody | '' | undefined, colorKey: string, accessory: string) {
+/** 캐릭터 모델: 옷 색·피부색·머리 색을 입히고 머리 소품을 단다 */
+function useAvatarModel(assets: RoomAssets, body: AvatarBody | '' | undefined, colorKey: string, accessory: string, skin?: string, hair?: string) {
   const color = tokens.avatar[colorKey as Avatar['color']] ?? tokens.avatar.mint;
   const gltf = useBodyModel(assets, body);
   const built = useMemo(() => {
     const model = cloneCharacter(gltf);
     model.traverse((o) => void ((o as THREE.Mesh).isMesh && ((o as THREE.Mesh).castShadow = true)));
-    const tinted = tintOutfit(model, color);
+    const tinted = tintOutfit(model, color, bodyTintOf({ skin, hair }));
     const face = faceControl(model);
     const acc = assets.accessories[accessory];
     if (acc) {
@@ -814,7 +814,7 @@ function useAvatarModel(assets: RoomAssets, body: AvatarBody | '' | undefined, c
     const actions = characterActions(gltf, mixer);
     actions.idle.play();
     return { model, mixer, actions, face, tinted, clip: { current: 'idle' as ClipName } };
-  }, [assets, gltf, accessory, color]);
+  }, [assets, gltf, accessory, color, skin, hair]);
   // 붙을 때마다 서 있기부터 (개발 모드의 붙였다 뗐다에도 동작이 멈추지 않게)
   useEffect(() => {
     built.actions.idle.reset().play();
@@ -929,7 +929,7 @@ function RoomAvatar({
   view: React.RefObject<FirstPersonView>;
   heading: React.RefObject<Heading>;
 }) {
-  const m = useAvatarModel(assets, avatar.body, avatar.color, avatar.accessory);
+  const m = useAvatarModel(assets, avatar.body, avatar.color, avatar.accessory, avatar.skin, avatar.hair);
   const blocked = useMemo(() => blockedCells(layout.items), [layout.items]);
   const state = useRef({ pos: startSpot(blocked), rot: 0, facing: 0, path: null as Point[] | null });
   const keys = useRef(new Set<string>());
@@ -1094,7 +1094,7 @@ function RemoteAvatar({
   emotes: EmoteTextures | null;
 }) {
   const p = presence.player(id);
-  const m = useAvatarModel(assets, p?.body, p?.color ?? 'mint', p?.acc ?? 'none');
+  const m = useAvatarModel(assets, p?.body, p?.color ?? 'mint', p?.acc ?? 'none', p?.skin, p?.hair);
   const samples = useRef<{ t: number; x: number; z: number }[]>(p ? [{ t: performance.now() / 1000, x: p.x, z: p.z }] : []);
   const pose = useRef({ x: p?.x ?? W / 2, z: p?.z ?? D - 1.5, rot: p?.rot ?? 0 });
 

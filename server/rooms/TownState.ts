@@ -15,6 +15,9 @@ export const Player = schema(
     mbti: t.string(),
     /** 캐릭터 몸: 'male' | 'female' */
     body: t.string(),
+    /** 피부색·머리 색 (src/shared/avatar.ts SKIN_TONES·HAIR_COLORS의 id, 'natural' = 모델 원래 색) */
+    skin: t.string(),
+    hair: t.string(),
     /** 데리고 다니는 펫 (src/shared/pets.ts의 id, 없으면 ''). 화면마다 주인 옆을 따라다니게 그린다 */
     pet: t.string(),
     x: t.float32(),

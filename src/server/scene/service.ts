@@ -25,7 +25,7 @@ import {
 import { youtubeIdOf } from '@/shared/clubMusic';
 import { coinConfig, contestConfig, debateConfig, marketConfig, playConfig } from '@/config/game';
 import { contestLeader, previousContestWeek, type ContestDistrictScore, type ContestKind, type ContestStandings } from '@/shared/contest';
-import type { AdminCounts, ProfileRow, RecordRow, RoomCardRow, SceneStore } from './store';
+import type { AdminCounts, ProfileRow, RecordRow, RoomCardRow, SceneStore, SignupFailure, SignupRow } from './store';
 
 export type SceneErrorCode =
   | 'login_required' | 'onboarding_required' | 'not_found' | 'forbidden' | 'bad_request' | 'conflict' | 'blocked' | 'rejected'
@@ -342,6 +342,33 @@ export function sniffImage(bytes: Uint8Array): 'image/jpeg' | 'image/png' | 'ima
   return null;
 }
 
+/** 운영 화면 가입 도움: 계정 하나 */
+export interface AdminSignup {
+  id: string;
+  email: string;
+  createdAt: string;
+  confirmedAt: string | null;
+  lastSignInAt: string | null;
+  /** pending = 메일 인증 전, joined = 인증했지만 주민 등록(MBTI 고르기) 전, resident = 주민 */
+  state: 'pending' | 'joined' | 'resident';
+  handle: string | null;
+  displayName: string | null;
+  admin: boolean;
+}
+
+/** 운영 화면 가입 도움 */
+export interface AdminSignups {
+  /** 메일 인증을 아직 안 한 계정 수 (전체) */
+  pending: number;
+  accounts: AdminSignup[];
+  /** 가입·로그인이 막힌 기록 (최근 것부터) */
+  failures: SignupFailure[];
+}
+
+/** 가입·로그인 막힘 기록을 이만큼만 둔다 (오래된 것부터 버린다) */
+export const SIGNUP_FAILURE_MAX = 40;
+const EMAIL = /^[^\s@]{1,64}@[^\s@]{1,189}\.[^\s@]{1,63}$/;
+
 /** 운영 화면: 클럽 유튜브 신청 */
 export interface AdminYoutube {
   on: boolean;
@@ -359,6 +386,21 @@ export interface ContestView {
 
 /** 서버 전체 공지를 보내는 길 (웹 서버에서는 실시간 서버로, 테스트에서는 기록만). 보냈으면 true */
 export type Announcer = (a: Announcement) => Promise<boolean>;
+
+function toAdminSignup(r: SignupRow): AdminSignup {
+  const iso = (d: Date | null) => (d ? new Date(d).toISOString() : null);
+  return {
+    id: r.id,
+    email: r.email,
+    createdAt: new Date(r.created_at).toISOString(),
+    confirmedAt: iso(r.email_confirmed_at),
+    lastSignInAt: iso(r.last_sign_in_at),
+    state: r.onboarded_at ? 'resident' : r.email_confirmed_at ? 'joined' : 'pending',
+    handle: r.handle,
+    displayName: r.display_name,
+    admin: r.is_admin,
+  };
+}
 
 export class SceneService {
   /** 결과를 정해 둔 지난주 (같은 주를 또 묻지 않게) */
@@ -479,8 +521,12 @@ export class SceneService {
     if ('district' in patch) {
       throw new SceneError('bad_request', '사는 마을은 MBTI로 정해져요. MBTI를 바꾸면 그 마을로 이사해요.');
     }
-    // 모습 바꾸기 (옷장). 펫 이름은 여기로 바꾸지 않는다 (petNames로만, 금지어 검사를 거친다)
-    if ('avatar' in patch) next.avatar = { ...cleanAvatar(patch.avatar), petNames: cleanAvatar(p.avatar).petNames };
+    // 모습 바꾸기 (옷장·내 캐릭터): 티셔츠 색·피부색·머리 색·소품. 남자·여자는 가입할 때 정한 그대로 둔다.
+    // 펫 이름은 여기로 바꾸지 않는다 (petNames로만, 금지어 검사를 거친다)
+    if ('avatar' in patch) {
+      const now = cleanAvatar(p.avatar);
+      next.avatar = { ...cleanAvatar(patch.avatar), body: p.onboarded_at ? now.body : cleanAvatar(patch.avatar).body, petNames: now.petNames };
+    }
     // 펫만 바꾸기 (마을의 펫 불러오기): 모습은 그대로 두고 펫만 고친다
     if ('pet' in patch) {
       if (patch.pet !== '' && !isPetId(patch.pet)) throw new SceneError('bad_request', '없는 펫이에요.');
@@ -893,6 +939,65 @@ export class SceneService {
     }));
   }
 
+  // ───────── 가입 도움 ─────────
+
+  /** 가입 계정 목록: 빈 검색이면 최근 가입 순, 아니면 이메일에 그 글자가 든 계정 */
+  async adminSignups(viewer: Viewer | null, q: unknown): Promise<AdminSignups> {
+    await this.requireAdmin(viewer);
+    const query = typeof q === 'string' ? q.trim().slice(0, 100) : '';
+    const [pending, rows, failures] = await Promise.all([
+      this.store.countPendingSignups(),
+      this.store.listSignups(query, 40),
+      // 운영 설정 표가 아직 없어도(SQL 전) 계정 목록은 보이게
+      this.store.signupFailures().catch(() => [] as SignupFailure[]),
+    ]);
+    return { pending, accounts: rows.map(toAdminSignup), failures };
+  }
+
+  /** 메일 인증을 못 한 계정을 인증한 것으로 바꾼다 (메일이 안 가거나 스팸함에 빠졌을 때). 그 사람은 처음 정한 비밀번호로 로그인하면 된다 */
+  async adminConfirmSignup(viewer: Viewer | null, id: string): Promise<AdminSignup> {
+    await this.requireAdmin(viewer);
+    if (!UUID.test(id)) throw new SceneError('not_found', '계정을 찾지 못했어요.');
+    if (!(await this.store.getSignup(id))) throw new SceneError('not_found', '계정을 찾지 못했어요.');
+    await this.store.confirmSignup(id, this.now());
+    return toAdminSignup((await this.store.getSignup(id))!);
+  }
+
+  /** 주민 등록 전 계정을 지운다 (같은 주소로 처음부터 다시 가입하게). 주민·운영자 계정은 주민 목록에서 지운다 */
+  async adminDeleteSignup(viewer: Viewer | null, id: string): Promise<void> {
+    const me = await this.requireAdmin(viewer);
+    const row = UUID.test(id) ? await this.store.getSignup(id) : null;
+    if (!row) throw new SceneError('not_found', '계정을 찾지 못했어요.');
+    if (id === me || row.is_admin) throw new SceneError('forbidden', '운영자 계정은 여기서 지울 수 없어요.');
+    if (row.onboarded_at) throw new SceneError('forbidden', '이미 주민이 된 계정은 주민 목록에서 지워 주세요.');
+    await this.store.deleteAccount(id);
+  }
+
+  /** 가입·로그인 막힘 기록 비우기 */
+  async adminClearSignupFailures(viewer: Viewer | null): Promise<void> {
+    await this.requireAdmin(viewer);
+    await this.store.saveSignupFailures([], this.now());
+  }
+
+  /**
+   * 가입·로그인 화면에서 막혔을 때 브라우저가 알려 온다 (로그인 전이라 누구나 부를 수 있다).
+   * 운영자가 “누가 왜 막혔는지” 바로 보게 최근 SIGNUP_FAILURE_MAX개만 모은다. 같은 주소·오류는 한 줄로 합친다.
+   * 이상한 값은 조용히 버린다 (화면은 결과를 기다리지 않는다).
+   */
+  async reportSignupFailure(input: Record<string, unknown>): Promise<void> {
+    const email = typeof input.email === 'string' ? input.email.trim().toLowerCase() : '';
+    if (email.length > 254 || !EMAIL.test(email)) return;
+    const code = typeof input.code === 'string' && /^[a-z0-9_]{1,40}$/.test(input.code) ? input.code : 'unknown';
+    const step: SignupFailure['step'] = input.step === 'login' || input.step === 'resend' ? input.step : 'signup';
+    const at = this.now();
+    const list = await this.store.signupFailures().catch(() => null);
+    if (!list) return;
+    const i = list.findIndex((f) => f.email === email && f.code === code && f.step === step);
+    const prev = i >= 0 ? list.splice(i, 1)[0] : null;
+    list.unshift({ email, code, step, at: at.toISOString(), count: Math.min(9999, (prev?.count ?? 0) + 1) });
+    await this.store.saveSignupFailures(list.slice(0, SIGNUP_FAILURE_MAX), at).catch(() => {});
+  }
+
   /** 운영자: 주민에게 코인을 주거나 뺀다 (음수면 뺀다, 0 밑으로는 안 내려간다). 새 잔액 */
   async adminAdjustWallet(viewer: Viewer | null, userId: unknown, input: Record<string, unknown>): Promise<{ coins: number }> {
     await this.requireAdmin(viewer);
@@ -999,6 +1104,8 @@ export class SceneService {
         body: avatar.body,
         color: avatar.color,
         acc: avatar.accessory,
+        skin: avatar.skin,
+        hair: avatar.hair,
         exp,
         // 이름표 둘째 줄: MBTI
         ...(p.mbti ? { mbti: p.mbti } : {}),
@@ -1010,7 +1117,7 @@ export class SceneService {
     } else {
       pass = {
         pid: guestPid(), name: '손님', handle: '', district: '', hood: 1, lot: -1, body: 'male',
-        color: AVATAR_COLORS[randomBytes(1)[0] % AVATAR_COLORS.length], acc: 'none', exp,
+        color: AVATAR_COLORS[randomBytes(1)[0] % AVATAR_COLORS.length], acc: 'none', skin: 'natural', hair: 'natural', exp,
       };
     }
     // 하루 첫 방문: 대항전 출석 점수 (하루 상한이 한 번 값이라 여러 번 들어와도 한 번)

@@ -2,15 +2,30 @@
 
 // 로그인·가입. 처음 가입할 때만 이메일 인증을 하고, 그다음부터는 이메일 + 비밀번호로 들어온다.
 // 비밀번호를 잊으면 재설정 메일로 새 비밀번호를 만든다.
+// 가입 메일 인증을 끈 프로젝트(대시보드 Confirm email 끔)면 메일 없이 바로 가입되고, 문구도 그에 맞춘다.
+// 가입·로그인이 막히면(메일 발송 실패 등) 운영 화면 가입 도움에 저절로 알린다.
 import { createBrowserClient } from '@supabase/ssr';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { OAUTH_PROVIDERS, supabaseAnonKey, supabaseUrl, type AuthMode } from '@/lib/authConfig';
-import { PASSWORD_MIN, authErrorMessage } from '@/lib/authMessages';
+import { PASSWORD_MIN, authErrorCode, authErrorMessage, shouldReportAuthError, signupErrorMessage } from '@/lib/authMessages';
+import { fetchAuthSettings } from '@/lib/authSettings';
 import { Wordmark } from '../app/Wordmark';
 import { ApiError, api } from './api';
 
 type Tab = 'login' | 'signup' | 'reset';
+
+/** 막힌 가입·로그인을 운영자에게 알린다 (기다리지 않는다) */
+function reportTrouble(step: 'signup' | 'login' | 'resend', email: string, err: { code?: string; status?: number }) {
+  const code = authErrorCode(err);
+  if (!shouldReportAuthError(step, code)) return;
+  void fetch('/api/auth/signup-issue', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ step, email: email.trim(), code }),
+    keepalive: true,
+  }).catch(() => {});
+}
 
 export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; devLogin: boolean; next: string; failed: string | null }) {
   const [tab, setTab] = useState<Tab>('login');
@@ -21,9 +36,21 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
   /** 메일을 보냈으면 무슨 메일인지 (가입 인증·비밀번호 재설정) */
   const [sent, setSent] = useState<'signup' | 'reset' | null>(null);
   const [needsConfirm, setNeedsConfirm] = useState(false);
+  /** 메일 보냄 화면에서 한 번 더 보냈는지 */
+  const [resent, setResent] = useState(false);
   /** 이미 있는 계정(가입했거나 예전 메일 링크 계정) 또는 비밀번호가 틀림 → 그 자리에서 재설정 메일을 받게 한다 */
   const [offerReset, setOfferReset] = useState(false);
   const [error, setError] = useState<string | null>(failed ? authErrorMessage(failed) : null);
+  /** 가입할 때 인증 메일을 보내는지 (못 읽으면 보낸다고 본다) */
+  const [confirmEmail, setConfirmEmail] = useState(true);
+  useEffect(() => {
+    if (mode !== 'supabase') return;
+    let live = true;
+    void fetchAuthSettings(supabaseUrl, supabaseAnonKey).then((s) => live && s && setConfirmEmail(s.confirmEmail));
+    return () => {
+      live = false;
+    };
+  }, [mode]);
 
   const callback = (to: string) => `${window.location.origin}/auth/callback?next=${encodeURIComponent(to)}`;
   const supabase = () => createBrowserClient(supabaseUrl, supabaseAnonKey);
@@ -32,6 +59,7 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
     setTab(t);
     setError(null);
     setSent(null);
+    setResent(false);
     setNeedsConfirm(false);
     setOfferReset(false);
   }
@@ -57,6 +85,7 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
     }
     setBusy(false);
     setError(authErrorMessage(err.code));
+    reportTrouble('login', email, err);
     if (err.code === 'email_not_confirmed') setNeedsConfirm(true);
     if (err.code === 'invalid_credentials') setOfferReset(true);
   }
@@ -80,7 +109,10 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
       setOfferReset(true);
       return setError('이미 가입한 이메일이에요. 비밀번호를 모르거나 예전에 메일 링크로 가입했다면, 재설정 메일을 받아 비밀번호를 정해 주세요.');
     }
-    if (err) return setError(authErrorMessage(err.code));
+    if (err) {
+      reportTrouble('signup', email, err);
+      return setError(signupErrorMessage(authErrorCode(err)));
+    }
     if (data.session) {
       window.location.href = '/onboarding';
       return;
@@ -92,10 +124,13 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
     setBusy(true);
     const { error: err } = await supabase().auth.resend({ type: 'signup', email: email.trim(), options: { emailRedirectTo: callback('/onboarding') } });
     setBusy(false);
-    if (err) setError(authErrorMessage(err.code));
-    else {
+    if (err) {
+      reportTrouble('resend', email, err);
+      setError(signupErrorMessage(authErrorCode(err)));
+    } else {
       setError(null);
       setNeedsConfirm(false);
+      setResent(sent === 'signup');
       setSent('signup');
     }
   }
@@ -167,6 +202,10 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
               <b>{email}</b>로 인증 메일을 보냈어요. 메일의 링크를 누르면 가입이 끝나요.
               <br />
               다음부터는 이메일과 비밀번호로 바로 들어오면 돼요. 메일이 안 보이면 스팸함도 봐 주세요.
+              <br />
+              <button type="button" className="auth-link auth-link--inline" onClick={resend} disabled={busy}>
+                {resent ? '다시 보냈어요' : '메일이 안 와요 (다시 받기)'}
+              </button>
             </div>
           ) : sent === 'reset' ? (
             <div className="notice">
@@ -198,9 +237,9 @@ export function LoginClient({ mode, devLogin, next, failed }: { mode: AuthMode; 
                 <input type="password" required minLength={PASSWORD_MIN} autoComplete="new-password" value={password2} onChange={(e) => setPassword2(e.target.value)} />
               </label>
               <button className="btn-primary" disabled={busy}>
-                {busy ? '보내는 중…' : '가입하고 인증 메일 받기'}
+                {confirmEmail ? (busy ? '보내는 중…' : '가입하고 인증 메일 받기') : busy ? '가입하는 중…' : '가입하기'}
               </button>
-              <p className="muted auth-note">가입할 때 딱 한 번만 이메일 인증을 해요. 그다음부터는 비밀번호로 들어와요.</p>
+              {confirmEmail && <p className="muted auth-note">가입할 때 딱 한 번만 이메일 인증을 해요. 그다음부터는 비밀번호로 들어와요.</p>}
             </form>
           ) : (
             <form className="auth-form" onSubmit={reset}>

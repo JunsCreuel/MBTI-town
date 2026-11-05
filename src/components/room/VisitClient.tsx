@@ -103,7 +103,7 @@ export function VisitClient({ handle }: { handle: string }) {
   const { presence, snap: presenceSnap, others } = useHousePresence(view?.room ? handle : null);
   const pass = presenceSnap?.pass;
   const myAvatar: Avatar | null = pass
-    ? { body: pass.body, color: pass.color, accessory: pass.acc, pet: '', petNames: {} }
+    ? { body: pass.body, color: pass.color, skin: pass.skin, hair: pass.hair, accessory: pass.acc, pet: '', petNames: {} }
     : presenceSnap?.status === 'denied'
       ? DEFAULT_AVATAR
       : null;

@@ -41,3 +41,45 @@ export function authErrorMessage(code: string | undefined | null): string {
 
 /** 비밀번호 규칙: 8자 이상 */
 export const PASSWORD_MIN = 8;
+
+/** 가입할 때 이 오류면 메일을 못 보낸 것 (메일 발송 설정·한도 문제, 사용자가 고칠 수 없다) */
+const MAIL_SEND_FAILURES = new Set(['email_address_not_authorized', 'over_email_send_rate_limit', 'unexpected_failure']);
+
+/** 가입 오류 코드 (없으면 status_<HTTP 상태>) */
+export function authErrorCode(err: { code?: string; status?: number } | null | undefined): string {
+  return err?.code || `status_${err?.status ?? 0}`;
+}
+
+/** 가입하다 막혔을 때 보여 줄 말: 메일 발송 문제는 운영자에게 저절로 알려진다 (signup-issue) */
+export function signupErrorMessage(code: string): string {
+  if (MAIL_SEND_FAILURES.has(code) || /^status_5\d\d$/.test(code)) {
+    return '지금 가입 인증 메일을 보내지 못하고 있어요. 운영자에게 저절로 알려졌어요. 조금 뒤에 같은 이메일로 다시 가입해 주세요.';
+  }
+  return authErrorMessage(code);
+}
+
+/** 운영자에게 알릴 만한 오류인지 (비밀번호가 짧거나 이미 가입한 주소처럼 사용자가 고칠 수 있는 것은 빼고) */
+export function shouldReportAuthError(step: 'signup' | 'login' | 'resend', code: string): boolean {
+  if (step === 'login') return code === 'email_not_confirmed';
+  return !['weak_password', 'same_password', 'email_exists', 'user_already_exists', 'email_address_invalid', 'validation_failed'].includes(code);
+}
+
+/** 운영 화면 가입 도움: 막힌 이유를 짧게 */
+export function authTroubleLabel(code: string): string {
+  switch (code) {
+    case 'email_address_not_authorized':
+      return '메일 발송 막힘 (메일 발송 설정 필요)';
+    case 'over_email_send_rate_limit':
+      return '메일 발송 한도 넘음';
+    case 'over_request_rate_limit':
+      return '시도 횟수 한도 넘음';
+    case 'email_not_confirmed':
+      return '메일 인증 전에 로그인 시도';
+    case 'unexpected_failure':
+      return '메일 발송 실패';
+    case 'signup_disabled':
+      return '새 가입이 꺼져 있음';
+    default:
+      return /^status_5\d\d$/.test(code) ? '인증 서버 오류' : code;
+  }
+}

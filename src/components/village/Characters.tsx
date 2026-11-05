@@ -10,7 +10,7 @@ import { shiftLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { isAvatarBody, profileTag, type AccessoryId, type AvatarBody, type AvatarColor } from '@/shared/avatar';
 import { CHARACTER_HEIGHT, HAND_SOCKET, faceFor, type ClipName } from '@/shared/character';
-import { attachAccessory, characterActions, characterRig, cloneCharacter, faceControl, tintOutfit } from '@/lib/characterRig';
+import { attachAccessory, bodyTintOf, characterActions, characterRig, cloneCharacter, faceControl, tintOutfit } from '@/lib/characterRig';
 import { gesturePose, hopHeight } from '@/shared/gesture';
 import { lerpAngle, moveWithCollision, yawFromVector } from '@/shared/movement';
 import { FishingRig } from './FishingRig';
@@ -56,6 +56,9 @@ interface Look {
   body?: AvatarBody | '';
   color: AvatarColor;
   acc: AccessoryId;
+  /** 피부색·머리 색 (avatar.ts의 id, 없으면 원래 색) */
+  skin?: string;
+  hair?: string;
   /** 이름표 둘째 줄 (MBTI) */
   mbti?: string;
 }
@@ -88,10 +91,11 @@ function Character(props: { actor: RefObject<Actor>; look: Look; self?: boolean 
 function CharacterModel({ actor, look, self = false, gltf }: { actor: RefObject<Actor>; look: Look; self?: boolean; gltf: GLTF }) {
   const { assets } = useTown();
   const color = tokens.avatar[look.color] ?? tokens.avatar.mint;
+  const { skin, hair } = look;
   const { model, mixer, actions, rod, face, tinted } = useMemo(() => {
     const model = cloneCharacter(gltf);
     castShadows(model);
-    const tinted = tintOutfit(model, color);
+    const tinted = tintOutfit(model, color, bodyTintOf({ skin, hair }));
     const face = faceControl(model);
     const acc = assets.accessories[look.acc];
     if (acc) {
@@ -118,7 +122,7 @@ function CharacterModel({ actor, look, self = false, gltf }: { actor: RefObject<
     const actions = characterActions(gltf, mixer);
     actions.idle.play();
     return { model, mixer, actions, rod, face, tinted };
-  }, [assets, gltf, color, look.acc]);
+  }, [assets, gltf, color, look.acc, skin, hair]);
 
   const sub = profileTag(look.mbti);
   const tag = useMemo(() => tagTexture(self ? `나 · ${look.name}` : look.name, color, self, sub), [look.name, color, self, sub]);

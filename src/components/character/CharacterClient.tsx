@@ -1,13 +1,15 @@
 'use client';
 
-// 내 캐릭터 (아래 탭): 지금은 색과 소품을 무료로 고른다. 옷·머리 소품·등·효과는 꾸미기 상점에서 팔 예정 (준비 중).
+// 내 캐릭터 (아래 탭): 피부색·머리 색·티셔츠 색과 소품을 무료로 고른다. 남자·여자는 가입할 때 정해서 바꿀 수 없다.
+// 옷·머리 소품·등·효과는 꾸미기 상점에서 팔 예정 (준비 중).
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
 import { tokens } from '@/design/tokens';
 import { call, errorMessage } from '@/lib/api';
-import { ACCESSORIES, AVATAR_BODIES, AVATAR_COLORS, type Avatar } from '@/shared/avatar';
+import { ACCESSORIES, AVATAR_COLORS, type Avatar } from '@/shared/avatar';
 import { COSMETIC_SLOTS, UPCOMING_COSMETICS, type CosmeticSlot } from '@/shared/cosmetics';
 import { Icon } from '../app/Icon';
+import { LookPickers } from '../app/LookPickers';
 import { TabBar } from '../app/TabBar';
 import { useMe } from '../app/useMe';
 import { loadRoomAssets, type RoomAssets } from '../room/assets';
@@ -27,7 +29,8 @@ export function CharacterClient() {
     if (me?.profile && !avatar) setAvatar(me.profile.avatar);
   }, [me, avatar]);
 
-  const changed = !!(avatar && me?.profile && (avatar.body !== me.profile.avatar.body || avatar.color !== me.profile.avatar.color || avatar.accessory !== me.profile.avatar.accessory));
+  const saved = me?.profile?.avatar;
+  const changed = !!(avatar && saved && (['color', 'skin', 'hair', 'accessory'] as const).some((k) => avatar[k] !== saved[k]));
   async function save() {
     if (!avatar || !me?.profile) return;
     setBusy(true);
@@ -50,14 +53,7 @@ export function CharacterClient() {
       <div className="avatar-stage">{assets && avatar ? <AvatarPreview assets={assets} avatar={avatar} /> : <div className="loader" aria-hidden />}</div>
       {avatar && (
         <section className="section card">
-          <h2 className="section-title">캐릭터</h2>
-          <div className="chips">
-            {AVATAR_BODIES.map((b) => (
-              <button key={b.id} className={`chip${avatar.body === b.id ? ' chip--on' : ''}`} aria-pressed={avatar.body === b.id} onClick={() => setAvatar({ ...avatar, body: b.id })}>
-                {b.label}
-              </button>
-            ))}
-          </div>
+          <LookPickers avatar={avatar} onChange={setAvatar} titleClassName="section-title" />
           <h2 className="section-title">티셔츠 색</h2>
           <div className="swatches">
             {AVATAR_COLORS.map((c) => (

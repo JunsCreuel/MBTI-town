@@ -1,4 +1,5 @@
-// 나의 캐릭터: 남자·여자 캐릭터를 고르고, 티셔츠 색과 소품을 바꿔 입힌다 (PROJECT_GUIDE.md 5장 4단계, 16장 아바타 규약).
+// 나의 캐릭터: 남자·여자 캐릭터를 고르고, 티셔츠 색·피부색·머리 색과 소품을 바꾼다 (PROJECT_GUIDE.md 5장 4단계, 16장 아바타 규약).
+// 남자·여자는 가입할 때 한 번 고르고 바꿀 수 없다. 나머지는 내 캐릭터 화면에서 언제든 바꾼다.
 // 마을에서 데리고 다니는 펫도 여기에 둔다 (profiles.avatar jsonb, DB를 바꾸지 않는다).
 import { PETS, isPetId, petDef, type PetId } from './pets';
 
@@ -17,6 +18,33 @@ export const isAvatarBody = (v: unknown): v is AvatarBody => AVATAR_BODIES.some(
 export const AVATAR_COLORS = ['mint', 'sky', 'peach', 'butter', 'lilac', 'coral', 'sage', 'navy'] as const;
 export type AvatarColor = (typeof AVATAR_COLORS)[number];
 
+/** 피부색 (natural = 모델 원래 색). 색은 tokens.avatarSkin */
+export const SKIN_TONES = [
+  { id: 'natural', label: '기본' },
+  { id: 'fair', label: '뽀얀' },
+  { id: 'honey', label: '꿀빛' },
+  { id: 'tan', label: '구릿빛' },
+  { id: 'brown', label: '갈색' },
+  { id: 'deep', label: '짙은' },
+] as const;
+export type SkinTone = (typeof SKIN_TONES)[number]['id'];
+export const isSkinTone = (v: unknown): v is SkinTone => SKIN_TONES.some((x) => x.id === v);
+
+/** 머리 색 (natural = 모델 원래 색). 색은 tokens.avatarHair */
+export const HAIR_COLORS = [
+  { id: 'natural', label: '기본' },
+  { id: 'black', label: '검정' },
+  { id: 'brown', label: '갈색' },
+  { id: 'blonde', label: '금발' },
+  { id: 'red', label: '빨강' },
+  { id: 'pink', label: '분홍' },
+  { id: 'lavender', label: '보라' },
+  { id: 'mint', label: '민트' },
+  { id: 'silver', label: '은발' },
+] as const;
+export type HairColor = (typeof HAIR_COLORS)[number]['id'];
+export const isHairColor = (v: unknown): v is HairColor => HAIR_COLORS.some((x) => x.id === v);
+
 export const ACCESSORIES = [
   { id: 'none', label: '없음', key: null },
   { id: 'flower', label: '꽃 핀', key: 'char.acc.flower' },
@@ -27,8 +55,12 @@ export const ACCESSORIES = [
 export type AccessoryId = (typeof ACCESSORIES)[number]['id'];
 
 export interface Avatar {
+  /** 남자·여자 (가입할 때만 고른다) */
   body: AvatarBody;
+  /** 티셔츠 색 */
   color: AvatarColor;
+  skin: SkinTone;
+  hair: HairColor;
   accessory: AccessoryId;
   /** 마을에서 데리고 다니는 펫 (pets.ts의 id, 없으면 '') */
   pet: PetId | '';
@@ -36,7 +68,7 @@ export interface Avatar {
   petNames: Partial<Record<PetId, string>>;
 }
 
-export const DEFAULT_AVATAR: Avatar = { body: 'male', color: 'mint', accessory: 'none', pet: '', petNames: {} };
+export const DEFAULT_AVATAR: Avatar = { body: 'male', color: 'mint', skin: 'natural', hair: 'natural', accessory: 'none', pet: '', petNames: {} };
 
 /** 펫 이름: 지어 준 이름, 없으면 종류 이름 (강아지) */
 export function petNameOf(avatar: Pick<Avatar, 'petNames'> | null | undefined, pet: PetId): string {
@@ -64,6 +96,8 @@ export function cleanAvatar(v: unknown): Avatar {
   return {
     body: isAvatarBody(a.body) ? a.body : DEFAULT_AVATAR.body,
     color: (AVATAR_COLORS as readonly unknown[]).includes(a.color) ? (a.color as AvatarColor) : DEFAULT_AVATAR.color,
+    skin: isSkinTone(a.skin) ? a.skin : DEFAULT_AVATAR.skin,
+    hair: isHairColor(a.hair) ? a.hair : DEFAULT_AVATAR.hair,
     accessory: ACCESSORIES.some((x) => x.id === a.accessory) ? (a.accessory as AccessoryId) : DEFAULT_AVATAR.accessory,
     pet: isPetId(a.pet) ? a.pet : '',
     petNames: cleanPetNames(a.petNames),

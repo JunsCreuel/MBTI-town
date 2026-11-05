@@ -19,6 +19,7 @@ import {
   type FurnitureAction, type PlacedItem, type RoomLayout, type Rot,
 } from '@/shared/room';
 import { BgmPlayer, type BgmHandle } from '../app/BgmPlayer';
+import { LookPickers } from '../app/LookPickers';
 import { GesturePicker } from '../app/GesturePicker';
 import { Guide } from '../app/Guide';
 import { PetNameSheet } from '../app/PetNameSheet';
@@ -512,6 +513,8 @@ function Wardrobe({ assets, initial, onSave, onClose }: { assets: RoomAssets; in
       <div className="avatar-stage avatar-stage--small">
         <AvatarPreview assets={assets} avatar={avatar} />
       </div>
+      <LookPickers avatar={avatar} onChange={setAvatar} titleClassName="sub-title" />
+      <h2 className="sub-title">티셔츠 색</h2>
       <div className="swatches">
         {AVATAR_COLORS.map((c) => (
           <button key={c} className={`swatch${avatar.color === c ? ' swatch--on' : ''}`} style={{ background: tokens.avatar[c] }} aria-label={c} onClick={() => setAvatar({ ...avatar, color: c })} />

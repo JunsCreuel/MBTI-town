@@ -1,12 +1,14 @@
 'use client';
 
-// 운영 화면 (운영자만): 요약 숫자, 전체 공지, 신고 처리, 주민 찾기·계정 삭제.
+// 운영 화면 (운영자만): 요약 숫자, 가입 도움(인증 처리·막힌 기록·가입 설정 점검), 전체 공지, 신고 처리, 주민 찾기·계정 삭제.
 // 운영자는 이 화면 말고도 모든 방·기록을 공개 범위와 상관없이 보고, 방명록·토론 논거를 지울 수 있다.
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { call } from '@/lib/api';
-import type { AdminReport, AdminUser, AdminYoutube } from '@/server/scene/service';
-import type { AdminCounts } from '@/server/scene/store';
+import { authTroubleLabel } from '@/lib/authMessages';
+import type { AuthSettings } from '@/lib/authSettings';
+import type { AdminReport, AdminSignup, AdminSignups, AdminUser, AdminYoutube } from '@/server/scene/service';
+import type { AdminCounts, SignupFailure } from '@/server/scene/store';
 import { NOTICE_MAX } from '@/shared/announce';
 import { DISTRICT } from '@/shared/districts';
 import { TabBar } from '../app/TabBar';
@@ -22,6 +24,9 @@ const COUNT_LABEL: [keyof AdminCounts, string][] = [
   ['open_reports', '처리할 신고'],
 ];
 
+const SIGNUP_STATE: Record<AdminSignup['state'], string> = { pending: '메일 인증 전', joined: '주민 등록 전', resident: '주민' };
+const TROUBLE_STEP: Record<SignupFailure['step'], string> = { signup: '가입', login: '로그인', resend: '메일 다시 받기' };
+
 const when = (iso: string) => new Date(iso).toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 
 export function AdminClient() {
@@ -36,6 +41,8 @@ export function AdminClient() {
   const [notice, setNotice] = useState('');
   const [youtube, setYoutube] = useState<AdminYoutube | null>(null);
   const [ytLink, setYtLink] = useState('');
+  const [signups, setSignups] = useState<(AdminSignups & { auth: AuthSettings | null }) | null>(null);
+  const [signupQ, setSignupQ] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -58,10 +65,19 @@ export function AdminClient() {
     }
   }, []);
 
+  const loadSignups = useCallback(async (query: string) => {
+    try {
+      setSignups(await call<AdminSignups & { auth: AuthSettings | null }>('GET', `/api/admin/signups?q=${encodeURIComponent(query)}`));
+    } catch {
+      setSignups(null);
+    }
+  }, []);
+
   useEffect(() => {
     void load();
     void search('');
-  }, [load, search]);
+    void loadSignups('');
+  }, [load, search, loadSignups]);
 
   useEffect(() => {
     if (!toast) return;
@@ -133,6 +149,46 @@ export function AdminClient() {
     }
   }
 
+  /** 가입 도움: 인증 처리·지우기·막힌 기록 비우기 */
+  async function confirmSignup(a: AdminSignup) {
+    if (!confirm(`${a.email} 계정을 메일 인증 없이 쓸 수 있게 할까요?\n그분은 가입할 때 정한 비밀번호로 바로 로그인하면 돼요.`)) return;
+    setBusy(a.id);
+    try {
+      const next = await call<AdminSignup>('POST', `/api/admin/signups/${a.id}`);
+      setSignups((s) => s && { ...s, pending: Math.max(0, s.pending - 1), accounts: s.accounts.map((x) => (x.id === a.id ? next : x)) });
+      setToast('인증 처리했어요');
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '처리하지 못했어요');
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function deleteSignup(a: AdminSignup) {
+    if (!confirm(`${a.email} 계정을 지울까요?\n지우면 같은 주소로 처음부터 다시 가입할 수 있어요.`)) return;
+    setBusy(a.id);
+    try {
+      await call('DELETE', `/api/admin/signups/${a.id}`);
+      setToast('계정을 지웠어요');
+      await loadSignups(signupQ);
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '지우지 못했어요');
+    } finally {
+      setBusy(null);
+    }
+  }
+  async function clearTroubles() {
+    if (!confirm('막힌 기록을 모두 지울까요?')) return;
+    setBusy('troubles');
+    try {
+      await call('DELETE', '/api/admin/signups');
+      setSignups((s) => s && { ...s, failures: [] });
+    } catch (e) {
+      setToast(e instanceof Error ? e.message : '지우지 못했어요');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function deleteUser(u: AdminUser) {
     if (!confirm(`${u.displayName} 님의 계정을 지울까요?\n방·기록·사진·방명록이 모두 지워지고 되돌릴 수 없어요.`)) return;
     if (prompt(`정말 지우려면 이름(${u.displayName})을 그대로 적어 주세요.`) !== u.displayName) return;
@@ -181,6 +237,101 @@ export function AdminClient() {
           </ul>
         </section>
       )}
+
+      <section className="section card">
+        <h2 className="section-title">
+          가입 도움 {signups && <span className="muted">메일 인증 전 {signups.pending}</span>}
+        </h2>
+        {!signups ? (
+          <p className="muted">가입 정보를 불러오지 못했어요.</p>
+        ) : (
+          <>
+            {signups.auth && !signups.auth.signup ? (
+              <p className="notice admin-warn">새 가입이 꺼져 있어요. Supabase → Authentication → Sign In / Providers에서 Allow new users to sign up을 켜 주세요.</p>
+            ) : signups.auth?.confirmEmail ? (
+              <p className="notice admin-warn">
+                가입할 때 메일 인증을 해요. Supabase에 메일 발송(SMTP)을 연결하지 않았다면 운영팀 주소 말고는 인증 메일이 가지 않아 가입이 막혀요. 바로 풀려면 Supabase → Authentication → Sign In / Providers → Email에서 Confirm email을 꺼 주세요.
+              </p>
+            ) : signups.auth ? (
+              <p className="muted">메일 인증 없이 바로 가입돼요.</p>
+            ) : null}
+            {signups.failures.length > 0 && (
+              <>
+                <h3 className="sub-title admin-sub">
+                  막힌 기록
+                  <button type="button" className="auth-link auth-link--inline" disabled={busy === 'troubles'} onClick={() => void clearTroubles()}>
+                    비우기
+                  </button>
+                </h3>
+                <ul className="admin-list">
+                  {signups.failures.map((f) => (
+                    <li key={`${f.email}|${f.code}|${f.step}`} className="admin-user">
+                      <div className="admin-user__info">
+                        <b className="admin-email">{f.email}</b>
+                        <span className="muted">
+                          {TROUBLE_STEP[f.step]} · {authTroubleLabel(f.code)} · {when(f.at)}
+                          {f.count > 1 && ` · ${f.count}번`}
+                        </span>
+                      </div>
+                      <div className="admin-actions">
+                        <button
+                          className="btn-secondary btn-small"
+                          onClick={() => {
+                            setSignupQ(f.email);
+                            void loadSignups(f.email);
+                          }}
+                        >
+                          계정 찾기
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <form
+              className="admin-search"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void loadSignups(signupQ);
+              }}
+            >
+              <input value={signupQ} onChange={(e) => setSignupQ(e.target.value)} placeholder="이메일로 찾기" maxLength={100} aria-label="찾을 이메일" />
+              <button className="btn-primary btn-primary--inline">찾기</button>
+            </form>
+            <ul className="admin-list">
+              {signups.accounts.map((a) => (
+                <li key={a.id} className="admin-user">
+                  <div className="admin-user__info">
+                    <b className="admin-email">
+                      {a.email}
+                      <span className={`admin-badge${a.state === 'pending' ? ' admin-badge--alert' : ''}`}>{SIGNUP_STATE[a.state]}</span>
+                    </b>
+                    <span className="muted">
+                      가입 {when(a.createdAt)} · 마지막 로그인 {a.lastSignInAt ? when(a.lastSignInAt) : '없음'}
+                      {a.displayName && ` · ${a.displayName}`}
+                      {a.handle && ` (@${a.handle})`}
+                    </span>
+                  </div>
+                  {a.state !== 'resident' && !a.admin && (
+                    <div className="admin-actions">
+                      {a.state === 'pending' && (
+                        <button className="btn-primary btn-primary--inline btn-small" disabled={busy === a.id} onClick={() => void confirmSignup(a)}>
+                          인증 처리
+                        </button>
+                      )}
+                      <button className="btn-danger btn-small" disabled={busy === a.id} onClick={() => void deleteSignup(a)}>
+                        지우기
+                      </button>
+                    </div>
+                  )}
+                </li>
+              ))}
+              {signups.accounts.length === 0 && <p className="muted">{signupQ.trim() ? '그 주소로 가입한 계정이 없어요. 가입하다 메일 발송에서 막히면 계정이 만들어지지 않아요.' : '가입한 계정이 없어요.'}</p>}
+            </ul>
+          </>
+        )}
+      </section>
 
       <section className="section card">
         <h2 className="section-title">

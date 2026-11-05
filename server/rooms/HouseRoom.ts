@@ -91,6 +91,8 @@ export class HouseRoom extends Room<{ state: HouseState }> {
     player.color = pass.color;
     player.acc = pass.acc;
     player.body = pass.body;
+    player.skin = pass.skin;
+    player.hair = pass.hair;
     player.mbti = pass.mbti ?? '';
     player.x = start.x;
     player.z = start.z;

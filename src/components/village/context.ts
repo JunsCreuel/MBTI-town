@@ -62,6 +62,9 @@ export interface SelfLook {
   body: AvatarBody;
   color: AvatarColor;
   acc: AccessoryId;
+  /** 피부색·머리 색 (avatar.ts의 id, 없으면 원래 색) */
+  skin?: string;
+  hair?: string;
   /** 이름표 둘째 줄 (MBTI) */
   mbti?: string;
 }

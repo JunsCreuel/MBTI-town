@@ -263,12 +263,14 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   const passAcc = snap.pass?.acc;
   const passMbti = snap.pass?.mbti;
   const passBody = snap.pass?.body ?? 'male';
+  const passSkin = snap.pass?.skin;
+  const passHair = snap.pass?.hair;
   const look = useMemo(
     () =>
       passName !== undefined && passColor && passAcc
-        ? { name: passName, body: passBody, color: passColor, acc: passAcc, mbti: passMbti }
+        ? { name: passName, body: passBody, color: passColor, acc: passAcc, mbti: passMbti, skin: passSkin, hair: passHair }
         : null,
-    [passName, passBody, passColor, passAcc, passMbti],
+    [passName, passBody, passColor, passAcc, passMbti, passSkin, passHair],
   );
   // 상가: 점포 20칸 (주인·이름·차양 색). 상가에 있는 동안 20초마다, 점포 시트를 열 때 새로 받는다
   const [market, setMarket] = useState<MarketView | null>(null);

@@ -99,6 +99,27 @@ export const tokens = {
     sage: '#B6CFA3',
     navy: '#7287B8',
   },
+  /** 캐릭터 피부색 (avatar.ts SKIN_TONES. natural은 모델 원래 색이라 몸마다 따로) */
+  avatarSkin: {
+    fair: '#FBE0CF',
+    honey: '#E8B48C',
+    tan: '#CD9468',
+    brown: '#A06644',
+    deep: '#6C4431',
+  },
+  avatarSkinNatural: { male: '#F5C2A3', female: '#FCB993' },
+  /** 캐릭터 머리 색 (avatar.ts HAIR_COLORS. natural은 모델 원래 색이라 몸마다 따로) */
+  avatarHair: {
+    black: '#26211F',
+    brown: '#6B4532',
+    blonde: '#E9C46F',
+    red: '#C2583B',
+    pink: '#F3A2BF',
+    lavender: '#B7A3EC',
+    mint: '#8AD7C2',
+    silver: '#D8DBE2',
+  },
+  avatarHairNatural: { male: '#754134', female: '#31160C' },
   /** 3D 방 색 */
   room: {
     wall: {

@@ -3945,6 +3945,24 @@ a:focus-visible {
   font-size: 11px;
   vertical-align: 2px;
 }
+.admin-badge--alert {
+  background: var(--color-danger);
+  color: var(--color-surface);
+}
+/* 가입 도움: 메일 인증 설정 경고, 긴 이메일 줄바꿈 */
+.admin-warn {
+  box-shadow: inset 0 0 0 2px var(--color-danger);
+  font-size: 14px;
+  line-height: 1.55;
+}
+.admin-email {
+  word-break: break-all;
+}
+.admin-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
 
 /* 클럽: DJ 신청곡, 바 */
 .club-sheet {

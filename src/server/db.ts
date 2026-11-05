@@ -24,6 +24,8 @@ const DEV_AUTH_SCHEMA = `
     email text,
     created_at timestamptz not null default now()
   );
+  alter table auth.users add column if not exists email_confirmed_at timestamptz;
+  alter table auth.users add column if not exists last_sign_in_at timestamptz;
 `;
 
 export async function createPgliteSql(dataDir?: string): Promise<Sql> {

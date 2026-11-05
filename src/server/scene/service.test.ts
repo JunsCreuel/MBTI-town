@@ -351,6 +351,19 @@ describe('마을 집터', () => {
     expect((await service.me(v)).profile.avatar.petNames).toEqual({});
   });
 
+  it('피부색·머리 색은 언제든 바꾸고 입장 토큰에 담기지만, 남자·여자는 가입 뒤에 바꿀 수 없다', async () => {
+    const v = await user();
+    await onboard(v, '머리바꿈', { district: 'INFJ', avatar: { body: 'female', color: 'sky', skin: 'tan', hair: 'pink', accessory: 'none' } });
+    const first = (await service.me(v)).profile.avatar;
+    expect(first).toMatchObject({ body: 'female', skin: 'tan', hair: 'pink' });
+    expect((await service.townTicket(v)).pass).toMatchObject({ body: 'female', skin: 'tan', hair: 'pink' });
+    // 몸을 바꿔 보내도 그대로, 피부색·머리 색은 바뀐다. 모르는 값은 원래 색으로
+    const next = await service.updateProfile(v, { avatar: { ...first, body: 'male', skin: 'deep', hair: 'silver' } });
+    expect(next.avatar).toMatchObject({ body: 'female', skin: 'deep', hair: 'silver' });
+    expect(verifyTownPass((await service.townTicket(v)).token)).toMatchObject({ body: 'female', skin: 'deep', hair: 'silver' });
+    expect((await service.updateProfile(v, { avatar: { ...next.avatar, skin: 'green', hair: 42 } })).avatar).toMatchObject({ skin: 'natural', hair: 'natural' });
+  });
+
   it('입장 토큰: 가입한 사람은 이름·집터를, 아니면 손님으로 담는다', async () => {
     const tp = await service.townTicket(p);
     expect(tp.guest).toBe(false);
@@ -828,3 +841,68 @@ describe('클럽 유튜브 신청 제한 (운영자)', () => {
   });
 });
 
+
+describe('가입 도움 (운영자)', () => {
+  async function account(email: string, confirmed: boolean): Promise<Viewer> {
+    const id = randomUUID();
+    await sql.query(`insert into auth.users (id, email, email_confirmed_at) values ($1, $2, $3)`, [id, email, confirmed ? now : null]);
+    return { id };
+  }
+
+  it('메일 인증 전 계정을 찾아 인증 처리하고, 주민 등록 전 계정만 지운다', async () => {
+    const admin = await user();
+    await sql.query(`insert into public.admins (user_id) values ($1) on conflict do nothing`, [admin.id]);
+    const stuck = await account('Stuck.Person@naver.com', false);
+    const joined = await account('joined-only@example.com', true);
+    const resident = await account('resident-help@example.com', true);
+    await onboard(resident, '가입도움주민');
+
+    // 운영자가 아니면 없는 것처럼
+    await expectError(service.adminSignups(stuck, ''), 'not_found');
+    await expectError(service.adminConfirmSignup(stuck, stuck.id), 'not_found');
+
+    const all = await service.adminSignups(admin, '');
+    expect(all.pending).toBeGreaterThanOrEqual(1);
+    const found = await service.adminSignups(admin, 'stuck.person');
+    expect(found.accounts.map((a) => [a.email, a.state])).toEqual([['Stuck.Person@naver.com', 'pending']]);
+    expect((await service.adminSignups(admin, 'resident-help')).accounts[0]).toMatchObject({ state: 'resident', displayName: '가입도움주민' });
+    expect((await service.adminSignups(admin, 'joined-only')).accounts[0].state).toBe('joined');
+    // %·_는 글자 그대로 찾는다
+    expect((await service.adminSignups(admin, '%')).accounts).toEqual([]);
+
+    const done = await service.adminConfirmSignup(admin, stuck.id);
+    expect(done.state).toBe('joined');
+    expect(done.confirmedAt).toBe(now.toISOString());
+    // 이미 인증한 계정은 그대로
+    expect((await service.adminConfirmSignup(admin, stuck.id)).confirmedAt).toBe(now.toISOString());
+    await expectError(service.adminConfirmSignup(admin, randomUUID()), 'not_found');
+
+    await expectError(service.adminDeleteSignup(admin, resident.id), 'forbidden');
+    await expectError(service.adminDeleteSignup(admin, admin.id), 'not_found'); // 이메일 없는 계정은 가입 도움 대상이 아니다
+    await service.adminDeleteSignup(admin, joined.id);
+    expect((await service.adminSignups(admin, 'joined-only')).accounts).toEqual([]);
+  });
+
+  it('막힌 가입·로그인을 모으고, 같은 주소·오류는 한 줄로 합친다', async () => {
+    const admin = await user();
+    await sql.query(`insert into public.admins (user_id) values ($1) on conflict do nothing`, [admin.id]);
+    await service.adminClearSignupFailures(admin);
+    await service.reportSignupFailure({ email: ' Blocked@Naver.com ', code: 'email_address_not_authorized', step: 'signup' });
+    await service.reportSignupFailure({ email: 'blocked@naver.com', code: 'email_address_not_authorized', step: 'signup' });
+    await service.reportSignupFailure({ email: 'other@example.com', code: 'email_not_confirmed', step: 'login' });
+    // 이상한 값은 버리거나 다듬는다
+    await service.reportSignupFailure({ email: '이메일 아님', code: 'x' });
+    await service.reportSignupFailure({ email: 'odd@example.com', code: '<script>', step: 'hack' });
+    const { failures } = await service.adminSignups(admin, '');
+    expect(failures.map((f) => [f.email, f.code, f.step, f.count])).toEqual([
+      ['odd@example.com', 'unknown', 'signup', 1],
+      ['other@example.com', 'email_not_confirmed', 'login', 1],
+      ['blocked@naver.com', 'email_address_not_authorized', 'signup', 2],
+    ]);
+    for (let i = 0; i < 50; i++) await service.reportSignupFailure({ email: `many${i}@example.com`, code: 'over_email_send_rate_limit' });
+    expect((await service.adminSignups(admin, '')).failures).toHaveLength(40);
+    await expectError(service.adminClearSignupFailures({ id: randomUUID() }), 'not_found');
+    await service.adminClearSignupFailures(admin);
+    expect((await service.adminSignups(admin, '')).failures).toEqual([]);
+  });
+});

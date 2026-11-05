@@ -28,6 +28,9 @@ export interface PlayerView {
   acc: AccessoryId;
   /** 캐릭터 몸 (예전 서버면 '' → 남자로 그린다) */
   body: AvatarBody | '';
+  /** 피부색·머리 색 (avatar.ts의 id. 예전 서버면 undefined → 원래 색) */
+  skin?: string;
+  hair?: string;
   /** 데리고 다니는 펫 (pets.ts의 id, 없으면 ''. 예전 서버면 undefined) */
   pet?: string;
   /** 이름표 둘째 줄 (없으면 '') */

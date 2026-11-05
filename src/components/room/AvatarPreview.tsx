@@ -9,15 +9,16 @@ import { shiftLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import type { Avatar } from '@/shared/avatar';
 import { useBodyModel } from './useBodyModel';
-import { attachAccessory, characterActions, cloneCharacter, faceControl, tintOutfit } from '@/lib/characterRig';
+import { attachAccessory, bodyTintOf, characterActions, cloneCharacter, faceControl, tintOutfit } from '@/lib/characterRig';
 import type { RoomAssets } from './assets';
 
 function Model({ assets, avatar }: { assets: RoomAssets; avatar: Avatar }) {
   const color = tokens.avatar[avatar.color];
+  const { skin, hair } = avatar;
   const gltf = useBodyModel(assets, avatar.body);
   const { model, mixer, start } = useMemo(() => {
     const model = cloneCharacter(gltf);
-    const tinted = tintOutfit(model, color);
+    const tinted = tintOutfit(model, color, bodyTintOf({ skin, hair }));
     const face = faceControl(model);
     const acc = assets.accessories[avatar.accessory];
     if (acc) {
@@ -36,7 +37,7 @@ function Model({ assets, avatar }: { assets: RoomAssets; avatar: Avatar }) {
       };
     };
     return { model, mixer, start };
-  }, [assets, gltf, avatar.accessory, color]);
+  }, [assets, gltf, avatar.accessory, color, skin, hair]);
   useEffect(() => start(), [start]);
   useFrame(({ clock }, dt) => {
     mixer.update(Math.min(dt, 0.1));

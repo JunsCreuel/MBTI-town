@@ -2,12 +2,14 @@
 // - 동작: 원본에는 서 있기(idle)·걷기(walk)만 있다. 나머지 몸짓은 서 있기 첫 자세에서 뼈를 돌려 만든다.
 //   (원본에 같은 이름의 동작이 있으면 그것을 쓴다. Tripo·Mixamo에서 동작을 더 뽑아 넣으면 저절로 바뀐다.)
 // - 옷 색: 티셔츠 자리(색 텍스처 알파)에만 고른 색을 입힌다 (scripts/import-characters.ts가 표시해 둔다).
+// - 머리 색·피부색: 머리카락·살 자리 텍스처(발광 텍스처 칸)에 표시된 곳에만 고른 색을 입힌다.
 // - 표정: 얼굴 재질 텍스처(표정 아틀라스)의 자리를 옮겨 바꾼다.
 import * as THREE from 'three';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import type { GLTF, GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { ACCESSORIES } from '@/shared/avatar';
+import { tokens } from '@/design/tokens';
+import { ACCESSORIES, isHairColor, isSkinTone } from '@/shared/avatar';
 import { CHARACTER_CLIPS, EYES_SOCKET, FACE_MATERIAL, HAND_SOCKET, HEAD_SOCKET, TINT_MATERIAL, faceOffset, type ClipName, type FaceName } from '@/shared/character';
 
 /** 모든 GLTFLoader에 meshopt 압축 풀기를 붙인다 (캐릭터 모델은 meshopt로 압축했다) */
@@ -351,15 +353,39 @@ export function characterActions(gltf: GLTF, mixer: THREE.AnimationMixer, names:
   return actions;
 }
 
-// ───────────────────────── 옷 색 ─────────────────────────
+// ───────────────────────── 옷 색·머리 색·피부색 ─────────────────────────
 
 const TINT_KEY = 'outfit-tint';
 
+/** 머리 색·피부색 (없거나 null이면 모델 원래 색) */
+export interface BodyTint {
+  hair?: string | null;
+  skin?: string | null;
+}
+
+/** 저장된 피부색·머리 색 id (avatar.ts) → 입힐 색. natural·모르는 값은 null (원래 색) */
+export function bodyTintOf(look: { skin?: string | null; hair?: string | null }): BodyTint {
+  const skin = isSkinTone(look.skin) && look.skin !== 'natural' ? tokens.avatarSkin[look.skin] : null;
+  const hair = isHairColor(look.hair) && look.hair !== 'natural' ? tokens.avatarHair[look.hair] : null;
+  return { skin, hair };
+}
+
+/** 머리·살 자리 텍스처가 없는 재질용 (모두 0 = 바꾸지 않는다) */
+let noRegions: THREE.DataTexture | null = null;
+function emptyRegions(): THREE.DataTexture {
+  if (!noRegions) {
+    noRegions = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+    noRegions.needsUpdate = true;
+  }
+  return noRegions;
+}
+
 /**
  * 옷 재질에 색을 입힌다 (재질을 복제한다). 새 모델: 티셔츠 자리(알파)에만, 밝기 무늬는 살린다.
+ * 머리 색·피부색을 주면 머리카락·살 자리(발광 텍스처 칸에 담긴 자리 텍스처, scripts/import-characters.ts)에도 입힌다.
  * 예전 임시 모델(티셔츠 표시가 없음): 재질 색을 바꾼다. 복제한 재질 목록을 돌려준다 (정리할 때 dispose).
  */
-export function tintOutfit(root: THREE.Object3D, color: string): THREE.Material[] {
+export function tintOutfit(root: THREE.Object3D, color: string, body?: BodyTint): THREE.Material[] {
   const made: THREE.Material[] = [];
   root.traverse((o) => {
     const mesh = o as THREE.Mesh;
@@ -367,23 +393,57 @@ export function tintOutfit(root: THREE.Object3D, color: string): THREE.Material[
     const mat = mesh.material as THREE.MeshStandardMaterial;
     if (mat.name !== TINT_MATERIAL) return;
     const m = mat.clone();
-    const lum = (mat.userData as { shirtLum?: number }).shirtLum;
-    if (typeof lum === 'number' && m.map) {
+    const extras = mat.userData as { shirtLum?: number; hairLum?: number; skinLum?: number };
+    if (typeof extras.shirtLum === 'number' && m.map) {
       const tint = new THREE.Color(color);
       // 텍스처는 화면에서 선형 색으로 풀리므로 기준 밝기도 선형으로 바꾼다
-      const base = Math.pow(lum, 2.2);
+      const base = Math.pow(extras.shirtLum, 2.2);
+      // 머리·살 자리: 값 그대로 읽는다 (색 공간 변환을 하면 경계 값이 바뀐다). 그리는 데는 쓰지 않는다
+      const regions = m.emissiveMap;
+      if (regions && regions.colorSpace !== THREE.NoColorSpace) {
+        regions.colorSpace = THREE.NoColorSpace;
+        regions.needsUpdate = true;
+      }
+      m.emissiveMap = null;
+      const hairOn = !!(body?.hair && regions && extras.hairLum);
+      const skinOn = !!(body?.skin && regions && extras.skinLum);
+      const uniforms = {
+        uTint: { value: tint },
+        uShirtLum: { value: base },
+        uRegions: { value: regions ?? emptyRegions() },
+        uHair: { value: new THREE.Color(hairOn ? body!.hair! : '#000000') },
+        uHairLum: { value: extras.hairLum || 1 },
+        uHairOn: { value: hairOn ? 1 : 0 },
+        uSkin: { value: new THREE.Color(skinOn ? body!.skin! : '#000000') },
+        uSkinLum: { value: extras.skinLum || 1 },
+        uSkinOn: { value: skinOn ? 1 : 0 },
+      };
       m.onBeforeCompile = (shader) => {
-        shader.uniforms.uTint = { value: tint };
-        shader.uniforms.uShirtLum = { value: base };
+        Object.assign(shader.uniforms, uniforms);
         shader.fragmentShader = shader.fragmentShader
-          .replace('#include <common>', '#include <common>\nuniform vec3 uTint;\nuniform float uShirtLum;')
+          .replace(
+            '#include <common>',
+            `#include <common>
+uniform vec3 uTint;
+uniform float uShirtLum;
+uniform sampler2D uRegions;
+uniform vec3 uHair;
+uniform float uHairLum;
+uniform float uHairOn;
+uniform vec3 uSkin;
+uniform float uSkinLum;
+uniform float uSkinOn;`,
+          )
           .replace(
             '#include <map_fragment>',
             `#include <map_fragment>
 #ifdef USE_MAP
-  float shirtLumNow = dot( sampledDiffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
-  vec3 shirtTinted = uTint * clamp( shirtLumNow / uShirtLum, 0.55, 1.2 );
+  float lumNow = dot( sampledDiffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) );
+  vec3 shirtTinted = uTint * clamp( lumNow / uShirtLum, 0.55, 1.2 );
   diffuseColor.rgb = mix( diffuseColor.rgb, shirtTinted, sampledDiffuseColor.a );
+  vec2 regionMix = texture2D( uRegions, vMapUv ).rg * vec2( uHairOn, uSkinOn );
+  diffuseColor.rgb = mix( diffuseColor.rgb, uHair * clamp( lumNow / uHairLum, 0.5, 1.6 ), regionMix.r );
+  diffuseColor.rgb = mix( diffuseColor.rgb, uSkin * clamp( lumNow / uSkinLum, 0.6, 1.25 ), regionMix.g );
   diffuseColor.a = 1.0;
 #endif`,
           );

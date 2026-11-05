@@ -17,6 +17,7 @@ import { FLOORS, STARTER_ROOMS, WALLPAPERS, starterLayout, type FloorId, type Wa
 import { call, errorMessage } from '@/lib/api';
 import { BgmPlayer } from '../app/BgmPlayer';
 import { Guide } from '../app/Guide';
+import { LookPickers } from '../app/LookPickers';
 import { ResidentCard } from '../app/ResidentCard';
 import { Icon } from '../app/Icon';
 import type { MyProfile } from '@/server/scene/service';
@@ -162,7 +163,7 @@ export function OnboardingClient() {
 
       {step === 2 && (
         <section className="onboarding__body">
-          <Guide>나를 닮은 캐릭터를 만들어 봐요. 나중에 옷장에서 언제든 바꿀 수 있어요.</Guide>
+          <Guide>나를 닮은 캐릭터를 만들어 봐요. 남자·여자는 지금만 고를 수 있고, 피부색·머리 색·옷은 나중에도 언제든 바꿀 수 있어요.</Guide>
           <div className="avatar-stage">{assets ? <AvatarPreview assets={assets} avatar={avatar} /> : <div className="loader" aria-hidden />}</div>
           <h2 className="field-title">캐릭터</h2>
           <div className="chips">
@@ -172,6 +173,7 @@ export function OnboardingClient() {
               </button>
             ))}
           </div>
+          <LookPickers avatar={avatar} onChange={setAvatar} titleClassName="field-title" />
           <h2 className="field-title">티셔츠 색</h2>
           <div className="swatches">
             {AVATAR_COLORS.map((c) => (

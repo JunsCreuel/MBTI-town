@@ -33,7 +33,7 @@ const inSpawn = (p: { x: number; z: number }, name: string, m: TownMap = map) =>
 
 function pass(over: Partial<TownPass> = {}): TownPass {
   return {
-    pid: guestPid(), name: '손님', handle: '', district: '', hood: 1, lot: -1, body: 'male', color: 'mint', acc: 'none',
+    pid: guestPid(), name: '손님', handle: '', district: '', hood: 1, lot: -1, body: 'male', color: 'mint', acc: 'none', skin: 'natural', hair: 'natural',
     exp: Math.floor(Date.now() / 1000) + 600, ...over,
   };
 }
@@ -337,6 +337,18 @@ describe('펫', () => {
     rooms.push(r);
     await until(() => r.state.players?.get(r.sessionId) !== undefined);
     expect(r.state.players.get(r.sessionId).pet).toBe('dog');
+  });
+
+  it('피부색·머리 색은 입장 토큰대로 다른 사람에게 보인다', async () => {
+    const a = await connect({ token: signTownPass(pass({ pid: townPid('user-look'), name: '분홍머리', district: 'INFJ', lot: 2, skin: 'deep', hair: 'pink' })), place: 'market' });
+    rooms.push(a);
+    const b = await connect({ token: signTownPass(pass({ name: '보는손님' })), place: 'market' });
+    rooms.push(b);
+    await until(() => !!b.state.players?.get(a.sessionId) && !!a.state.players?.get(b.sessionId));
+    const seen = b.state.players.get(a.sessionId);
+    expect([seen.skin, seen.hair]).toEqual(['deep', 'pink']);
+    const guest = a.state.players.get(b.sessionId);
+    expect([guest.skin, guest.hair]).toEqual(['natural', 'natural']);
   });
 
   it('집이 있는 주민은 펫을 데리고 들어오고 바꿀 수 있다. 손님과 모르는 펫은 받지 않는다', async () => {
