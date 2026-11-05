@@ -107,10 +107,11 @@ const FEMALE_FACE: FaceSpec = {
 const MODELS: ModelSpec[] = [
   { src: 'base_blank_face.glb', key: 'char.base', file: 'characters/char_base.glb', height: CHARACTER_HEIGHT, face: MALE_FACE, armSpread: 15, old: 'characters/char_base_ph.glb' },
   { src: 'base_blank_face_female.glb', key: 'char.base.female', file: 'characters/char_base_female.glb', height: CHARACTER_HEIGHT, face: FEMALE_FACE, armSpread: 20 },
-  { src: 'animal_cat.glb', key: 'char.npc.monnyang', file: 'characters/char_npc_monnyang.glb', height: 1.3, old: 'characters/char_npc_monnyang_ph.glb' },
-  { src: 'animal_fox.glb', key: 'char.npc.dj', file: 'characters/char_npc_dj.glb', height: 1.32, old: 'characters/char_npc_dj_ph.glb' },
-  { src: 'animal_bear.glb', key: 'char.npc.bartender', file: 'characters/char_npc_bartender.glb', height: 1.38, old: 'characters/char_npc_bartender_ph.glb' },
-  { src: 'animal_rabbit.glb', key: 'char.npc.rabbit', file: 'characters/char_npc_rabbit.glb', height: 1.3 },
+  // 동물 주민 (MBTI 마을에 집이 있다). 광장 몬냥이·클럽 DJ 너굴·바텐더 곰돌은 예전 임시 모델 그대로 (scripts/gen-placeholders.ts)
+  { src: 'animal_cat.glb', key: 'char.resident.cat', file: 'characters/char_resident_cat.glb', height: 1.3 },
+  { src: 'animal_fox.glb', key: 'char.resident.fox', file: 'characters/char_resident_fox.glb', height: 1.32 },
+  { src: 'animal_bear.glb', key: 'char.resident.bear', file: 'characters/char_resident_bear.glb', height: 1.38 },
+  { src: 'animal_rabbit.glb', key: 'char.resident.rabbit', file: 'characters/char_resident_rabbit.glb', height: 1.3 },
   { src: 'animal_dog_lowpoly.glb', key: 'pet.dog', file: 'pets/pet_dog.glb', height: 0.5, pet: true, simplify: 0.3, simplifyError: 0.01, texture: 512 },
 ];
 

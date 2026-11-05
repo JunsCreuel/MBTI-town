@@ -200,6 +200,9 @@ AI로 생성한 이미지·모델은 출처 칸에 사용한 도구를 적는다
 | items/item_fish_boot_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
 | items/item_fish_bottle_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
 | props/prop_tool_rod_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| characters/char_npc_monnyang_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-03 |
+| characters/char_npc_dj_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-04 |
+| characters/char_npc_bartender_ph.glb | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-04 |
 | ui/ui_icon_drink_ph.svg | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-04 |
 | audio/club_pan_bakkwo.ogg | "판을 바꿔" by zansang (운영자 제공, Suno로 제작), 음량 맞춤·변환 | 제공자 보유 | 2026-11-04 |
 | audio/club_pan_bakkwo.mp3 | "판을 바꿔" by zansang (운영자 제공, Suno로 제작), 음량 맞춤·변환 | 제공자 보유 | 2026-11-04 |
@@ -256,8 +259,8 @@ AI로 생성한 이미지·모델은 출처 칸에 사용한 도구를 적는다
 | room/room_view_sp_ph.png | 자체 제작 임시 에셋 (scripts/gen-placeholders.ts) | 프로젝트 소유 | 2026-11-05 |
 | characters/char_base.glb | 프로젝트 소유자 제공 (Tripo로 제작한 모델, 표정 그림 포함), 용량·뼈대 정리 (scripts/import-characters.ts) | 프로젝트 소유 [결정 필요: Tripo 요금제의 상업적 이용 권한 확인] | 2026-11-05 |
 | characters/char_base_female.glb | 프로젝트 소유자 제공 (Tripo로 제작한 모델, 표정 그림 포함), 용량·뼈대 정리 (scripts/import-characters.ts) | 프로젝트 소유 [결정 필요: Tripo 요금제의 상업적 이용 권한 확인] | 2026-11-05 |
-| characters/char_npc_monnyang.glb | 프로젝트 소유자 제공 (Tripo로 제작한 모델, 표정 그림 포함), 용량·뼈대 정리 (scripts/import-characters.ts) | 프로젝트 소유 [결정 필요: Tripo 요금제의 상업적 이용 권한 확인] | 2026-11-05 |
-| characters/char_npc_dj.glb | 프로젝트 소유자 제공 (Tripo로 제작한 모델, 표정 그림 포함), 용량·뼈대 정리 (scripts/import-characters.ts) | 프로젝트 소유 [결정 필요: Tripo 요금제의 상업적 이용 권한 확인] | 2026-11-05 |
-| characters/char_npc_bartender.glb | 프로젝트 소유자 제공 (Tripo로 제작한 모델, 표정 그림 포함), 용량·뼈대 정리 (scripts/import-characters.ts) | 프로젝트 소유 [결정 필요: Tripo 요금제의 상업적 이용 권한 확인] | 2026-11-05 |
-| characters/char_npc_rabbit.glb | 프로젝트 소유자 제공 (Tripo로 제작한 모델, 표정 그림 포함), 용량·뼈대 정리 (scripts/import-characters.ts) | 프로젝트 소유 [결정 필요: Tripo 요금제의 상업적 이용 권한 확인] | 2026-11-05 |
+| characters/char_resident_cat.glb | 프로젝트 소유자 제공 (Tripo로 제작한 모델, 표정 그림 포함), 용량·뼈대 정리 (scripts/import-characters.ts) | 프로젝트 소유 [결정 필요: Tripo 요금제의 상업적 이용 권한 확인] | 2026-11-05 |
+| characters/char_resident_fox.glb | 프로젝트 소유자 제공 (Tripo로 제작한 모델, 표정 그림 포함), 용량·뼈대 정리 (scripts/import-characters.ts) | 프로젝트 소유 [결정 필요: Tripo 요금제의 상업적 이용 권한 확인] | 2026-11-05 |
+| characters/char_resident_bear.glb | 프로젝트 소유자 제공 (Tripo로 제작한 모델, 표정 그림 포함), 용량·뼈대 정리 (scripts/import-characters.ts) | 프로젝트 소유 [결정 필요: Tripo 요금제의 상업적 이용 권한 확인] | 2026-11-05 |
+| characters/char_resident_rabbit.glb | 프로젝트 소유자 제공 (Tripo로 제작한 모델, 표정 그림 포함), 용량·뼈대 정리 (scripts/import-characters.ts) | 프로젝트 소유 [결정 필요: Tripo 요금제의 상업적 이용 권한 확인] | 2026-11-05 |
 | pets/pet_dog.glb | 프로젝트 소유자 제공 (Tripo로 제작한 모델, 표정 그림 포함), 용량·뼈대 정리 (scripts/import-characters.ts) | 프로젝트 소유 [결정 필요: Tripo 요금제의 상업적 이용 권한 확인] | 2026-11-05 |

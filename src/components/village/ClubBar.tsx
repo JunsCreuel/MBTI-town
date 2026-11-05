@@ -1,6 +1,6 @@
 'use client';
 
-// 클럽 화면: DJ 여우비(여우)에게 신청곡, 바텐더 곰돌에게 한 잔, 취했을 때 화면 효과(흐려짐·분홍빛·딸꾹질).
+// 클럽 화면: DJ 너굴에게 신청곡, 바텐더 곰돌에게 한 잔, 취했을 때 화면 효과(흐려짐·분홍빛·딸꾹질).
 import { useEffect, useRef, useState } from 'react';
 import { townConfig } from '@/config/game';
 import { CLUB_TRACKS, YOUTUBE_MAX_SECONDS, queueKey, youtubeIdOf, type YoutubeSong } from '@/shared/clubMusic';

@@ -67,6 +67,17 @@ export interface Lot {
   yaw: number;
 }
 
+/** 동물 주민의 집 (scripts/lib/town-map.ts가 MBTI 마을 몇 곳에 무작위로 세운다). id = 주민 (src/shared/residents.ts) */
+export interface ResidentHome {
+  id: string;
+  district: District;
+  /** 집 바닥 가운데 */
+  x: number;
+  z: number;
+  /** 집이 바라보는 방향 (라디안) */
+  yaw: number;
+}
+
 export interface Rect {
   x: number;
   z: number;
@@ -97,6 +108,8 @@ export interface TownMap {
   hoodLots: Omit<Lot, 'district'>[];
   /** 칸별 지역 (DISTRICTS 번호). 광장·길·바닷가는 -1 */
   districtGrid: Int8Array;
+  /** 동물 주민의 집 (본섬에만 있다) */
+  residents: ResidentHome[];
 }
 
 function layer<T extends TiledLayerBase['type']>(map: TiledMap, name: string, type: T) {
@@ -126,6 +139,7 @@ export function parseTownMap(json: TiledMap): TownMap {
   if (!spawnObj) throw new Error('spawn 레이어에 spawn 사각형이 없습니다');
   const lotObjs = optionalLayer(json, 'lots', 'objectgroup')?.objects ?? [];
   const districtData = optionalLayer(json, 'districts', 'tilelayer')?.data;
+  const residentObjs = optionalLayer(json, 'residents', 'objectgroup')?.objects ?? [];
   const lots = emptyLots();
   const hoodLots: Omit<Lot, 'district'>[] = [];
   for (const o of lotObjs) {
@@ -174,6 +188,13 @@ export function parseTownMap(json: TiledMap): TownMap {
     lots,
     hoodLots,
     districtGrid: Int8Array.from(districtData ?? new Array(json.width * json.height).fill(0), (v) => (v >= 1 && v <= DISTRICTS.length ? v - 1 : -1)),
+    // 이름 = "resident.주민", 사용자 속성 district = 사는 마을
+    residents: residentObjs.flatMap((o) => {
+      const [kind, id] = o.name.split('.');
+      const district = o.properties?.find((p) => p.name === 'district')?.value;
+      if (kind !== 'resident' || !id || !isDistrict(district)) return [];
+      return [{ id, district, x: o.x / TILE_PX, z: o.y / TILE_PX, yaw: -((o.rotation ?? 0) * Math.PI) / 180 }];
+    }),
   };
 }
 
@@ -190,6 +211,7 @@ export function withDistrict(map: TownMap, d: District): TownMap {
   return {
     ...map,
     lots,
+    residents: [],
     districtGrid: map.districtGrid.map((v) => (v >= 0 ? di : -1)),
     // 지역 색 소품은 그 지역 색으로, 자리표시 식물은 그 지역 식물로
     props: map.props.map((p) => (p.district ? { ...p, district: d, key: themedKey(d, p.key, p.x, p.z) } : p)),
@@ -206,7 +228,7 @@ export function districtAt(map: TownMap, x: number, z: number): District | null 
 }
 
 /** 집 문 앞 (집터 가운데에서 집이 바라보는 쪽으로) */
-export function lotDoor(lot: Lot, distance = 1.9): { x: number; z: number } {
+export function lotDoor(lot: Pick<Lot, 'x' | 'z' | 'yaw'>, distance = 1.9): { x: number; z: number } {
   return { x: lot.x + Math.sin(lot.yaw) * distance, z: lot.z + Math.cos(lot.yaw) * distance };
 }
 

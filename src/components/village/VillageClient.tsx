@@ -293,7 +293,7 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
   // 안내 NPC 몬냥이 (광장): 가까우면 말 걸기, 처음 온 사람에게는 먼저 인사한다
   const npcSpot = useMemo(() => (loaded ? guideNpcSpot(loaded.map) : null), [loaded]);
   const [nearNpc, setNearNpc] = useState(false);
-  // 클럽: DJ 여우비(신청곡), 바텐더 곰돌(한 잔)
+  // 클럽: DJ 너굴(신청곡), 바텐더 곰돌(한 잔)
   const clubSpots = useMemo(() => (loaded ? clubNpcSpots(loaded.map) : null), [loaded]);
   const [nearClub, setNearClub] = useState<'dj' | 'bar' | null>(null);
   const [contestOpen, setContestOpen] = useState(false);

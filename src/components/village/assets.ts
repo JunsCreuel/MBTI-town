@@ -7,6 +7,7 @@ import { ACCESSORIES, bodyKey, type AvatarBody } from '@/shared/avatar';
 import { allFloraKeys } from '@/shared/flora';
 import type { TownMap } from '@/shared/townMap';
 import { EMOTES, type EmoteKind } from '@/shared/protocol';
+import { residentDef } from '@/shared/residents';
 import { withMeshopt } from '@/lib/characterRig';
 import { EMOTE_INFO } from '../app/gestures';
 import { hasClubNpcs } from './npc';
@@ -130,6 +131,20 @@ export function loadNpc(kind: NpcKind): Promise<GLTF> {
   return p;
 }
 
+const residentCache = new Map<string, Promise<GLTF>>();
+
+/** 동물 주민 모델 (그 집 가까이 가면 받는다, 한 번만) */
+export function loadResident(id: string): Promise<GLTF> {
+  let p = residentCache.get(id);
+  if (!p) {
+    const def = residentDef(id);
+    p = def ? withMeshopt(new GLTFLoader()).loadAsync(assetUrl(def.key)) : Promise.reject(new Error(`주민 ${id}이 없습니다`));
+    residentCache.set(id, p);
+    p.catch(() => residentCache.delete(id));
+  }
+  return p;
+}
+
 export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) => void): Promise<TownAssets> {
   const loader = withMeshopt(new GLTFLoader());
   const accessoryKeys = ACCESSORIES.filter((a) => a.key).map((a) => [a.id, a.key!] as const);
@@ -160,6 +175,58 @@ export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) =
     rod: models.get(assetUrl(ROD_KEY))!.scene,
     npcs: Object.fromEntries(npcKinds.map((k) => [k, models.get(assetUrl(NPC_KEYS[k]))!])),
   };
+}
+
+const speechCache = new Map<string, { texture: THREE.Texture; aspect: number; height: number }>();
+
+/**
+ * 글 말풍선 (NPC가 하는 말). 한 줄에 너무 길면 낱말 사이에서 줄을 바꾼다. 같은 말은 한 번만 만든다.
+ * height = 화면 높이 (월드 단위, 이름표와 같은 글자 크기가 되게)
+ */
+export function speechTexture(text: string) {
+  const cached = speechCache.get(text);
+  if (cached) return cached;
+  const scale = 4;
+  const font = `600 ${13 * scale}px ${tokens.font.base}`;
+  const maxW = 190 * scale;
+  const probe = canvas(1, 1).ctx;
+  probe.font = font;
+  const lines: string[] = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && probe.measureText(next).width > maxW) {
+      lines.push(line);
+      line = word;
+    } else line = next;
+  }
+  if (line) lines.push(line);
+  const lineH = 18 * scale;
+  const padX = 12 * scale;
+  const padY = 9 * scale;
+  const tail = 9 * scale;
+  const W = Math.ceil(Math.max(...lines.map((l) => probe.measureText(l).width)) + padX * 2);
+  const H = Math.ceil(lines.length * lineH + padY * 2 + tail);
+  const { c, ctx } = canvas(W, H);
+  ctx.fillStyle = tokens.scene.tagBg;
+  ctx.beginPath();
+  ctx.roundRect(scale, scale, W - 2 * scale, H - tail - scale, 14 * scale);
+  ctx.moveTo(W / 2 - 8 * scale, H - tail - scale);
+  ctx.lineTo(W / 2, H - scale);
+  ctx.lineTo(W / 2 + 8 * scale, H - tail - scale);
+  ctx.fill();
+  ctx.font = font;
+  ctx.fillStyle = tokens.scene.tagText;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  lines.forEach((l, i) => ctx.fillText(l, W / 2, padY + lineH * (i + 0.5) + scale));
+  const texture = new THREE.CanvasTexture(c);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  // 이름표는 30px 높이가 0.3이다 (tagTexture)
+  const out = { texture, aspect: W / H, height: H / (100 * scale) };
+  speechCache.set(text, out);
+  return out;
 }
 
 const tagCache = new Map<string, { texture: THREE.Texture; aspect: number; rel: number }>();

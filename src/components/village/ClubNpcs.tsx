@@ -1,6 +1,6 @@
 'use client';
 
-// 클럽 NPC (3D): DJ 여우비(여우)는 부스 뒤에서 늘 춤추고, 신청곡이 바뀌면 손을 번쩍 든다.
+// 클럽 NPC (3D): DJ 너구리는 부스 뒤에서 늘 춤추고, 신청곡이 바뀌면 손을 번쩍 든다.
 // 바텐더 곰은 바 안쪽에 서서 가까이 오면 나를 보고, 처음 다가오면 손을 흔들고, 술을 내주면 건배한다.
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef } from 'react';
@@ -20,7 +20,7 @@ import { now } from './session';
 
 type Clip = 'idle' | 'wave' | 'cheer' | 'dance';
 
-export const DJ_NAME = 'DJ 여우비';
+export const DJ_NAME = 'DJ 너굴';
 export const BARTENDER_NAME = '바텐더 곰돌';
 
 function useRig(gltf: GLTF | undefined, clips: Clip[]) {

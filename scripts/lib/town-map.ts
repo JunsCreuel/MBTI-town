@@ -9,6 +9,8 @@
 //   spawn     (사각형) "spawn" = 중앙광장, "spawn.ENFP" 등 = 마을 입구, "gate.ENFP" 등 = 동네 길 앞
 //   lots      (점) 집터. name = "유형.번호", rotation = 집이 바라보는 방향(도). 집터는 늘 막혀 있다(빈 집터는 울타리).
 //   districts (타일) 마을 땅: 1~16 = DISTRICTS 순서, 0 = 광장·길·바닷가
+//   residents (점) 본섬에만: 동물 주민의 집. name = "resident.주민", rotation = 집이 바라보는 방향(도), 사용자 속성 district = 사는 마을.
+//             집 모델은 deco에 prop.town.house로 따로 놓는다 (그 마을 색으로 칠한다)
 //
 // 동네 틀 맵(buildHoodMap): 마을 1동(본섬) 집터가 다 차면 열리는 2동·3동…이 함께 쓰는 작은 섬.
 //   마을은 정해 두지 않는다. 화면과 서버가 그 동네의 마을을 입힌다 (townMap.ts withDistrict).
@@ -16,6 +18,7 @@
 import { playConfig, townConfig } from '../../src/config/game';
 import { DISTRICTS, THEMES, THEME_DISTRICT, themeOf, type District, type Theme } from '../../src/shared/districts';
 import { fruitTreeKey } from '../../src/shared/play';
+import { RESIDENTS } from '../../src/shared/residents';
 import { BEACH_TREES, FLORA, HILL_FLORA, PLAZA_TREES, TEMPLATE_BUSH, TEMPLATE_ROCK, TEMPLATE_TREE, pickWeighted } from '../../src/shared/flora';
 
 export const TOWN_TILES = ['grass', 'grass2', 'stone', 'path', 'water', 'flowerbed', 'hedge', 'stoneEdge', 'sand'] as const;
@@ -219,7 +222,7 @@ function canvas(size: number) {
   const spawnRect = (name: string, x: number, y: number, w: number, h: number) => ({
     id: id(), name, type: 'spawn', x: x * T, y: y * T, width: w * T, height: h * T, rotation: 0, visible: true,
   });
-  const toTiled = (tilesetFile: string, spawns: unknown[]) => {
+  const toTiled = (tilesetFile: string, spawns: unknown[], residents: unknown[] = []) => {
     const tileLayer = (lid: number, name: string, data: number[], opacity = 1) => ({
       id: lid, name, type: 'tilelayer', x: 0, y: 0, width: size, height: size, opacity, visible: true, data,
     });
@@ -237,7 +240,7 @@ function canvas(size: number) {
       height: size,
       tilewidth: T,
       tileheight: T,
-      nextlayerid: 7,
+      nextlayerid: residents.length ? 8 : 7,
       nextobjectid: nextId,
       layers: [
         tileLayer(1, 'ground', ground),
@@ -246,6 +249,7 @@ function canvas(size: number) {
         objectLayer(4, 'spawn', spawns),
         objectLayer(5, 'lots', lots),
         tileLayer(6, 'districts', districtGrid, 0.3),
+        ...(residents.length ? [objectLayer(7, 'residents', residents)] : []),
       ],
       tilesets: [
         {
@@ -272,14 +276,24 @@ function canvas(size: number) {
       ],
     };
   };
+  /** 동물 주민 집: 집 모델은 소품으로, 집 자리는 residents 레이어 점으로 남긴다. 집 바닥은 집터처럼 막는다 */
+  const residents: Record<string, unknown>[] = [];
+  const residentHome = (resident: string, x: number, y: number, rot: number, district: District) => {
+    prop('prop.town.house', x, y, rectTiles(x, y, 1.25, 1.15, rot), rot, district);
+    residents.push({
+      id: id(), name: `resident.${resident}`, type: 'resident', x: x * T, y: y * T, width: 0, height: 0, point: true, rotation: rot, visible: true,
+      properties: [{ name: 'district', type: 'string', value: district }],
+    });
+    taken.push({ x, y, r: 1.9 });
+  };
   return {
     ground, districtGrid, set, get, block, isBlocked, polar, taken, prop, unprop, facing, rectTiles, square, at, snap,
-    lot, gate, onPath, spawnRect, toTiled,
+    lot, gate, onPath, spawnRect, toTiled, residents, residentHome,
   };
 }
 
 export function buildTownMap(tilesetFile: string) {
-  const { ground, districtGrid, set, get, block, isBlocked, polar, taken, prop, unprop, facing, rectTiles, square, at, snap, lot, gate, onPath, spawnRect, toTiled } =
+  const { ground, districtGrid, set, get, block, isBlocked, polar, taken, prop, unprop, facing, rectTiles, square, at, snap, lot, gate, onPath, spawnRect, toTiled, residents, residentHome } =
     canvas(SIZE);
   const rand = rng(20261102);
 
@@ -544,6 +558,55 @@ export function buildTownMap(tilesetFile: string) {
     unprop((key, x, y) => /^prop\.nature\./.test(key) && Math.hypot(x - b.x, y - b.y) < 4.2);
   }
 
+  // 4-4. 동물 주민 집: 주민마다 서로 다른 기질 그룹의 MBTI 마을을 무작위로 골라, 그 마을 둥근 거리 가까운 빈 풀밭에 집을 세운다.
+  // 맨 나중에 놓고 따로 뽑는 난수를 써서 앞의 배치가 그대로다. 집 둘레와 문 앞을 가리는 식물은 뺀다.
+  {
+    // 주민마다 다른 기질 그룹(NT·NF·SJ·SP)에서 마을 하나씩 (섬 네 쪽에 흩어진다)
+    const pick = rng(20261105);
+    const groups = THEMES.map((_, k) => k);
+    for (let k = groups.length - 1; k > 0; k--) {
+      const j = Math.floor(pick() * (k + 1));
+      [groups[k], groups[j]] = [groups[j], groups[k]];
+    }
+    const order = groups.map((k) => k * 4 + Math.floor(pick() * 4));
+    const blockedGround = (x: number, y: number) => [gid('water'), gid('path'), gid('stone'), gid('stoneEdge'), gid('hedge'), gid('flowerbed')].includes(get(ground, x, y));
+    RESIDENTS.forEach((resident, n) => {
+      const i = order[n];
+      const a0 = districtAngle(i);
+      // 둥근 거리(streetA·B)에서 2.6~4.5칸 떨어진 풀밭 (문이 거리 쪽을 본다). 집터 줄은 집터 8곳이 다 쓰고 있다
+      const spots: { x: number; y: number; rot: number }[] = [];
+      for (const street of ['streetA', 'streetB'] as const) {
+        for (const side of [-1, 1]) {
+          for (let off = 2.6; off <= 4.5; off += 0.5) {
+            const r = TOWN_RADII[street] + side * off;
+            const half = SECTOR / 2 - 1.8 / r;
+            for (let da = -half; da <= half; da += 0.4 / r) {
+              if (Math.abs(da) * r < 2.8) continue; // 큰길
+              const p = at(r, a0 + da);
+              const target = at(TOWN_RADII[street], a0 + da);
+              const rot = facing(p.x, p.y, target.x, target.y);
+              const yaw = (-rot * Math.PI) / 180;
+              const door = { x: p.x + Math.sin(yaw) * 1.9, y: p.y + Math.cos(yaw) * 1.9 };
+              // 집터·명소·열매 나무·아치(심은 식물보다 큰 것)와 떨어지고, 집 바닥이 길·물이 아니고, 문 앞이 열려 있어야 한다
+              if (taken.some((t) => t.r >= 1.2 && Math.hypot(t.x - p.x, t.y - p.y) < t.r + 1.2)) continue;
+              if (inSpawn(p.x, p.y) || inSpawn(door.x, door.y)) continue;
+              if (polar(p.x, p.y).d > shoreAt(a0 + da) - 3.5) continue;
+              if (rectTiles(p.x, p.y, 1.25, 1.15, rot).some(([tx, ty]) => blockedGround(tx, ty))) continue;
+              if ([gid('water'), gid('hedge'), gid('flowerbed')].includes(get(ground, Math.floor(door.x), Math.floor(door.y)))) continue;
+              spots.push({ x: p.x, y: p.y, rot });
+            }
+          }
+        }
+      }
+      if (!spots.length) throw new Error(`${DISTRICTS[i]} 마을에 ${resident.name}의 집 자리가 없습니다`);
+      const s = spots[Math.floor(pick() * spots.length)];
+      const yaw = (-s.rot * Math.PI) / 180;
+      const door = { x: s.x + Math.sin(yaw) * 1.9, y: s.y + Math.cos(yaw) * 1.9 };
+      unprop((key, x, y) => /^prop\.nature\./.test(key) && (Math.hypot(x - s.x, y - s.y) < 2.6 || Math.hypot(x - door.x, y - door.y) < 1.8));
+      residentHome(resident.id, s.x, s.y, s.rot, DISTRICTS[i]);
+    });
+  }
+
   // 5. 스폰: 광장은 분수 남쪽, 마을은 큰길 입구, 동네 길은 아치 앞
   const spawns = [
     spawnRect('spawn', C - 3, C + 3, 6, 2),
@@ -556,7 +619,7 @@ export function buildTownMap(tilesetFile: string) {
       return spawnRect(`gate.${d}`, p.x - 1, p.y - 1, 2, 2);
     }),
   ];
-  return toTiled(tilesetFile, spawns);
+  return toTiled(tilesetFile, spawns, residents);
 }
 
 // ───────────────────────── 동네 틀 맵 (2동·3동…) ─────────────────────────

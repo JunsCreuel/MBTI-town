@@ -1,7 +1,9 @@
 // 광장 안내 NPC 몬냥이: 서 있는 자리와 하는 말. 처음 온 사람이 헷갈리지 않게 MBTI 마을·오늘의 토론·대항전·놀거리·클럽·코인·가방·조작·집을 알려 준다.
 // 복채·값은 설정(src/config/game.ts)에서 읽어 말한다 (값을 바꿔도 말이 맞게).
 import { coinConfig, contestConfig, debateConfig, marketConfig, townConfig } from '@/config/game';
+import { withIGa } from '@/shared/josa';
 import { FISH } from '@/shared/play';
+import { RESIDENTS } from '@/shared/residents';
 import type { TownMap } from '@/shared/townMap';
 
 export const NPC_NAME = '몬냥이';
@@ -73,6 +75,7 @@ export const NPC_TOPICS: NpcTopic[] = [
       '북쪽은 분석가(NT) 은빛 언덕, 동쪽은 외교관(NF) 초록 숲, 남쪽은 관리자(SJ) 푸른 호숫가, 서쪽은 탐험가(SP) 노을 거리예요.',
       `내 MBTI 마을에 내 집이 서요. MBTI를 바꾸면 그 마을로 이사하는데, 한 번 바꾸면 ${debateConfig.mbtiChangeCooldownDays}일 동안은 다시 못 바꿔요.`,
       '위쪽 지도 버튼으로 섬 전체를 보고, 가고 싶은 마을을 누르면 바로 가요.',
+      `마을 네 곳에는 동물 주민 ${withIGa(RESIDENTS.map((r) => r.name).join('·'))} 살아요. 집에서 나와 산책하다 다시 들어가니, 가까이 가서 인사해 보세요!`,
     ],
   },
   {
@@ -112,7 +115,7 @@ export const NPC_TOPICS: NpcTopic[] = [
     ask: '클럽에서는 뭐 해요?',
     lines: () => [
       '클럽에서는 모두 같은 노래를 같은 순간에 들어요. 무대 위에 서면 저절로 춤을 추고, 스페이스바(휴대폰은 몸짓의 "폴짝")로 다 같이 뛸 수 있어요.',
-      `DJ 여우비에게 가면 신청곡을 골라요. 지금 곡이 끝나면 신청곡이 차례로 나오고, 한 사람이 ${townConfig.musicQueuePerPerson}곡까지 기다릴 수 있어요.`,
+      `DJ 너굴에게 가면 신청곡을 골라요. 지금 곡이 끝나면 신청곡이 차례로 나오고, 한 사람이 ${townConfig.musicQueuePerPerson}곡까지 기다릴 수 있어요.`,
       '집이 있는 주민은 유튜브 링크로도 신청할 수 있어요. 음악·엔터테인먼트 영상, 8분 이하 곡이에요. 나오는 동안 화면에 유튜브 플레이어가 떠요.',
       'DJ 부스 뒤 큰 전광판에는 지금 곡, 신청한 사람, 다음 곡이 나와요.',
       '바텐더 곰돌에게는 한 잔 주문할 수 있어요. 세 잔부터는 점점 취하니 물도 챙겨 마셔요! (게임 속 술이에요)',

@@ -616,13 +616,13 @@
     "file": "props/prop_tool_rod_ph.glb"
   },
   "char.npc.monnyang": {
-    "file": "characters/char_npc_monnyang.glb"
+    "file": "characters/char_npc_monnyang_ph.glb"
   },
   "char.npc.dj": {
-    "file": "characters/char_npc_dj.glb"
+    "file": "characters/char_npc_dj_ph.glb"
   },
   "char.npc.bartender": {
-    "file": "characters/char_npc_bartender.glb"
+    "file": "characters/char_npc_bartender_ph.glb"
   },
   "ui.icon.drink": {
     "file": "ui/ui_icon_drink_ph.svg"
@@ -814,10 +814,19 @@
   "char.base.female": {
     "file": "characters/char_base_female.glb"
   },
-  "char.npc.rabbit": {
-    "file": "characters/char_npc_rabbit.glb"
-  },
   "pet.dog": {
     "file": "pets/pet_dog.glb"
+  },
+  "char.resident.cat": {
+    "file": "characters/char_resident_cat.glb"
+  },
+  "char.resident.fox": {
+    "file": "characters/char_resident_fox.glb"
+  },
+  "char.resident.bear": {
+    "file": "characters/char_resident_bear.glb"
+  },
+  "char.resident.rabbit": {
+    "file": "characters/char_resident_rabbit.glb"
   }
 }

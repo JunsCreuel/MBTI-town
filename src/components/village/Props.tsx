@@ -341,9 +341,9 @@ export function Props() {
 }
 
 /** 집 이름표 높이: 지붕 위에 붙여서, 뒤에 선 집이 아니라 이 집 것으로 보이게 한다 */
-const HOUSE_TAG_Y = 2.25;
+export const HOUSE_TAG_Y = 2.25;
 /** 이름표를 집 정면(문 쪽) 지붕으로 당기는 거리 */
-const HOUSE_TAG_FORWARD = 0.35;
+export const HOUSE_TAG_FORWARD = 0.35;
 
 /**
  * 집터마다 집(주민이 있으면) 또는 울타리만 친 빈 집터를 세운다.

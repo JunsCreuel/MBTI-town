@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { withGwa, withIeyo, withRo } from './josa';
+import { withGwa, withIGa, withIeyo, withRo } from './josa';
 
 describe('조사', () => {
   it('받침에 맞춰 로/으로', () => {
@@ -20,5 +20,11 @@ describe('이에요/예요', () => {
     expect(withGwa('E(외향)')).toBe('E(외향)과');
     expect(withGwa('T(사고)')).toBe('T(사고)와');
     expect(withGwa('사과')).toBe('사과와');
+  });
+});
+
+describe('이/가', () => {
+  it('받침이 있으면 이, 없으면 가', () => {
+    expect(['꿀떡', '토리', '단풍', '나비'].map(withIGa)).toEqual(['꿀떡이', '토리가', '단풍이', '나비가']);
   });
 });

@@ -14,3 +14,6 @@ export const withIeyo = (word: string) => `${word}${jong(word) === 0 ? '예요' 
 
 /** "E(외향)과", "T(사고)와": 괄호는 건너뛰고 마지막 한글 글자의 받침을 본다 */
 export const withGwa = (word: string) => `${word}${jong(word.replace(/[)\]\s]+$/, '')) === 0 ? '와' : '과'}`;
+
+/** "이/가" (받침이 있으면 이): 꿀떡이, 토리가 */
+export const withIGa = (word: string) => `${word}${jong(word) === 0 ? '가' : '이'}`;

@@ -192,7 +192,7 @@ CLAUDE.md에는 "이 프로젝트는 PROJECT_GUIDE.md를 따른다" 한 줄만 �
   - 클럽: 사방이 벽으로 막힌 실내 홀 (하늘·바다 없이 어둡다). 북쪽 DJ 부스와 스피커, 동쪽 바, 서쪽 소파, 남쪽 출입문. 카메라 쪽 벽은 반투명해져 안이 보인다.
     - 조명: 무대 바닥 칸, 천장 조명의 빛줄기, 미러볼과 바닥 빛 조각, 벽 네온 띠. 지금 나오는 곡의 박자(BPM)에 맞춰 움직인다 (음악을 꺼도 같은 박자).
     - 음악: CC0 EDM 4곡을 돌려 튼다 (7장). 무대에 서면 저절로 춤춘다 (같은 방 사람에게 보인다).
-    - **DJ 여우비** (여우, 부스 뒤, `char.npc.dj`): 늘 춤춘다. 가까이 가서 신청곡을 고르면 **신청곡 목록(대기열)** 뒤에 들어간다. 지금 나오는 곡은 끝까지 틀고, 신청곡을 차례로 튼 뒤 목록 순서로 이어 간다. 서버가 채널마다 흐름(지금 곡 + 대기열)을 기억하고, 늦게 들어온 사람도 같은 흐름을 받는다 (`ClubLine`, `advanceLine`). DJ 시트에 지금 나오는 곡·신청곡 목록(신청한 사람)이 보이고, 클럽 음악 칩에 "신청곡 N곡 대기". 대기열은 채널마다 10곡, 한 사람 2곡까지, 한 사람이 5초에 한 번 (`musicQueueMax`, `musicQueuePerPerson`, `musicRequestCooldownMs`).
+    - **DJ 너굴** (너구리, 부스 뒤, `char.npc.dj`): 늘 춤춘다. 가까이 가서 신청곡을 고르면 **신청곡 목록(대기열)** 뒤에 들어간다. 지금 나오는 곡은 끝까지 틀고, 신청곡을 차례로 튼 뒤 목록 순서로 이어 간다. 서버가 채널마다 흐름(지금 곡 + 대기열)을 기억하고, 늦게 들어온 사람도 같은 흐름을 받는다 (`ClubLine`, `advanceLine`). DJ 시트에 지금 나오는 곡·신청곡 목록(신청한 사람)이 보이고, 클럽 음악 칩에 "신청곡 N곡 대기". 대기열은 채널마다 10곡, 한 사람 2곡까지, 한 사람이 5초에 한 번 (`musicQueueMax`, `musicQueuePerPerson`, `musicRequestCooldownMs`).
     - **유튜브 신청곡**: DJ 시트에 유튜브 링크를 넣으면 (로그인한 주민만) 웹 서버가 YouTube Data API v3로 확인한다: 공개·일부 공개, 다른 곳에서 재생 허용, 연령 제한 없음, 라이브 아님, 음악·엔터테인먼트 카테고리(뮤직비디오가 엔터테인먼트로 올라오는 일이 많다, `YOUTUBE_CATEGORIES`), 우리나라에서 재생 가능, 8분 이하 (`src/server/youtube.ts`, `YOUTUBE_MAX_SECONDS`). 통과하면 곡 정보(id·제목·길이)에 서명한 신청표(10분 유효)를 주고, 실시간 서버는 서명이 맞는 것만 대기열에 넣는다 (`signYoutube`/`verifyYoutube`). 키(`YOUTUBE_API_KEY`, Vercel)가 없으면 "준비 중"이라고 알린다.
       - 제한: 제목·채널 이름에 욕설·비하·성인·도박 같은 말이 있으면 받지 않는다 (`youtubeTextProblem`, 노래 제목에 흔한 영어 낱말은 걸리지 않게 낱말 단위). 운영자는 운영 화면 "클럽 유튜브 신청"에서 유튜브 신청 전체를 끄고 켜고, 영상·채널을 막고 푼다 (`youtube_blocks`, `app_settings`). 막은 영상·채널은 신청표를 주지 않는다.
       - 운영자는 DJ 시트에서 지금 곡 넘기기(채널 모두에게 다음 곡), 신청곡 빼기, 유튜브 곡 막고 넘기기·막고 빼기를 한다. 실시간 서버는 입장 토큰의 운영자 표시(`admin`, 웹 서버가 서명)를 보고 운영자 명령만 받는다 (`MSG.musicAdmin`, `skipLine`). 일반 주민이 음악·유튜브 플레이어를 끄면 그 사람 화면에서만 멈춘다 (다른 사람에게는 그대로 나온다).
@@ -209,9 +209,14 @@ CLAUDE.md에는 "이 프로젝트는 PROJECT_GUIDE.md를 따른다" 한 줄만 �
   - 운영 화면 `/admin` (MY에 "운영 화면 열기"): 오늘의 마을 숫자, 전체 공지 보내기(100자, 지금 접속한 모두에게), 신고 처리(내용 지우기·문제없음, 같은 대상 신고는 함께 닫힘), 주민 찾기·계정 삭제 (운영자 계정은 지울 수 없다).
     - 주민마다 코인이 보이고, 코인 주기·빼기(한 번에 100만까지, 0 밑으로는 안 내려간다)를 할 수 있다 (`POST /api/admin/users/:id`, `profiles.coins`). 테스트나 이벤트 보상에 쓴다.
   - 운영자가 나만 보기 기록까지 볼 수 있다는 점은 개인정보 처리방침에 적어야 한다 `[결정 필요]`.
-- **안내 NPC 몬냥이**: 중앙광장 스폰 오른쪽에 서 있는 안경 쓴 회보라 고양이 (`char.npc.monnyang`, 사람 캐릭터와 같은 Mixamo 뼈대·동작). 첫 화면 용량을 아끼려고 마을을 다 그린 뒤에 받는다. 가까이 오면 나를 보고, 처음 다가오면 손을 흔든다.
+- **안내 NPC 몬냥이**: 중앙광장 스폰 오른쪽에 서 있는 크림색 고양이 (`char.npc.monnyang`, 예전 임시 캐릭터와 같은 뼈대·동작). 첫 화면 용량을 아끼려고 마을을 다 그린 뒤에 받는다. 가까이 오면 나를 보고, 처음 다가오면 손을 흔든다.
   - 이 기기에서 처음 온 사람에게는 먼저 인사창을 띄운다 (`scene:npc-hello`). 이야기하기 전에는 머리 위에 느낌표.
   - 가까이(2.6칸) 가면 "몬냥이와 이야기하기" 버튼. 말은 한 글자씩 나오고, 궁금한 것을 고른다: 마을 소개(MBTI 16개 마을), 오늘의 토론(성향 대결), 마을 대항전, 놀거리, 클럽(신청곡·유튜브·전광판·바), 코인 모으고 쓰기, 가방·도감·내 캐릭터, 움직이는 법(점프 포함), 내 집 (손님에게는 집 짓기 안내). 말은 `src/components/village/npc.ts`, 값은 설정에서 읽어 말한다 (값을 바꿔도 말이 맞다). 새 기능을 더하면 여기에도 안내를 더한다. 사주·오행·타로·일주 말은 쓰지 않는다 (테스트로 지킨다).
+- **동물 주민**: MBTI 마을 네 곳에 동물 NPC가 한 마리씩 산다 — 고양이 **나비**, 여우 **단풍**, 곰 **꿀떡**, 토끼 **토리** (`src/shared/residents.ts`, 모델 `char.resident.*`, 이름은 `[결정 필요]`로 바꿀 수 있다).
+  - 집: 맵을 만들 때 주민마다 서로 다른 기질 그룹(NT·NF·SJ·SP)에서 마을 하나를 무작위로 골라, 둥근 거리 가까운 빈 풀밭에 집을 세운다 (`scripts/lib/town-map.ts`, 맵 `residents` 레이어 + 집 모델 `prop.town.house`). 지금은 토리 INTP, 꿀떡 ENFJ, 나비 ISFJ, 단풍 ISFP. 지붕 위 이름표 "OO네 집". 주민 집은 들어갈 수 없다.
+  - 일과 (90초 한 바퀴, `RESIDENT_CYCLE`): 집 안에 있다가 문으로 나와서(흐려졌다 또렷해진다) 집 앞 둘레 몇 군데를 걸어서 들르고(서 있기·생각하기·춤), 다시 문으로 들어간다. 밖에 있는 시간은 한 바퀴에 50~60초쯤. 일과는 서버 시계 시각만으로 정해서 모든 화면에서 같은 자리에 보인다 (실시간 서버는 주민을 모른다).
+  - 가까이(3칸) 가면 말풍선으로 인사한다 (주민마다 말 4가지, `{마을}` = 사는 마을). 서 있을 때는 나를 보고 손을 흔든다. 이름표 둘째 줄은 "OOOO 마을 주민".
+  - 모델은 그 집에서 24칸 안으로 가야 받는다 (첫 화면 용량에 들지 않는다).
 
 ### MBTI로 마을 정하기 (`src/components/onboarding/MbtiPicker.tsx`, `src/shared/mbtiTest.ts`)
 
@@ -449,13 +454,14 @@ src/config/game.ts         # 운영 중 바꿀 값
 | 마을 소품 | GLB | 삼각형 3,000개 이하 | 원점 = 바닥 가운데, 정면 = +Z. 마을 색을 입힐 부분은 재질 `outfit`, 밤에 켜지는 부분은 `glass`(창)·`glow`(등), 늘 제 색으로 빛나는 클럽 네온은 `neonPink`·`neonCyan`·`neonGreen`, 바람에 흔들릴 잎·풀은 `foliage`. 집은 바닥 2.4×2.2, 문이 정면 |
 | 자연물 | GLB (Kenney Nature Kit, CC0) | 나무 높이 약 2~3.5, 꽃·풀 0.3~0.5 | `prop.nature.*`. 원본 묶음은 저장소에 넣지 않고 `npm run assets:kenney -- <GLTF 폴더>`로 다시 만든다 |
 | 클럽·마을 음악 | OGG + MP3 (CC0 또는 제공자 보유) | 곡마다 2MB 이하, 음량 맞춤 | `bgm.club.*`, `bgm.village.*`. manifest에 `title`, `mood`, `seconds`, 박자 `bpm`·`beat`. 원본은 저장소에 넣지 않고 `npm run assets:music -- <폴더>`로 다시 만든다 |
-| 마을 맵 | Tiled JSON | 타일 32px = 1칸 | 레이어: `ground`(타일 속성 `terrain`, `height`), `deco`(소품 점, 속성 `district`), `collision`, `spawn`(`spawn`, `spawn.<유형>`, `gate.<유형>` = 동네 길 앞), `lots`(집터 점 `<유형>.<번호>`, 회전 = 집 방향), `districts`(칸별 마을 1~16, `DISTRICTS` 순서) |
+| 마을 맵 | Tiled JSON | 타일 32px = 1칸 | 레이어: `ground`(타일 속성 `terrain`, `height`), `deco`(소품 점, 속성 `district`), `collision`, `spawn`(`spawn`, `spawn.<유형>`, `gate.<유형>` = 동네 길 앞), `lots`(집터 점 `<유형>.<번호>`, 회전 = 집 방향), `districts`(칸별 마을 1~16, `DISTRICTS` 순서), 본섬만 `residents`(동물 주민 집 점 `resident.<주민>`, 속성 `district`, 회전 = 집 방향) |
 | 동네 틀 맵 | Tiled JSON | 본섬과 같은 타일셋 | 같은 레이어. 집터 이름은 `hood.<번호>`, `districts`는 땅 전체가 1 (마을은 코드가 입힌다), `spawn` = 입구(아치 앞) |
 | 창밖 풍경 | PNG | 512×512 | 기질마다 1장 (`room.view.nt|nf|sj|sp`) |
 | BGM | OGG + MP3 | 반복 재생, 1~3분, 2MB 이하 | manifest에 `title`, `mood`, `seconds` |
 | 아이콘 | SVG | 24×24 viewBox, `currentColor` | 감정 아이콘 포함 |
 | 안내 캐릭터 | SVG | 정사각형 | 몬냥이 `char.guide.monnyang`, 구름이 `char.guide.gureum` |
-| NPC (3D) | GLB (Mixamo 스킨) | 캐릭터와 같은 변환 | 광장 몬냥이(고양이) `char.npc.monnyang`, 클럽 DJ 여우비(여우) `char.npc.dj`, 바텐더 곰돌(곰) `char.npc.bartender`, 아직 쓰지 않는 토끼 `char.npc.rabbit` `[결정 필요: 역할]` |
+| NPC (3D) | GLB (스킨) | 예전 임시 캐릭터와 같은 관절·클립 | 광장 몬냥이(크림색 고양이) `char.npc.monnyang`, 클럽 DJ 너굴(너구리) `char.npc.dj`, 바텐더 곰돌(곰) `char.npc.bartender` (`scripts/gen-placeholders.ts`) |
+| 동물 주민 (3D) | GLB (Mixamo 스킨) | 캐릭터와 같은 변환 | 고양이 나비 `char.resident.cat`, 여우 단풍 `char.resident.fox`, 곰 꿀떡 `char.resident.bear`, 토끼 토리 `char.resident.rabbit` (Tripo 원본을 `npm run assets:characters`로) |
 | 결과 카드 배경 | PNG 또는 WebP | 1080×1350 | 글자는 코드가 올린다 |
 
 `[결정 필요]` 삼각형 수와 파일 크기는 저가폰 기준 가안이다. 실제 에셋을 받으면 기기에서 재 보고 정한다.

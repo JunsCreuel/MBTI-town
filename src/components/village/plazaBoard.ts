@@ -27,6 +27,8 @@ export async function refreshBoard(): Promise<void> {
 
 /** 서버 시계로 지금 */
 export const boardNow = () => new Date(Date.now() + offsetMs);
+/** 서버 시계로 지금 (ms). 전광판 자료를 아직 못 받았으면 내 시계 */
+export const serverNowMs = () => Date.now() + offsetMs;
 
 /** 전광판 자료 (화면에 하나라도 쓰는 곳이 있으면 1분마다 받는다) */
 export function usePlazaBoard(enabled = true): PlazaBoard | null {

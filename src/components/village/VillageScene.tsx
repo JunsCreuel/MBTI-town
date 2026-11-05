@@ -24,6 +24,7 @@ import { Terrain } from './Terrain';
 import { BeaconSigns } from './BeaconSigns';
 import { GuideNpc } from './GuideNpc';
 import { ClubNpcs } from './ClubNpcs';
+import { Residents } from './Residents';
 import { ClubScreen } from './ClubScreen';
 import { ClubLights } from './ClubLights';
 import { PlazaScreen } from './PlazaScreen';
@@ -869,6 +870,7 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <BeaconSigns />
         <GuideNpc />
         <ClubNpcs />
+        <Residents />
         <MarketStalls />
         <FirstFrame
           onFrame={() => {
