@@ -31,6 +31,8 @@ export interface TownPass {
   house?: string;
   /** 이름표에 보이는 MBTI (= 사는 마을) */
   mbti?: string;
+  /** 계정에 저장된, 데리고 다니는 펫 (pets.ts의 id). 없으면 빠진다 */
+  pet?: string;
   /** 운영자 (클럽 곡 넘기기·신청곡 빼기를 할 수 있다). 운영자만 담긴다 */
   admin?: true;
 }
@@ -77,7 +79,7 @@ export function verifyTownPass(token: unknown, nowSec = Math.floor(Date.now() / 
   }
   if (typeof raw.exp !== 'number' || raw.exp < nowSec) return null;
   if (typeof raw.pid !== 'string' || !raw.pid || typeof raw.name !== 'string') return null;
-  const avatar = cleanAvatar({ body: raw.body, color: raw.color, accessory: raw.acc });
+  const avatar = cleanAvatar({ body: raw.body, color: raw.color, accessory: raw.acc, pet: raw.pet });
   return {
     pid: raw.pid.slice(0, 32),
     name: raw.name.slice(0, 40),
@@ -91,6 +93,7 @@ export function verifyTownPass(token: unknown, nowSec = Math.floor(Date.now() / 
     exp: raw.exp,
     ...(typeof raw.house === 'string' && raw.house ? { house: raw.house.slice(0, 32) } : {}),
     ...(typeof raw.mbti === 'string' && /^[EI][SN][TF][JP]$/.test(raw.mbti) ? { mbti: raw.mbti } : {}),
+    ...(avatar.pet ? { pet: avatar.pet } : {}),
     ...(raw.admin === true ? { admin: true as const } : {}),
   };
 }

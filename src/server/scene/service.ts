@@ -6,6 +6,7 @@ import { recordConfig, socialConfig, townConfig } from '@/config/game';
 import { isMbtiType, type MbtiType } from '@/design/mbti';
 import { NOTICE_MAX, parseAnnouncement, type Announcement } from '@/shared/announce';
 import { AVATAR_COLORS, cleanAvatar, type Avatar } from '@/shared/avatar';
+import { isPetId } from '@/shared/pets';
 import { isShopColor, isShopSlot, refundFor, shopLabel, type MarketView, type ShopColor } from '@/shared/market';
 import { bgmTrack } from '@/shared/bgm';
 import { cleanTaste, isDistrict, type District, type Taste } from '@/shared/districts';
@@ -478,6 +479,11 @@ export class SceneService {
       throw new SceneError('bad_request', '사는 마을은 MBTI로 정해져요. MBTI를 바꾸면 그 마을로 이사해요.');
     }
     if ('avatar' in patch) next.avatar = cleanAvatar(patch.avatar);
+    // 펫만 바꾸기 (마을의 펫 불러오기): 모습은 그대로 두고 펫만 고친다. 모르는 펫이면 돌려보낸 것('')으로 본다
+    if ('pet' in patch) {
+      if (patch.pet !== '' && !isPetId(patch.pet)) throw new SceneError('bad_request', '없는 펫이에요.');
+      next.avatar = { ...(next.avatar ?? cleanAvatar(p.avatar)), pet: patch.pet as Avatar['pet'] };
+    }
     if ('taste' in patch) next.taste = cleanTaste(patch.taste);
     if ('roomVisibility' in patch) {
       if (!isVisibility(patch.roomVisibility)) throw new SceneError('bad_request', '공개 범위가 올바르지 않아요.');
@@ -979,6 +985,8 @@ export class SceneService {
         exp,
         // 이름표 둘째 줄: MBTI
         ...(p.mbti ? { mbti: p.mbti } : {}),
+        // 데리고 다니는 펫 (계정에 저장)
+        ...(avatar.pet ? { pet: avatar.pet } : {}),
         ...((await this.isAdmin(viewer)) ? { admin: true as const } : {}),
       };
     } else {

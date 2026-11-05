@@ -314,6 +314,25 @@ describe('마을 집터', () => {
     expect(afterBlock.hidden).toEqual([tq.pass.pid]);
   });
 
+  it('펫은 계정에 저장되고 입장 토큰에 담긴다 (모습은 그대로, 모르는 펫은 받지 않는다)', async () => {
+    const v = await user();
+    await onboard(v, '산책이', { district: 'ENFP' });
+    const before = (await service.me(v)).profile.avatar;
+    expect(before.pet).toBe('');
+    expect((await service.townTicket(v)).pass.pet).toBeUndefined();
+    const saved = await service.updateProfile(v, { pet: 'dog' });
+    expect(saved.avatar).toEqual({ ...before, pet: 'dog' });
+    const t = await service.townTicket(v);
+    expect(t.pass.pet).toBe('dog');
+    expect(verifyTownPass(t.token)?.pet).toBe('dog');
+    // 옷장에서 모습을 바꿔도(펫을 같이 보내는 옷장 화면) 펫은 남는다
+    await service.updateProfile(v, { avatar: { ...saved.avatar, color: 'navy' } });
+    expect((await service.me(v)).profile.avatar).toMatchObject({ color: 'navy', pet: 'dog' });
+    await expectError(service.updateProfile(v, { pet: 'dragon' }), 'bad_request');
+    await service.updateProfile(v, { pet: '' });
+    expect((await service.townTicket(v)).pass.pet).toBeUndefined();
+  });
+
   it('입장 토큰: 가입한 사람은 이름·집터를, 아니면 손님으로 담는다', async () => {
     const tp = await service.townTicket(p);
     expect(tp.guest).toBe(false);

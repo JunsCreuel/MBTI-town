@@ -15,7 +15,6 @@ import { Icon } from '@/components/app/Icon';
 import { InventorySheet, ItemIcon } from '@/components/app/Inventory';
 import { GesturePicker } from '@/components/app/GesturePicker';
 import { PetSheet } from './PetSheet';
-import { savePet, savedPet } from './petPref';
 import { TabBar } from '@/components/app/TabBar';
 import type { HouseView, TownView } from '@/server/scene/service';
 import { DISTRICT, DISTRICTS, type District } from '@/shared/districts';
@@ -211,8 +210,8 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
     input.self.x = p.x;
     input.self.z = p.z;
     setSpawn(p);
-    // 지난번에 데리고 다니던 펫과 함께 들어간다 (집이 있는 주민만)
-    const saved = snap.guest ? '' : savedPet();
+    // 계정에 저장된 펫과 함께 들어간다 (집이 있는 주민만)
+    const saved = snap.guest ? '' : (snap.pass.pet ?? '');
     if (saved) {
       session.setPet(saved);
       setPet(saved);
@@ -872,10 +871,11 @@ export function VillageClient({ place, at, welcome }: { place: RoomPlace; at: To
             const before = petDef(pet);
             session.setPet(id);
             setPet(id);
-            savePet(id);
             setPetOpen(false);
             const def = petDef(id);
             setToast(def ? `${withGwa(def.name)} 산책을 시작해요` : before ? `${withEulReul(before.name)} 집에 보냈어요` : null);
+            // 계정에 저장한다 (다른 기기에서 들어와도 같이 나온다). 못 하면 이번 산책만
+            call('PATCH', '/api/me', { pet: id }).catch(() => setToast('펫을 저장하지 못했어요. 다음에 들어오면 다시 불러 주세요'));
           }}
           onClose={() => setPetOpen(false)}
         />

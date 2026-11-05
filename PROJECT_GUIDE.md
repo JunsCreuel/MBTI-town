@@ -221,7 +221,7 @@ CLAUDE.md에는 "이 프로젝트는 PROJECT_GUIDE.md를 따른다" 한 줄만 �
 - **펫과 산책** (`src/shared/pets.ts`, `src/components/village/Pets.tsx`): 마을 오른쪽 위 발바닥 버튼 → "펫 불러오기" 시트에서 펫을 고르면 내 옆(조금 뒤)을 따라다닌다. 지금은 강아지(`pet.dog`) 하나이고 하나씩 늘려 간다 (모델을 `npm run assets:characters`로 넣고 `PETS`에 한 줄, 화면 키 `height`도 정한다).
   - 걸으면 깡총깡총 따라오고 (멀수록 빨리), 멈추면 주인이 보는 쪽을 같이 본다. 주인이 지도로 멀리 가거나 길이 막혀 처지면 주인 곁으로 옮겨 온다. 불러오면 톡 커지며 나타난다.
   - 다른 사람에게도 보인다: 실시간 서버의 `Player.pet`(입장할 때 `JoinOptions.pet`, 바꿀 때 `MSG.pet`). 자리는 화면마다 주인 위치로 따로 계산한다. 집이 있는 주민만 (손님은 안내 문구, 서버도 손님 펫은 받지 않는다).
-  - 데리고 다니던 펫은 이 기기에 기억해 다음에 마을에 들어와도 같이 나온다 (`scene:pet`). 시트의 "OO 집에 보내기"로 돌려보낸다. 방 안에는 방마다 강아지가 따로 산다.
+  - 데리고 다니는 펫은 계정에 저장한다 (`profiles.avatar`의 `pet`, DB 구조는 그대로. `PATCH /api/me {pet}`). 다른 기기에서 들어와도 같이 나온다: 입장 토큰(`TownPass.pet`)에 담겨 실시간 서버가 처음부터 펫을 붙인다. 시트의 "OO 집에 보내기"로 돌려보낸다. 방 안에는 방마다 강아지가 따로 산다.
 
 ### MBTI로 마을 정하기 (`src/components/onboarding/MbtiPicker.tsx`, `src/shared/mbtiTest.ts`)
 

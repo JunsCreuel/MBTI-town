@@ -332,6 +332,13 @@ describe('새 동네 (2동·3동…)', () => {
 });
 
 describe('펫', () => {
+  it('계정에 저장된 펫(토큰)과 함께 들어온다', async () => {
+    const r = await connect({ token: signTownPass(pass({ pid: townPid('user-pet2'), name: '저장이', district: 'INFP', lot: 1, pet: 'dog' })), place: 'fishing' });
+    rooms.push(r);
+    await until(() => r.state.players?.get(r.sessionId) !== undefined);
+    expect(r.state.players.get(r.sessionId).pet).toBe('dog');
+  });
+
   it('집이 있는 주민은 펫을 데리고 들어오고 바꿀 수 있다. 손님과 모르는 펫은 받지 않는다', async () => {
     const owner = await connect({ token: signTownPass(pass({ pid: townPid('user-pet'), name: '산책이', district: 'ENFP', lot: 0 })), place: 'market', pet: 'dog' });
     rooms.push(owner);

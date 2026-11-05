@@ -13,9 +13,11 @@ describe('입력 정리', () => {
   it('모르는 값은 버린다', () => {
     expect(cleanTaste({ colors: ['sky', 'sky', 'nope'], moods: 'x', music: [1] })).toEqual({ colors: ['sky'], moods: [], music: [] });
     // 몸을 모르면(예전에 저장한 캐릭터) 남자로
-    expect(cleanAvatar({ color: 'gold', accessory: 'cap' })).toEqual({ body: 'male', color: 'mint', accessory: 'cap' });
-    expect(cleanAvatar({ body: 'female', color: 'sky', accessory: 'none' })).toEqual({ body: 'female', color: 'sky', accessory: 'none' });
+    expect(cleanAvatar({ color: 'gold', accessory: 'cap' })).toEqual({ body: 'male', color: 'mint', accessory: 'cap', pet: '' });
+    expect(cleanAvatar({ body: 'female', color: 'sky', accessory: 'none', pet: 'dog' })).toEqual({ body: 'female', color: 'sky', accessory: 'none', pet: 'dog' });
     expect(cleanAvatar({ body: 'robot' }).body).toBe('male');
+    // 모르는 펫은 데리고 다니지 않는 것으로
+    expect(cleanAvatar({ pet: 'dragon' }).pet).toBe('');
   });
 });
 

@@ -189,7 +189,9 @@ export class TownRoom extends Room<{ state: TownState; metadata: { channel: numb
     player.color = pass.color;
     player.acc = pass.acc;
     player.body = pass.body;
-    player.pet = pass.district && isPetId(options?.pet) ? options.pet : '';
+    // 펫: 계정에 저장된 펫(토큰). 화면이 방금 바꾼 펫을 보내면 그것 (집이 있는 주민만)
+    const pet = typeof options?.pet === 'string' ? options.pet : pass.pet;
+    player.pet = pass.district && isPetId(pet) ? pet : '';
     player.mbti = pass.mbti ?? '';
     player.x = spawn.x;
     player.z = spawn.z;
