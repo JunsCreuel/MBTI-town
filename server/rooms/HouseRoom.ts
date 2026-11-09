@@ -9,9 +9,10 @@ import { roomConfig, townConfig } from '../../src/config/game';
 import { MOVE_BUDGET_MAX, normalizeAngle, refillMoveBudget } from '../../src/shared/movement';
 import {
   ACTIONS, COEDIT_OPS, EMOTES, MSG, isDogMessage, parseFurniMessage,
-  type ActionBroadcast, type CoEditMessage, type ActionKind, type DogLeadMessage, type DogMessage, type EmoteBroadcast, type EmoteKind, type FurniBroadcast, type HouseJoinOptions, type MoveMessage,
+  type ActionBroadcast, type CoEditMessage, type DogTrickMessage, type ActionKind, type DogLeadMessage, type DogMessage, type EmoteBroadcast, type EmoteKind, type FurniBroadcast, type HouseJoinOptions, type MoveMessage,
 } from '../../src/shared/protocol';
 import { ROOM_BODY_RADIUS } from '../../src/shared/room';
+import { isPetPose } from '../../src/shared/pets';
 import type { AnnounceBroadcast } from '../../src/shared/announce';
 import { listenAnnouncements } from '../announce';
 import { verifyTownPass, type TownPass } from '../../src/shared/townToken';
@@ -102,6 +103,12 @@ export class HouseRoom extends Room<{ state: HouseState }> {
       this.broadcast(MSG.furni, payload, { except: client });
       // 주인이 꾸미기를 끝내면 같이 꾸미기도 끝난다
       if (owner && furni.op === 'reset') this.setCoEdit(false);
+    });
+    // 강아지 재주·밥: 집 주인만 (맡은 화면의 강아지가 하고 모두 같은 자세로 본다)
+    this.onMessage(MSG.dogTrick, (client, message: unknown) => {
+      const trick = (message as { trick?: unknown } | null)?.trick;
+      if (!this.isOwner(client) || !isPetPose(trick) || !this.takeGestureSlot(client)) return;
+      this.broadcast(MSG.dogTrick, { trick } satisfies DogTrickMessage, { except: client });
     });
     this.onMessage(MSG.coedit, (client, message: unknown) => {
       if (!this.isOwner(client)) return;

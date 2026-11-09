@@ -24,10 +24,11 @@ import {
   type FishDef, type FortuneFruit,
 } from '@/shared/play';
 import { youtubeIdOf } from '@/shared/clubMusic';
-import { coinConfig, contestConfig, debateConfig, marketConfig, playConfig } from '@/config/game';
-import { contestLeader, previousContestWeek, type ContestDistrictScore, type ContestKind, type ContestStandings } from '@/shared/contest';
+import { coinConfig, contestConfig, debateConfig, fishingCupConfig, marketConfig, petCareConfig, playConfig } from '@/config/game';
+import { careGain, petCareState, type PetCareAction, type PetCareState } from '@/shared/petCare';
+import { contestLeader, contestWeek, previousContestWeek, type ContestDistrictScore, type ContestKind, type ContestStandings } from '@/shared/contest';
 import { stripImageMetadata } from '../imageMeta';
-import type { AdminCounts, ProfileRow, RecordRow, RoomCardRow, SceneStore, SignupFailure, SignupRow } from './store';
+import type { AdminCounts, FishingRow, ProfileRow, RecordRow, RoomCardRow, SceneStore, SignupFailure, SignupRow } from './store';
 
 export type SceneErrorCode =
   | 'login_required' | 'onboarding_required' | 'not_found' | 'forbidden' | 'bad_request' | 'conflict' | 'blocked' | 'rejected'
@@ -169,6 +170,15 @@ export interface PickResult {
   contest?: number;
 }
 
+/** 주간 낚시 대회: 이번 주 순위와 내 기록, 지난주 낚시왕 */
+export interface FishingCupView {
+  week: string;
+  closesAt: string;
+  top: { name: string; handle: string; fish: string; size: number }[];
+  mine: { fish: string; size: number; rank: number | null } | null;
+  last: { name: string; fish: string; size: number } | null;
+}
+
 export interface FishResult {
   /** 잡은 것. null = 꽝 (아무것도 안 걸렸다) */
   fish: FishDef | null;
@@ -250,6 +260,8 @@ export interface RoomView {
   canWriteGuestbook: boolean;
   /** 방 주인에게만: 최근 방문자 */
   visitors: (RoomCard & { lastAt: string })[] | null;
+  /** 방 강아지가 목걸이를 했는지 (주인이 친밀도 마지막 단계) */
+  petCollar: boolean;
 }
 
 export interface OnboardingInput {
@@ -419,6 +431,7 @@ function toAdminSignup(r: SignupRow): AdminSignup {
 export class SceneService {
   /** 결과를 정해 둔 지난주 (같은 주를 또 묻지 않게) */
   private settledWeek = '';
+  private fishingSettledWeek = '';
   constructor(
     private readonly store: SceneStore,
     private readonly now: () => Date = () => new Date(),
@@ -732,6 +745,7 @@ export class SceneService {
       friend: await this.friendState(viewer, owner),
       canWriteGuestbook: !!viewer && relation !== 'self' && canSeeRoom && !!viewerProfile?.onboarded_at,
       visitors,
+      petCollar: room ? petCareState(await this.store.petCare(owner.id).catch(() => null), localDate(this.now())).collar : false,
     };
   }
 
@@ -1313,6 +1327,10 @@ export class SceneService {
       const left = playConfig.fishPerDay - used - 1;
       if (!caught) return { fish: null, size: 0, count: 0, left, earned: 0, contest: 0 };
       const count = await this.store.addToCollection(p.id, 'fish', caught.fish.id, 1);
+      // 주간 낚시 대회: 이번 주 가장 큰 물고기 (잡동사니는 빼고, 표가 없으면 건너뛴다)
+      if (caught.fish.rarity !== 'junk' && caught.size > 0) {
+        await this.store.recordWeeklyFish(p.id, contestWeek(this.now()).week, caught.fish.id, caught.size).catch(() => {});
+      }
       const earned = coinConfig.fish[caught.fish.rarity];
       await this.store.addCoins(p.id, earned);
       const contest = await this.contest(p, 'fish', contestConfig.points.fish[caught.fish.rarity]);
@@ -1324,6 +1342,87 @@ export class SceneService {
       return { fish: caught.fish, size: caught.size, count, left, earned, contest };
     }
     throw new SceneError('conflict', '잠깐 뒤에 다시 던져 주세요.');
+  }
+
+  // ───────── 강아지 키우기 ─────────
+
+  /** 내 강아지 친밀도 (SQL을 실행하기 전이면 null) */
+  async petCare(viewer: Viewer | null): Promise<PetCareState | null> {
+    const p = await this.requireOnboarded(viewer);
+    const row = await this.store.petCare(p.id).catch(() => undefined);
+    if (row === undefined) return null;
+    return petCareState(row, localDate(this.now()));
+  }
+
+  /** 밥 주기·쓰다듬기·산책. 오른 친밀도와 새 상태 (오늘 이미 다 했으면 gained 0) */
+  async careForPet(viewer: Viewer | null, action: PetCareAction): Promise<{ state: PetCareState; gained: number; levelUp: boolean }> {
+    const p = await this.requireOnboarded(viewer);
+    const today = localDate(this.now());
+    const before = await this.store.petCare(p.id).catch(() => undefined);
+    if (before === undefined) throw new SceneError('conflict', '강아지 돌보기는 곧 열려요.');
+    const prev = petCareState(before, today);
+    const gain = careGain(action, prev);
+    if (!gain) return { state: prev, gained: 0, levelUp: false };
+    const after = await this.store.careForPet(p.id, action, gain, today, petCareConfig.petsPerDay);
+    if (!after) return { state: petCareState(await this.store.petCare(p.id), today), gained: 0, levelUp: false };
+    const state = petCareState(after, today);
+    return { state, gained: gain, levelUp: state.level > prev.level };
+  }
+
+  // ───────── 주간 낚시 대회 ─────────
+
+  /** 이번 주 순위와 내 기록 (누구나 본다, 로그인하면 내 기록도). SQL 실행 전이면 null */
+  async fishingCup(viewer: Viewer | null): Promise<FishingCupView | null> {
+    const now = this.now();
+    const w = contestWeek(now);
+    const prev = previousContestWeek(now);
+    try {
+      const [rows, last] = await Promise.all([this.store.fishingTop(w.week, fishingCupConfig.top), this.store.getFishingResult(prev.week)]);
+      const me = viewer ? await this.store.myWeeklyFish(viewer.id, w.week) : null;
+      const rank = viewer ? rows.findIndex((r) => r.user_id === viewer.id) : -1;
+      return {
+        week: w.week,
+        closesAt: w.closesAt.toISOString(),
+        top: rows.map((r) => ({ name: displayNameOf({ display_name: r.display_name, handle: r.handle }), handle: r.handle, fish: r.fish, size: r.size })),
+        mine: me ? { ...me, rank: rank >= 0 ? rank + 1 : null } : null,
+        last: last && last.user_id ? { name: displayNameOf({ display_name: last.display_name, handle: last.handle }), fish: last.fish, size: last.size } : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * 지난주 낚시왕을 처음 한 번 정한다: 상 코인과 알림, 일요일 21시에서 6시간 안이면 서버 전체 발표.
+   * 표가 없으면(SQL 실행 전) 아무것도 하지 않는다
+   */
+  async settleFishingCup(): Promise<{ week: string; winner: string | null } | null> {
+    const now = this.now();
+    const prev = previousContestWeek(now);
+    if (this.fishingSettledWeek === prev.week) return null;
+    try {
+      if (await this.store.getFishingResult(prev.week)) {
+        this.fishingSettledWeek = prev.week;
+        return null;
+      }
+      const [winner] = await this.store.fishingTop(prev.week, 1);
+      const first = await this.store.insertFishingResult(prev.week, (winner as FishingRow | undefined) ?? null);
+      this.fishingSettledWeek = prev.week;
+      if (!first || !winner) return { week: prev.week, winner: null };
+      const fishName = fishDef(winner.fish)?.name ?? '물고기';
+      const size = Math.round(winner.size * 10) / 10;
+      await this.store.addCoins(winner.user_id, fishingCupConfig.prizeCoins);
+      await this.store
+        .insertNotice(winner.user_id, 'gift', `이번 주 낚시왕! ${fishName} ${size}cm로 상 코인 ${fishingCupConfig.prizeCoins}개를 받았어요.`)
+        .catch(() => {});
+      const name = displayNameOf({ display_name: winner.display_name, handle: winner.handle });
+      if (now.getTime() - prev.closesAt.getTime() < 6 * 3600_000) {
+        await this.announce({ kind: 'fishing_king', name, fish: fishName, size }).catch(() => false);
+      }
+      return { week: prev.week, winner: name };
+    } catch {
+      return null;
+    }
   }
 
   /** 오늘 딴 나무, 남은 낚시 횟수, 모은 것 (도감) */

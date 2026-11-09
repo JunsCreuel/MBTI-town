@@ -120,6 +120,27 @@ export const playConfig = {
 } as const;
 
 /** 게임 코인: 낚시·열매로 모은다 (현금으로 사거나 바꿀 수 없다) */
+/** 강아지 키우기 (src/shared/petCare.ts): 하루에 오르는 친밀도와 단계 */
+export const petCareConfig = {
+  /** 밥 주기 (하루 한 번) */
+  feed: 10,
+  /** 쓰다듬기 한 번, 하루 petsPerDay번까지 */
+  pet: 3,
+  petsPerDay: 5,
+  /** 마을에서 같이 산책 (하루 한 번, walkTiles칸 넘게 걸으면) */
+  walk: 8,
+  walkTiles: 60,
+  /** 단계마다 필요한 친밀도 (1단계 0부터) */
+  levels: [0, 20, 60, 120, 200],
+} as const;
+
+/** 주간 낚시 대회: 낚시왕 상 (코인) */
+export const fishingCupConfig = {
+  prizeCoins: 500,
+  /** 순위판에 보이는 사람 수 */
+  top: 10,
+} as const;
+
 export const coinConfig = {
   /** 물고기 한 마리 값 (흔해요·드물어요·전설·신화·잡동사니) */
   fish: { common: 10, rare: 40, legend: 300, mythic: 10_000, junk: 2 },

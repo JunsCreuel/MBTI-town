@@ -19,7 +19,7 @@ import { panelOpen } from '../app/panelState';
 import { AdaptiveResolution, ShadowThrottle, usePanelOpen } from '../app/RenderQuality';
 import { lowQuality, quality } from '@/lib/quality';
 import { attachAccessory, bodyTintOf, brightenFur, characterActions, cloneCharacter, faceControl, petInstance, tintOutfit, withMeshopt } from '@/lib/characterRig';
-import { PET_REACTION_SEC, petDef, petReactionPose, type PetPose } from '@/shared/pets';
+import { PET_REACTION_SEC, petDef, petReactionPose, trickPose, type PetPose } from '@/shared/pets';
 import { themeOf, type District } from '@/shared/districts';
 import {
   blockedCells, canPlace, canStandInRoom, findRoomPath, footprintSize, furnitureDef, itemCenter, moveInRoom,
@@ -81,6 +81,10 @@ export interface RoomSceneProps {
   onLayoutStale?: () => void;
   /** 같이 꾸미기 중인 손님 (mode 'edit'로 가구를 들고 옮긴다. 저장은 주인이 한다) */
   coEdit?: boolean;
+  /** 강아지에게 재주·밥 (n이 바뀔 때마다 한 번, 방 주인) */
+  trickCall?: { pose: PetPose; n: number } | null;
+  /** 강아지 목걸이 (친밀도 마지막 단계) */
+  petCollar?: boolean;
   /** 화면 위아래를 가리는 HUD 높이 (px). 방이 그 사이에 들어오게 맞춘다. */
   insetTop?: number;
   insetBottom?: number;
@@ -1065,6 +1069,8 @@ interface PetGo {
   goAt: number;
   pathAt: number;
   lookUntil: number;
+  /** 재주·밥을 시켰다: 1인칭이면 강아지 쪽을 본다 */
+  lookAtDog: boolean;
 }
 
 function RoomAvatar({
@@ -1230,6 +1236,16 @@ function RoomAvatar({
       } else if (t - pg.pathAt > 0.4) {
         pg.pathAt = t;
         s.path = pathTo(blocked, s.pos, petSpot(dog, s.pos, blocked));
+      }
+    }
+    // 재주·밥: 강아지 쪽으로 고개를 돌린다 (1인칭)
+    if (pg.lookAtDog) {
+      pg.lookAtDog = false;
+      if (firstPerson && dog && !v.looking) {
+        const yawTo = Math.atan2(dog.x - s.pos.x, dog.z - s.pos.z);
+        const dist = Math.hypot(dog.x - s.pos.x, dog.z - s.pos.z) + roomConfig.eyeBack;
+        v.aim = { yaw: yawTo, pitch: Math.max(deg(-50), -Math.atan2(roomConfig.eyeHeight - PET_HEIGHT * 0.5, dist)) };
+        pg.lookUntil = t + 4.5;
       }
     }
     // 쓰다듬는 동안 쪼그려 앉고, 강아지가 다 좋아하면 고개를 처음 높이로 든다
@@ -1448,7 +1464,7 @@ function loadPetModel(): Promise<GLTF> {
  * 모델은 방을 그린 뒤에 받는다.
  */
 function PetDog({
-  layout, name, hidden = false, onTap, presence, dogPos, petBus, selfPos,
+  layout, name, hidden = false, onTap, presence, dogPos, petBus, selfPos, trickBus, collar = false,
 }: {
   layout: RoomLayout;
   name: string;
@@ -1461,6 +1477,9 @@ function PetDog({
   /** 누가 쓰다듬었는지 듣는다 (나는 SELF_GESTURE) */
   petBus: Set<(id: string) => void>;
   selfPos: React.RefObject<Point>;
+  /** 재주·밥 (집 주인이 시켰다) */
+  trickBus: Set<(trick: PetPose) => void>;
+  collar?: boolean;
 }) {
   const [inst, setInst] = useState<ReturnType<typeof petInstance> | null>(null);
   const [heart, setHeart] = useState<THREE.Texture | null>(null);
@@ -1472,6 +1491,8 @@ function PetDog({
     pos: { x: W / 2 + 1, z: D - 1.2 } as Point, path: null as Point[] | null, rest: 1.5, facing: 0, rot: 0,
     /** 쓰다듬은 시각 (clockNow), 쓰다듬은 사람 자리 */
     petAt: -100, petFrom: null as Point | null,
+    /** 시킨 재주와 시각 */
+    trick: null as { pose: PetPose; at: number } | null,
     /** 맡은 화면이 알린 자리를 마지막으로 보낸 때 */
     sent: { at: 0, pose: null as PetPose | null, moving: false },
   });
@@ -1492,6 +1513,24 @@ function PetDog({
     inst.restart();
     return () => inst.stop();
   }, [inst]);
+
+  useEffect(() => {
+    inst?.setCollar(collar, tokens.color.danger);
+  }, [inst, collar]);
+
+  // 재주·밥: 주인을 보며 그 자세를 하고 좋아한다
+  useEffect(() => {
+    const onTrick = (pose: PetPose) => {
+      const s = state.current;
+      s.trick = { pose, at: clockNow() };
+      const p = selfPos.current;
+      s.petFrom = p ? { x: p.x, z: p.z } : s.petFrom;
+    };
+    trickBus.add(onTrick);
+    return () => {
+      trickBus.delete(onTrick);
+    };
+  }, [trickBus, selfPos]);
 
   // 누가 쓰다듬었다: 그 사람을 보며 반응을 처음부터 (반응 중이면 앉고 눕는 동안은 그대로 둔다)
   useEffect(() => {
@@ -1526,15 +1565,18 @@ function PetDog({
       s.facing = remote.rot;
       s.path = null;
       moving = remote.moving;
-      // 내가 막 쓰다듬었으면 맡은 화면의 자세가 오기 전까지 내 화면이 먼저 반응한다
-      pose = remote.pose ?? (t - s.petAt < 0.8 ? petReactionPose(t - s.petAt) : null);
+      // 내가 막 쓰다듬었거나 재주를 시켰으면 맡은 화면의 자세가 오기 전까지 내 화면이 먼저 반응한다
+      const localTrick = s.trick && t - s.trick.at < 0.8 ? trickPose(s.trick.pose, t - s.trick.at) : null;
+      pose = remote.pose ?? localTrick ?? (t - s.petAt < 0.8 ? petReactionPose(t - s.petAt) : null);
     } else {
       // 가구가 옮겨 와 갇히면 가까운 빈 칸으로 비킨다
       if (blocked[Math.floor(s.pos.z) * W + Math.floor(s.pos.x)]) {
         s.pos = nearestFree(blocked, s.pos);
         s.path = null;
       }
-      pose = inst.canPose ? petReactionPose(t - s.petAt) : null;
+      const tricking = s.trick ? trickPose(s.trick.pose, t - s.trick.at) : null;
+      if (!tricking) s.trick = null;
+      pose = inst.canPose ? (tricking ?? petReactionPose(t - s.petAt)) : null;
       if (pose) {
         // 쓰다듬는 사람을 본다 (반응하는 동안은 걷지 않는다)
         s.path = null;
@@ -1745,8 +1787,20 @@ function SceneContent(props: RoomSceneProps) {
 
   // 강아지 쓰다듬기: 버튼(petCall)이나 강아지를 누르면 내 캐릭터가 곁으로 가서 쓰다듬는다
   const dogPos = useRef<Point | null>(null);
-  const petGo = useRef<PetGo>({ goAt: 0, pathAt: 0, lookUntil: 0 });
+  const petGo = useRef<PetGo>({ goAt: 0, pathAt: 0, lookUntil: 0, lookAtDog: false });
   const petBus = useMemo(() => new Set<(id: string) => void>(), []);
+  const trickBus = useMemo(() => new Set<(trick: PetPose) => void>(), []);
+  useEffect(() => presence?.onTrick((trick) => trickBus.forEach((fn) => fn(trick))), [presence, trickBus]);
+  // 재주·밥 버튼 (방 주인): 같은 방이면 모두에게, 아니면 내 강아지만
+  const trickCall = props.trickCall ?? null;
+  const seenTrick = useRef(trickCall?.n ?? 0);
+  useEffect(() => {
+    if (!trickCall || trickCall.n === seenTrick.current) return;
+    seenTrick.current = trickCall.n;
+    if (presence) presence.sendTrick(trickCall.pose);
+    else trickBus.forEach((fn) => fn(trickCall.pose));
+    petGo.current.lookAtDog = true;
+  }, [trickCall, presence, trickBus]);
   useEffect(() => presence?.onPet((id) => petBus.forEach((fn) => fn(id))), [presence, petBus]);
   const goPet = () => {
     petGo.current.goAt = clockNow();
@@ -1826,6 +1880,8 @@ function SceneContent(props: RoomSceneProps) {
         dogPos={dogPos}
         petBus={petBus}
         selfPos={focus}
+        trickBus={trickBus}
+        collar={!!props.petCollar}
       />
       {mode === 'edit' && <DragController drag={drag} items={itemsRef} onMove={onMoveRef} onDrop={onDrop} />}
       <FirstFrame onFrame={props.onReady} />

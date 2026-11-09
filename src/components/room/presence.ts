@@ -9,12 +9,13 @@ import type { AnnounceBroadcast } from '@/shared/announce';
 import { townConfig } from '@/config/game';
 import {
   MSG,
-  type ActionBroadcast, type ActionKind, type CoEditMessage, type DogLeadMessage, type DogMessage, type EmoteBroadcast, type EmoteKind, type FurniBroadcast, type FurniMessage,
+  type ActionBroadcast, type ActionKind, type CoEditMessage, type DogLeadMessage, type DogTrickMessage, type DogMessage, type EmoteBroadcast, type EmoteKind, type FurniBroadcast, type FurniMessage,
   type HouseJoinOptions, type MoveMessage, type SnapMessage,
 } from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
 import { SELF_GESTURE, now, type Gesture, type PlayerView } from '../village/session';
 import { LIFT_SEC } from '@/shared/character';
+import type { PetPose } from '@/shared/pets';
 import { showAnnouncement } from '../app/AnnounceBanner';
 
 /**
@@ -61,6 +62,7 @@ export class HousePresence {
   private dogAt = 0;
   private readonly furniListeners = new Set<(m: FurniBroadcast) => void>();
   private readonly petListeners = new Set<(id: string) => void>();
+  private readonly trickListeners = new Set<(trick: PetPose) => void>();
   private snapshot: PresenceSnapshot = { status: 'loading', selfId: '', playerIds: [], pass: null, hidden: [], coEdit: false };
   private readonly listeners = new Set<() => void>();
   private readonly snapListeners = new Set<(s: SnapMessage) => void>();
@@ -144,6 +146,7 @@ export class HousePresence {
       room.onMessage(MSG.dogLead, (m: DogLeadMessage) => {
         this.dogLead = !!m.lead;
       });
+      room.onMessage(MSG.dogTrick, (m: DogTrickMessage) => this.trickListeners.forEach((fn) => fn(m.trick)));
       room.onMessage(MSG.coedit, (m: CoEditMessage) => {
         // 같이 꾸미기가 끝나면 손님들이 들고 있던 가구를 내려놓은 것으로 본다 (주인 것은 다음 '옮겼다'에 다시 잡힌다)
         if (!m.on) {
@@ -224,6 +227,19 @@ export class HousePresence {
     this.petListeners.add(fn);
     return () => {
       this.petListeners.delete(fn);
+    };
+  }
+
+  /** 강아지에게 재주·밥 (집 주인). 내 강아지는 바로, 같은 방이면 모두에게 */
+  sendTrick(trick: PetPose) {
+    this.trickListeners.forEach((fn) => fn(trick));
+    if (this.connected) this.room!.send(MSG.dogTrick, { trick } satisfies DogTrickMessage);
+  }
+
+  onTrick(fn: (trick: PetPose) => void) {
+    this.trickListeners.add(fn);
+    return () => {
+      this.trickListeners.delete(fn);
     };
   }
 

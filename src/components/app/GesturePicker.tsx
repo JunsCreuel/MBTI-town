@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { assetUrl } from '@/assets/manifest';
 import { townConfig } from '@/config/game';
+import { tokens } from '@/design/tokens';
 import { type ActionKind, type EmoteKind } from '@/shared/protocol';
 import { ACTION_INFO, EMOTE_INFO, PICKABLE_ACTIONS, PICKABLE_EMOTES, type GestureInfo } from './gestures';
 
@@ -25,7 +26,7 @@ function GestureIcon({ info, size = 22 }: { info: GestureInfo; size?: number }) 
 }
 
 export function GesturePicker({
-  onAction, onEmote, variant = 'bar', onPet, selfPop = false,
+  onAction, onEmote, variant = 'bar', onPet, onCare, selfPop = false,
 }: {
   onAction: (kind: ActionKind) => void;
   onEmote: (kind: EmoteKind) => void;
@@ -34,6 +35,8 @@ export function GesturePicker({
   onPet?: () => void;
   /** 내가 보낸 것을 화면 가운데에 크게 띄운다 (내 캐릭터가 안 보이는 1인칭) */
   selfPop?: boolean;
+  /** 강아지 돌보기 창 (내 방) */
+  onCare?: () => void;
 }) {
   const [pop, setPop] = useState<{ info: GestureInfo; at: number } | null>(null);
   useEffect(() => {
@@ -112,6 +115,12 @@ export function GesturePicker({
           <button className="action-btn" onClick={onPet}>
             <GestureIcon info={ACTION_INFO.pet} />
             {ACTION_INFO.pet.label}
+          </button>
+        )}
+        {onCare && (
+          <button className="action-btn" onClick={onCare}>
+            <GestureIcon info={{ label: '', icon: 'ui.icon.heart', color: tokens.scene.heart }} />
+            돌보기
           </button>
         )}
         <button className="action-btn" aria-expanded={open} aria-haspopup="dialog" onClick={() => setOpen((o) => !o)}>

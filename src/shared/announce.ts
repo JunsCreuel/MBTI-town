@@ -11,7 +11,9 @@ export type Announcement =
   /** 운영자 공지 */
   | { kind: 'notice'; text: string }
   /** MBTI 마을 대항전 우승 마을 (일요일 21시) */
-  | { kind: 'contest'; district: District };
+  | { kind: 'contest'; district: District }
+  /** 주간 낚시 대회 낚시왕 (일요일 21시): 이름, 물고기 이름, 크기(cm) */
+  | { kind: 'fishing_king'; name: string; fish: string; size: number };
 
 /** 한 사람에게만 가는 알림: 운영자가 코인을 선물했다, 운영자가 방에 다녀갔다 (user_notices) */
 export type PersonalNoticeKind = 'gift' | 'visit';
@@ -28,11 +30,13 @@ export interface AnnounceBroadcast {
 export const NOTICE_MAX = 100;
 
 /** 서명할 때 쓰는 내용 (종류 + 이름·글) */
-export const announcementBody = (a: Announcement) => `${a.kind}:${a.kind === 'notice' ? a.text : a.kind === 'contest' ? a.district : a.name}`;
+export const announcementBody = (a: Announcement) =>
+  `${a.kind}:${a.kind === 'notice' ? a.text : a.kind === 'contest' ? a.district : a.kind === 'fishing_king' ? `${a.name}|${a.fish}|${a.size}` : a.name}`;
 
 export function announcementText(a: Announcement): string {
   if (a.kind === 'golden_whale') return `(공지) ${a.name}님이 황금 고래를 낚았습니다!`;
   if (a.kind === 'contest') return `(공지) 이번 주 MBTI 마을 대항전 우승은 ${DISTRICT[a.district].name}입니다! 광장 전광판에서 순위를 확인하세요.`;
+  if (a.kind === 'fishing_king') return `(공지) 이번 주 낚시왕은 ${a.name}님! ${a.fish} ${a.size}cm를 낚았어요.`;
   return `(공지) ${a.text}`;
 }
 
@@ -46,6 +50,12 @@ export function parseAnnouncement(v: unknown): Announcement | null {
     return name ? { kind: o.kind, name } : null;
   }
   if (o.kind === 'contest') return isDistrict(o.district) ? { kind: 'contest', district: o.district } : null;
+  if (o.kind === 'fishing_king') {
+    const name = clean(o.name, socialConfig.displayNameMax);
+    const fish = clean(o.fish, 20);
+    const size = typeof o.size === 'number' && Number.isFinite(o.size) && o.size >= 0 && o.size < 100_000 ? Math.round(o.size * 10) / 10 : null;
+    return name && fish && size !== null ? { kind: 'fishing_king', name, fish, size } : null;
+  }
   if (o.kind === 'notice') {
     const text = clean(o.text, NOTICE_MAX);
     return text ? { kind: 'notice', text } : null;

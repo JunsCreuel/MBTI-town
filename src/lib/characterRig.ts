@@ -345,7 +345,7 @@ export function petInstance(gltf: GLTF, height: number) {
   };
   const idle = action('idle');
   const walk = action('walk');
-  const poses: Record<PetPose, THREE.AnimationAction | null> = { sit: action('sit'), lie: action('lie'), happy: action('happy') };
+  const poses: Record<PetPose, THREE.AnimationAction | null> = { sit: action('sit'), lie: action('lie'), happy: action('happy'), paw: action('paw') };
   let playing: THREE.AnimationAction | null = idle;
   let posing: PetPose | null = null;
   /** 지금 동작에서 next로 부드럽게 넘어간다 */
@@ -385,8 +385,34 @@ export function petInstance(gltf: GLTF, height: number) {
     stop() {
       mixer.stopAllAction();
     },
+    /** 목걸이 (친밀도 마지막 단계): 머리 뼈에 고리를 단다 */
+    setCollar(on: boolean, color: string) {
+      const head = model.getObjectByName('dog_head');
+      if (!head) return;
+      let ring = head.getObjectByName('pet_collar');
+      if (!on) {
+        if (ring) head.remove(ring);
+        return;
+      }
+      if (!ring) {
+        ring = new THREE.Group();
+        ring.name = 'pet_collar';
+        const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
+        const band = new THREE.Mesh(new THREE.TorusGeometry(PET_COLLAR.radius, PET_COLLAR.tube, 8, 24), mat);
+        const tag = new THREE.Mesh(new THREE.SphereGeometry(PET_COLLAR.tube * 1.8, 10, 8), new THREE.MeshStandardMaterial({ color: '#F2C14E', metalness: 0.4, roughness: 0.3 }));
+        tag.position.set(0, -PET_COLLAR.radius, PET_COLLAR.tube);
+        ring.add(band, tag);
+        ring.position.set(0, PET_COLLAR.y, PET_COLLAR.z);
+        ring.rotation.x = PET_COLLAR.tilt;
+        head.add(ring);
+      }
+      ((ring.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial).color.set(color);
+    },
   };
 }
+
+/** 목걸이 자리 (강아지 모델 단위, 머리 뼈 기준): 고리 반지름·굵기, 높이·앞뒤, 기울기 */
+const PET_COLLAR = { radius: 0.075, tube: 0.012, y: -0.02, z: -0.02, tilt: -Math.PI / 4 };
 
 export type PetInstance = ReturnType<typeof petInstance>;
 

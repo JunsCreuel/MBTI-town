@@ -8,6 +8,8 @@ import type { ContestView } from './scene/service';
 /** 지난주 결과를 아직 정하지 않았으면 일요일 토론부터 집계하고 정한다 (처음 정한 요청이 발표한다) */
 export async function settleContestIfDue() {
   const scene = await getSceneService();
+  // 주간 낚시 대회 낚시왕도 같은 때 정한다 (표가 없으면 건너뛴다)
+  await scene.settleFishingCup().catch((e) => console.error('[fishing] 낚시왕 정하기 실패', e));
   if (!(await scene.contestUnsettled())) return null;
   await (await getDebateService())
     .finalizeDue()

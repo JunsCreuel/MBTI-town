@@ -5439,3 +5439,113 @@ canvas {
   cursor: pointer;
   font: inherit;
 }
+
+/* 강아지 돌보기 (내 방) */
+.petcare {
+  display: grid;
+  gap: var(--space-2);
+}
+.petcare__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.petcare__title {
+  margin: var(--space-2) 0 0;
+  font-size: 14px;
+  color: var(--color-textSub);
+}
+.petcare__today {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.petcare__today li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 40px;
+}
+.petcare__tricks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+/* 작은 알림 (miniToast) */
+.mini-toast {
+  position: fixed;
+  left: 50%;
+  top: calc(120px + env(safe-area-inset-top));
+  z-index: 40;
+  transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  padding: var(--space-2) var(--space-4);
+  border-radius: 999px;
+  background: var(--color-surface);
+  box-shadow: 0 6px 22px var(--color-shadow);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+  animation: mini-toast 2.6s ease-out forwards;
+}
+@keyframes mini-toast {
+  0% { opacity: 0; transform: translate(-50%, -8px); }
+  10% { opacity: 1; transform: translate(-50%, 0); }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 주간 낚시 대회 */
+.cup {
+  display: grid;
+  gap: var(--space-2);
+}
+.cup__last {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin: 0;
+  font-weight: 700;
+  color: var(--color-goldInk);
+}
+.cup__list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cup__row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+}
+.cup__row--first {
+  background: var(--color-goldSoft);
+}
+.cup__rank {
+  font-weight: 800;
+  text-align: center;
+}
+.cup__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cup__fish {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+.cup__mine {
+  margin: 0;
+  font-weight: 700;
+  color: var(--color-accentInk);
+}

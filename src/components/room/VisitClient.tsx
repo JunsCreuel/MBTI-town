@@ -162,6 +162,7 @@ export function VisitClient({ handle }: { handle: string }) {
             photoUrl={(id) => `/api/photos/${id}`}
             petName={petNameOf(owner.avatar, 'dog')}
             petCall={petCall}
+            petCollar={view.petCollar}
             onLayoutStale={load}
             insetTop={insets.top}
             insetBottom={insets.bottom}

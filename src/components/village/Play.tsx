@@ -3,9 +3,13 @@
 // 마을 놀거리 화면: 나무 자리 찾기, 운세 열매 카드(공유), 낚시 판. 가방(도감)은 app/Inventory.
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { tokens } from '@/design/tokens';
-import type { FishResult, PickResult, PlayState } from '@/server/scene/service';
+import type { FishResult, FishingCupView, PickResult, PlayState } from '@/server/scene/service';
+import { fishingCupConfig } from '@/config/game';
+import { call } from '@/lib/api';
+import { timeLeftLabel } from '@/shared/contest';
+import { Icon } from '../app/Icon';
 import { isDistrict, type District } from '@/shared/districts';
-import { FORTUNE_FRUIT, type FortuneFruit } from '@/shared/play';
+import { FORTUNE_FRUIT, fishDef, type FortuneFruit } from '@/shared/play';
 import { parseSpot, type Spot } from '@/shared/protocol';
 import type { TownMap } from '@/shared/townMap';
 import { CARD_H, CARD_W, blankCard, canvasToBlob, cardFont, shareImage, wrapText } from '@/lib/shareCard';
@@ -62,6 +66,7 @@ export function FishingPanel({
   onCaught: (r: FishResult) => void;
   onClose: () => void;
 }) {
+  const [cupOpen, setCupOpen] = useState(false);
   const [stage, setStage] = useState<'wait' | 'bite' | 'caught' | 'error'>('wait');
   const [result, setResult] = useState<FishResult | null>(null);
   const [error, setError] = useState('');
@@ -150,6 +155,9 @@ export function FishingPanel({
       )}
       {stage === 'error' && <p className="fishing__text">{error}</p>}
       <div className="fishing__actions">
+        <button className="btn-secondary" onClick={() => setCupOpen(true)}>
+          <Icon name="ranking" size={16} /> 이번 주 대회
+        </button>
         {done && (result || stage === 'caught') && (
           <button className="btn-primary btn-primary--inline" onClick={() => void cast()}>
             또 던지기
@@ -159,7 +167,57 @@ export function FishingPanel({
           그만하기
         </button>
       </div>
+      {cupOpen && <FishingCupSheet onClose={() => setCupOpen(false)} />}
     </div>
+  );
+}
+
+/** 주간 낚시 대회: 이번 주 가장 큰 물고기 순위 (일요일 21시 마감, 1등은 낚시왕 상 코인) */
+export function FishingCupSheet({ onClose }: { onClose: () => void }) {
+  const [cup, setCup] = useState<FishingCupView | null | undefined>(undefined);
+  useEffect(() => {
+    call<{ cup: FishingCupView | null }>('GET', '/api/play/cup')
+      .then((r) => setCup(r.cup))
+      .catch(() => setCup(null));
+  }, []);
+  const fishName = (id: string) => fishDef(id)?.name ?? id;
+  return (
+    <Sheet title="주간 낚시 대회" onClose={onClose}>
+      {cup === undefined && <div className="loader" aria-hidden />}
+      {cup === null && <p className="muted">낚시 대회는 곧 열려요.</p>}
+      {cup && (
+        <div className="cup">
+          <p className="muted">
+            이번 주 가장 큰 물고기를 낚은 사람이 낚시왕! 1등은 코인 {fishingCupConfig.prizeCoins.toLocaleString('ko-KR')}개 · {timeLeftLabel(new Date(cup.closesAt), new Date())}
+          </p>
+          {cup.last && (
+            <p className="cup__last">
+              <Icon name="crown" size={16} /> 지난주 낚시왕 {cup.last.name} · {fishName(cup.last.fish)} {cup.last.size}cm
+            </p>
+          )}
+          {cup.top.length === 0 ? (
+            <p className="muted">아직 아무도 낚지 않았어요. 첫 기록의 주인공이 되어 보세요!</p>
+          ) : (
+            <ol className="cup__list">
+              {cup.top.map((r, i) => (
+                <li key={r.handle} className={i === 0 ? 'cup__row cup__row--first' : 'cup__row'}>
+                  <span className="cup__rank">{i + 1}</span>
+                  <span className="cup__name">{r.name}</span>
+                  <span className="cup__fish">
+                    <ItemIcon kind="fish" id={r.fish} size={22} /> {fishName(r.fish)} {r.size}cm
+                  </span>
+                </li>
+              ))}
+            </ol>
+          )}
+          {cup.mine && (
+            <p className="cup__mine">
+              내 기록: {fishName(cup.mine.fish)} {cup.mine.size}cm{cup.mine.rank ? ` · ${cup.mine.rank}등` : ''}
+            </p>
+          )}
+        </div>
+      )}
+    </Sheet>
   );
 }
 

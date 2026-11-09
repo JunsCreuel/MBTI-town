@@ -183,6 +183,22 @@ export interface AdminUserRow {
   coins: number;
 }
 
+export interface PetCareRow {
+  affection: number;
+  fed_day: string | null;
+  walked_day: string | null;
+  pet_day: string | null;
+  pets_today: number;
+}
+
+export interface FishingRow {
+  user_id: string;
+  handle: string;
+  display_name: string | null;
+  fish: string;
+  size: number;
+}
+
 export class SceneStore {
   constructor(private readonly sql: Sql) {}
 
@@ -678,12 +694,14 @@ export class SceneStore {
    * - 방문 기록: 30일만 보여 준다 → 35일 지난 것
    * - 대항전 점수: 이번 주·지난주만 읽는다(끝난 주 결과는 contest_results) → 3주 지난 것
    */
-  async cleanupOld(today: string): Promise<{ dailyPicks: number; visits: number; contestPoints: number }> {
+  async cleanupOld(today: string): Promise<{ dailyPicks: number; visits: number; contestPoints: number; fishingWeekly: number }> {
     const count = async (text: string) => Number((await this.sql.query<{ n: number }>(`with d as (${text} returning 1) select count(*)::int as n from d`, [today]))[0]?.n ?? 0);
     return {
       dailyPicks: await count(`delete from public.daily_picks where day < $1::date - 2`),
       visits: await count(`delete from public.visits where visited_on < $1::date - 35`),
       contestPoints: await count(`delete from public.contest_points where week < $1::date - 21`),
+      // 표가 아직 없으면(SQL 실행 전) 건너뛴다
+      fishingWeekly: await count(`delete from public.fishing_weekly where week < $1::date - 35`).catch(() => 0),
     };
   }
 
@@ -779,6 +797,90 @@ export class SceneStore {
   async coinsOf(userId: string): Promise<number> {
     const [r] = await this.sql.query<{ coins: number }>(`select coins from public.profiles where id = $1`, [userId]);
     return Number(r?.coins ?? 0);
+  }
+
+  // ───────── 강아지 키우기 ─────────
+
+  async petCare(userId: string): Promise<PetCareRow | null> {
+    const [r] = await this.sql.query<PetCareRow>(
+      `select affection, fed_day::text as fed_day, walked_day::text as walked_day, pet_day::text as pet_day, pets_today from public.pet_care where user_id = $1`,
+      [userId],
+    );
+    return r ? { ...r, affection: Number(r.affection), pets_today: Number(r.pets_today) } : null;
+  }
+
+  /**
+   * 돌봐 준다: 오늘 아직 했을 수 있을 때만 친밀도를 gain만큼 올린다 (한 문장, 동시에 눌러도 한 번).
+   * 올렸으면 새 줄, 오늘 이미 다 했으면 null
+   */
+  async careForPet(userId: string, action: 'feed' | 'pet' | 'walk', gain: number, today: string, petsPerDay: number): Promise<PetCareRow | null> {
+    const cols = `affection, fed_day::text as fed_day, walked_day::text as walked_day, pet_day::text as pet_day, pets_today`;
+    const day = action === 'feed' ? 'fed_day' : 'walked_day';
+    const rows =
+      action === 'pet'
+        ? await this.sql.query<PetCareRow>(
+            `insert into public.pet_care as c (user_id, affection, pet_day, pets_today) values ($1, $2, $3::date, 1)
+             on conflict (user_id) do update set affection = c.affection + $2,
+               pets_today = case when c.pet_day = $3::date then c.pets_today + 1 else 1 end, pet_day = $3::date, updated_at = now()
+             where c.pet_day is distinct from $3::date or c.pets_today < $4
+             returning ${cols}`,
+            [userId, gain, today, petsPerDay],
+          )
+        : await this.sql.query<PetCareRow>(
+            `insert into public.pet_care as c (user_id, affection, ${day}) values ($1, $2, $3::date)
+             on conflict (user_id) do update set affection = c.affection + $2, ${day} = $3::date, updated_at = now()
+             where c.${day} is distinct from $3::date
+             returning ${cols}`,
+            [userId, gain, today],
+          );
+    const r = rows[0];
+    return r ? { ...r, affection: Number(r.affection), pets_today: Number(r.pets_today) } : null;
+  }
+
+  // ───────── 주간 낚시 대회 ─────────
+
+  /** 이번 주 가장 큰 물고기를 바꾼다 (더 클 때만) */
+  async recordWeeklyFish(userId: string, week: string, fish: string, size: number): Promise<void> {
+    await this.sql.query(
+      `insert into public.fishing_weekly as f (week, user_id, fish, size) values ($1, $2, $3, $4)
+       on conflict (week, user_id) do update set fish = excluded.fish, size = excluded.size, caught_at = now()
+       where excluded.size > f.size`,
+      [week, userId, fish, size],
+    );
+  }
+
+  /** 한 주 순위 (큰 것부터, 먼저 낚은 사람이 앞) */
+  async fishingTop(week: string, limit: number): Promise<FishingRow[]> {
+    const rows = await this.sql.query<FishingRow>(
+      `select f.user_id, p.handle, p.display_name, f.fish, f.size from public.fishing_weekly f join public.profiles p on p.id = f.user_id
+       where f.week = $1 order by f.size desc, f.caught_at asc limit $2`,
+      [week, limit],
+    );
+    return rows.map((r) => ({ ...r, size: Number(r.size) }));
+  }
+
+  async myWeeklyFish(userId: string, week: string): Promise<{ fish: string; size: number } | null> {
+    const [r] = await this.sql.query<{ fish: string; size: number }>(`select fish, size from public.fishing_weekly where week = $1 and user_id = $2`, [week, userId]);
+    return r ? { fish: r.fish, size: Number(r.size) } : null;
+  }
+
+  async getFishingResult(week: string): Promise<(FishingRow & { decided: true }) | { decided: true; user_id: null } | null> {
+    const [r] = await this.sql.query<{ user_id: string | null; handle: string | null; display_name: string | null; fish: string | null; size: number | null }>(
+      `select r.user_id, p.handle, p.display_name, r.fish, r.size from public.fishing_weekly_results r left join public.profiles p on p.id = r.user_id where r.week = $1`,
+      [week],
+    );
+    if (!r) return null;
+    if (!r.user_id || !r.fish) return { decided: true, user_id: null };
+    return { decided: true, user_id: r.user_id, handle: r.handle ?? '', display_name: r.display_name, fish: r.fish, size: Number(r.size) };
+  }
+
+  /** 끝난 주의 낚시왕을 정한다. 처음 넣었으면 true */
+  async insertFishingResult(week: string, winner: FishingRow | null): Promise<boolean> {
+    const rows = await this.sql.query(
+      `insert into public.fishing_weekly_results (week, user_id, fish, size) values ($1, $2, $3, $4) on conflict do nothing returning week`,
+      [week, winner?.user_id ?? null, winner?.fish ?? null, winner?.size ?? null],
+    );
+    return rows.length > 0;
   }
 
   /** 코인을 더한다. 새 잔액 */

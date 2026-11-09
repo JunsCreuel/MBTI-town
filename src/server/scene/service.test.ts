@@ -1,7 +1,8 @@
 // 미니홈피 규칙을 실제 Postgres(PGlite, 메모리)로 확인한다. 공개 범위·차단은 서버 규칙이라 여기서 꼼꼼히 본다.
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import { coinConfig, contestConfig, debateConfig, marketConfig, playConfig, recordConfig, townConfig } from '@/config/game';
+import { coinConfig, contestConfig, debateConfig, fishingCupConfig, marketConfig, petCareConfig, playConfig, recordConfig, townConfig } from '@/config/game';
+import { contestWeek } from '@/shared/contest';
 import type { Announcement } from '@/shared/announce';
 import { DISTRICTS, type District } from '@/shared/districts';
 import { refundFor } from '@/shared/market';
@@ -1041,5 +1042,60 @@ describe('내게 온 알림 (운영자)', () => {
     ]);
     expect(await service.takeNotices(v)).toEqual([]);
     expect(await service.takeNotices(null)).toEqual([]);
+  });
+});
+
+describe('강아지 키우기', () => {
+  it('밥·산책은 하루 한 번, 쓰다듬기는 정한 횟수까지 친밀도가 오르고 단계가 오른다', async () => {
+    const v = await user();
+    await onboard(v, '강아지 집사');
+    expect(await service.petCare(v)).toMatchObject({ affection: 0, level: 1, fedToday: false });
+    const fed = await service.careForPet(v, 'feed');
+    expect(fed).toMatchObject({ gained: petCareConfig.feed, state: { affection: petCareConfig.feed, fedToday: true } });
+    expect((await service.careForPet(v, 'feed')).gained).toBe(0);
+    for (let i = 0; i < petCareConfig.petsPerDay; i++) expect((await service.careForPet(v, 'pet')).gained).toBe(petCareConfig.pet);
+    expect((await service.careForPet(v, 'pet')).gained).toBe(0);
+    const walked = await service.careForPet(v, 'walk');
+    const total = petCareConfig.feed + petCareConfig.pet * petCareConfig.petsPerDay + petCareConfig.walk;
+    expect(walked.state.affection).toBe(total);
+    expect(walked.state.level).toBe(total >= petCareConfig.levels[1] ? 2 : 1);
+    // 다음 날 다시 줄 수 있다
+    const tomorrow = new SceneService(new SceneStore(sql), () => new Date(now.getTime() + 86_400_000));
+    expect((await tomorrow.careForPet(v, 'feed')).gained).toBe(petCareConfig.feed);
+    await expectError(service.careForPet(null, 'feed'), 'login_required');
+  });
+});
+
+describe('주간 낚시 대회', () => {
+  it('이번 주 가장 큰 물고기로 순위를 내고, 주가 끝나면 낚시왕을 한 번만 정해 상 코인과 공지를 준다', async () => {
+    const heard: Announcement[] = [];
+    const t0 = new Date('2026-11-10T03:00:00Z'); // 화요일 (한국 12시)
+    const svc = new SceneService(new SceneStore(sql), () => t0, async (a) => (heard.push(a), true));
+    const a = await user();
+    const b = await user();
+    await onboard(a, '큰고기');
+    await onboard(b, '작은고기');
+    const week = contestWeek(t0).week;
+    const store = new SceneStore(sql);
+    await store.recordWeeklyFish(a.id, week, 'carp', 70.5);
+    await store.recordWeeklyFish(b.id, week, 'crucian', 25);
+    // 더 작은 것은 바꾸지 않는다
+    await store.recordWeeklyFish(a.id, week, 'minnow', 8);
+    const cup = await svc.fishingCup(b);
+    expect(cup?.top.slice(0, 2)).toEqual([
+      { name: '큰고기', handle: expect.any(String), fish: 'carp', size: 70.5 },
+      { name: '작은고기', handle: expect.any(String), fish: 'crucian', size: 25 },
+    ]);
+    expect(cup?.mine).toEqual({ fish: 'crucian', size: 25, rank: 2 });
+    // 일요일 21시 지나 1시간 뒤: 낚시왕을 정한다
+    const after = new Date(contestWeek(t0).closesAt.getTime() + 3600_000);
+    const later = new SceneService(new SceneStore(sql), () => after, async (x) => (heard.push(x), true));
+    const coinsBefore = Number((await sql.query<{ coins: number }>(`select coins from public.profiles where id = $1`, [a.id]))[0].coins);
+    expect(await later.settleFishingCup()).toEqual({ week, winner: '큰고기' });
+    expect(await later.settleFishingCup()).toBeNull();
+    const coinsAfter = Number((await sql.query<{ coins: number }>(`select coins from public.profiles where id = $1`, [a.id]))[0].coins);
+    expect(coinsAfter - coinsBefore).toBe(fishingCupConfig.prizeCoins);
+    expect(heard).toContainEqual({ kind: 'fishing_king', name: '큰고기', fish: '잉어', size: 70.5 });
+    expect((await later.fishingCup(null))?.last).toEqual({ name: '큰고기', fish: 'carp', size: 70.5 });
   });
 });

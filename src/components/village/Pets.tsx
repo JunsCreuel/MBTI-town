@@ -3,10 +3,13 @@
 // 데리고 다니는 펫 (3D): 주인 옆(조금 뒤)을 따라다닌다. 걸을 때는 다리로 걷고(빠르기에 맞춰), 멈추면 주인이 보는 쪽을 같이 본다.
 // 주인이 멀리 순간이동(지도 이동)하거나 길이 막혀 처지면 주인 곁으로 옮겨 온다.
 // 내 펫과 다른 사람 펫을 똑같이 그린다 (자리는 화면마다 따로 계산한다. 서버는 누가 어떤 펫을 데리고 있는지만 안다).
+import { call } from '@/lib/api';
+import { localDate } from '@/shared/debate';
+import { miniToast } from '../app/miniToast';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
-import { townConfig } from '@/config/game';
+import { petCareConfig, townConfig } from '@/config/game';
 import { petInstance } from '@/lib/characterRig';
 import { lerpAngle, moveWithCollision } from '@/shared/movement';
 import { petDef } from '@/shared/pets';
@@ -131,3 +134,43 @@ export function PetFollower({ owner, petOf }: { owner: RefObject<Actor>; petOf: 
     </group>
   );
 }
+
+/**
+ * 강아지와 산책 (내 펫만): 펫을 데리고 petCareConfig.walkTiles칸 넘게 걸으면 하루 한 번 친밀도가 오른다.
+ * 오늘 이미 했으면 다시 묻지 않는다 (이 기기에 날짜를 적어 둔다, 서버도 하루 한 번만 올린다)
+ */
+export function PetWalkTracker({ owner, petOf }: { owner: RefObject<Actor>; petOf: () => string }) {
+  const st = useRef({ last: null as { x: number; z: number } | null, dist: 0, sent: false });
+  useFrame(() => {
+    const s = st.current;
+    const a = owner.current;
+    if (s.sent || !a) return;
+    if (!petOf()) {
+      s.last = null;
+      return;
+    }
+    if (s.last) {
+      const d = Math.hypot(a.x - s.last.x, a.z - s.last.z);
+      // 순간 이동(동네 옮기기 등)은 세지 않는다
+      if (d < 2) s.dist += d;
+    }
+    s.last = { x: a.x, z: a.z };
+    if (s.dist < petCareConfig.walkTiles) return;
+    s.sent = true;
+    const today = localDate(new Date());
+    try {
+      if (window.localStorage.getItem(WALK_KEY) === today) return;
+    } catch {}
+    call<{ gained: number; levelUp: boolean }>('POST', '/api/pet', { action: 'walk' })
+      .then((r) => {
+        try {
+          window.localStorage.setItem(WALK_KEY, today);
+        } catch {}
+        if (r.gained) miniToast(r.levelUp ? `산책 덕분에 더 친해졌어요! (친밀도 +${r.gained})` : `즐거운 산책! 친밀도 +${r.gained}`);
+      })
+      .catch(() => {});
+  });
+  return null;
+}
+
+const WALK_KEY = 'mt_pet_walk';

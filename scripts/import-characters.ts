@@ -906,6 +906,31 @@ function rigQuadruped(doc: Document) {
     ]);
   }
   {
+    // 손: 앉은 채로 오른 앞발을 들어 앞으로 내밀고 살짝 흔든다 (재주)
+    const SIT = -26;
+    const rad = SIT * deg;
+    const frontTopY = -0.06 * H * Math.cos(rad) - dz * Math.sin(rad);
+    const sitY = legLen - frontTopY;
+    clip('paw', 1.0, 20, [
+      ...legNames.flatMap((n) => {
+        if (n === 'FR') {
+          return [
+            [`leg${n}`, 'rotation', (ph: number) => quat(-SIT - 75 + 8 * Math.sin(2 * ph), 0, 0)],
+            [`knee${n}`, 'rotation', (ph: number) => quat(25 + 10 * Math.sin(2 * ph), 0, 0)],
+          ] as [string, 'rotation', (ph: number) => number[]][];
+        }
+        const [leg, kneeDeg] = n[0] === 'F' ? [-SIT, 0] : [-54, 150];
+        return [hold(`leg${n}`, leg), hold(`knee${n}`, kneeDeg)];
+      }),
+      ['hips', 'translation', () => [hipsRest[0], sitY, hipsRest[2]]],
+      hold('hips', SIT),
+      // 몸을 조금 왼쪽으로 기울여 균형을 잡고, 고개를 갸웃
+      ['chest', 'rotation', () => quat(0, 0, 4)],
+      ['head', 'rotation', (ph) => quat(14, 0, 8 + 4 * Math.sin(ph))],
+      ['tail', 'rotation', (ph) => quat(8, 32 * Math.sin(3 * ph), 0)],
+    ]);
+  }
+  {
     // 옆으로 눕기: 몸 전체를 옆으로 눕혀 몸통 옆면이 바닥에 닿게 하고, 다리를 버둥, 꼬리를 탁탁
     const LIE = 84;
     const halfW = (max[0] - min[0]) / 2;

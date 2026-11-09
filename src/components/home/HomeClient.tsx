@@ -3,6 +3,10 @@
 // HOME: 나의 방 = 마을 속 내 집 안 (PROJECT_GUIDE.md 4, 6장). 마을에서 내 집 문으로 들어온다.
 // 보기: 바닥을 누르면 걷고, 턴테이블·책상·우편함·옷장·액자를 누르면 그 기능이 열린다.
 // 꾸미기: 소품 추가·옮기기·돌리기·빼기, 벽지·바닥·BGM 바꾸기, 저장.
+import { TRICKS, type PetCareState } from '@/shared/petCare';
+import type { PetPose } from '@/shared/pets';
+import { SELF_GESTURE } from '../village/session';
+import { PetCareSheet } from './PetCareSheet';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -36,7 +40,7 @@ import { useHudInsets } from '../room/useHudInsets';
 const RoomScene = dynamic(() => import('../room/RoomScene'), { ssr: false });
 const AvatarPreview = dynamic(() => import('../room/AvatarPreview'), { ssr: false });
 
-type SheetKind = 'guestbook' | 'visitors' | 'wardrobe' | 'frame' | 'petName' | null;
+type SheetKind = 'guestbook' | 'visitors' | 'wardrobe' | 'frame' | 'petName' | 'petCare' | null;
 type EditTab = 'items' | 'wall' | 'floor' | 'bgm';
 
 const newId = () => Math.random().toString(36).slice(2, 10);
@@ -73,6 +77,29 @@ export function HomeClient() {
   const [petCard, setPetCard] = useState(false);
   /** 쓰다듬기 버튼을 누른 횟수 (방 장면이 강아지 곁으로 걸어가 쓰다듬는다) */
   const [petCall, setPetCall] = useState(0);
+  /** 강아지 돌보기: 친밀도 (null = 준비 중), 재주·밥 시키기 */
+  const [care, setCare] = useState<PetCareState | null>(null);
+  const [caring, setCaring] = useState(false);
+  const [trick, setTrick] = useState<{ pose: PetPose; n: number } | null>(null);
+  useEffect(() => {
+    call<{ care: PetCareState | null }>('GET', '/api/pet')
+      .then((r) => setCare(r.care))
+      .catch(() => {});
+  }, []);
+  const doTrick = (pose: PetPose) => setTrick((t) => ({ pose, n: (t?.n ?? 0) + 1 }));
+  /** 돌봐 주고 결과를 알린다 (오른 만큼, 단계가 오르면 배운 재주) */
+  async function careFor(action: 'feed' | 'pet') {
+    try {
+      const r = await call<{ state: PetCareState; gained: number; levelUp: boolean }>('POST', '/api/pet', { action });
+      setCare(r.state);
+      if (r.levelUp) {
+        const learned = TRICKS.find((t) => t.level === r.state.level);
+        setToast(learned ? `더 친해졌어요! 이제 '${learned.name}'를 할 수 있어요` : r.state.collar ? '영원한 짝꿍! 목걸이를 선물했어요' : '더 친해졌어요!');
+      } else if (r.gained && action === 'feed') setToast(`맛있게 먹었어요 (친밀도 +${r.gained})`);
+    } catch (e) {
+      if (action === 'feed') setToast(errorMessage(e));
+    }
+  }
   useEffect(() => {
     if (!petCard) return;
     const t = setTimeout(() => setPetCard(false), 5000);
@@ -231,6 +258,10 @@ export function HomeClient() {
 
   // 내 방에 들어온 친구·손님과 함께 있는다
   const { presence, snap: presenceSnap, others } = useHousePresence(profile?.handle ?? null);
+  // 내 강아지를 쓰다듬으면 친밀도가 오른다 (하루 정한 횟수까지)
+  const careRef = useRef(careFor);
+  careRef.current = careFor;
+  useEffect(() => presence?.onPet((id) => id === SELF_GESTURE && void careRef.current('pet')), [presence]);
   // 같이 꾸미기: 손님이 옮긴 가구를 내 초안에 넣는다 (놓을 수 없는 자리면 내 자리로 되돌려 알린다)
   const draftRef = useRef(draft);
   draftRef.current = draft;
@@ -290,6 +321,8 @@ export function HomeClient() {
             petName={petNameOf(profile.avatar, 'dog')}
             onPetTap={() => setPetCard(true)}
             petCall={petCall}
+            trickCall={trick}
+            petCollar={!!care?.collar}
             insetTop={insets.top}
             insetBottom={insets.bottom}
             onReady={() => setReady(true)}
@@ -358,15 +391,15 @@ export function HomeClient() {
                   className="btn-primary btn-primary--inline"
                   onClick={() => {
                     setPetCard(false);
-                    setSheet('petName');
+                    setSheet('petCare');
                   }}
                 >
-                  이름 짓기
+                  돌보기
                 </button>
               </div>
             )}
             {presence && (
-              <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} onPet={() => setPetCall((n) => n + 1)} selfPop={!overview} />
+              <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} onPet={() => setPetCall((n) => n + 1)} onCare={() => setSheet('petCare')} selfPop={!overview} />
             )}
             <BgmPlayer ref={player} trackKey={bgm} onPlayingChange={setPlaying} />
             <div className="quick-actions">
@@ -485,6 +518,26 @@ export function HomeClient() {
 
       {sheet === 'guestbook' && <OwnerGuestbook handle={profile.handle} onClose={() => setSheet(null)} />}
       {sheet === 'visitors' && <Visitors handle={profile.handle} onClose={() => setSheet(null)} />}
+      {sheet === 'petCare' && (
+        <PetCareSheet
+          name={petNameOf(profile.avatar, 'dog')}
+          care={care}
+          busy={caring}
+          onFeed={async () => {
+            setCaring(true);
+            await careFor('feed');
+            setCaring(false);
+            setSheet(null);
+            doTrick('happy');
+          }}
+          onTrick={(id) => {
+            setSheet(null);
+            doTrick(TRICKS.find((t) => t.id === id)!.pose);
+          }}
+          onRename={() => setSheet('petName')}
+          onClose={() => setSheet(null)}
+        />
+      )}
       {sheet === 'petName' && (
         <PetNameSheet
           pet="dog"

@@ -11,9 +11,21 @@ export const isPetId = (v: unknown): v is PetId => PETS.some((p) => p.id === v);
 export const petDef = (id: string) => PETS.find((p) => p.id === id);
 
 /** 쓰다듬으면 하는 펫 자세 (펫 모델의 동작 이름, scripts/import-characters.ts) */
-export const PET_POSES = ['sit', 'lie', 'happy'] as const;
+export const PET_POSES = ['sit', 'lie', 'happy', 'paw'] as const;
 export type PetPose = (typeof PET_POSES)[number];
 export const isPetPose = (v: unknown): v is PetPose => (PET_POSES as readonly unknown[]).includes(v);
+
+/** 재주·밥 주기: 그 자세를 이만큼(초) 한 뒤 좋아하기 */
+export const TRICK_SEC = 2.6;
+export const TRICK_HAPPY_SEC = 1.4;
+
+/** 재주를 시킨 지 elapsed초 뒤의 자세 (끝났으면 null) */
+export function trickPose(trick: PetPose, elapsed: number): PetPose | null {
+  if (!(elapsed >= 0)) return null;
+  if (trick === 'happy') return elapsed < TRICK_SEC ? 'happy' : null;
+  if (elapsed < TRICK_SEC) return trick;
+  return elapsed < TRICK_SEC + TRICK_HAPPY_SEC ? 'happy' : null;
+}
 
 /** 쓰다듬으면: 앉고 → 옆으로 벌러덩 눕고 → 일어나 깡총거리며 꼬리를 흔든다 (초) */
 export const PET_REACTION: readonly { pose: PetPose; sec: number }[] = [

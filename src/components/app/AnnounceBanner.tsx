@@ -12,7 +12,7 @@ const EVENT = 'scene:announce';
 const SHOW_MS = 10000;
 
 /** 띠 위쪽 작은 이름표 */
-const LABEL: Record<string, string> = { notice: '운영자 공지', golden_whale: '황금 고래', contest: 'MBTI 마을 대항전', saju_ticket: '이용권', gift: '선물이 왔어요', visit: '운영자 방문' };
+const LABEL: Record<string, string> = { notice: '운영자 공지', golden_whale: '황금 고래', contest: 'MBTI 마을 대항전', fishing_king: '주간 낚시 대회', saju_ticket: '이용권', gift: '선물이 왔어요', visit: '운영자 방문' };
 
 export function showAnnouncement(b: AnnounceBroadcast) {
   window.dispatchEvent(new CustomEvent<AnnounceBroadcast>(EVENT, { detail: b }));

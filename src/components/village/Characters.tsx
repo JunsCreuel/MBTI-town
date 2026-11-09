@@ -15,7 +15,7 @@ import { attachAccessory, bodyTintOf, characterActions, characterRig, cloneChara
 import { gesturePose, hopHeight } from '@/shared/gesture';
 import { lerpAngle, moveWithCollision, yawFromVector } from '@/shared/movement';
 import { FishingRig } from './FishingRig';
-import { PetFollower } from './Pets';
+import { PetFollower, PetWalkTracker } from './Pets';
 import { drunkLevel } from './drunk';
 import type { FishingState } from './context';
 import { findPath, type Point } from '@/shared/pathfinding';
@@ -346,6 +346,7 @@ export function LocalPlayer() {
     <>
       <Character actor={actor} look={look} self />
       <PetFollower owner={actor} petOf={() => session.pet} />
+      <PetWalkTracker owner={actor} petOf={() => session.pet} />
     </>
   );
 }
