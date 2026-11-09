@@ -16,6 +16,8 @@ import { profileTag, type Avatar, type AvatarBody } from '@/shared/avatar';
 import { useBodyModel } from './useBodyModel';
 import { CHARACTER_HEIGHT, LIFT_SEC, PLACE_SEC, faceFor, type ClipName } from '@/shared/character';
 import { panelOpen } from '../app/panelState';
+import { AdaptiveResolution, ShadowThrottle, usePanelOpen } from '../app/RenderQuality';
+import { lowQuality, quality } from '@/lib/quality';
 import { attachAccessory, bodyTintOf, brightenFur, characterActions, cloneCharacter, faceControl, petInstance, tintOutfit, withMeshopt } from '@/lib/characterRig';
 import { PET_REACTION_SEC, petDef, petReactionPose, type PetPose } from '@/shared/pets';
 import { themeOf, type District } from '@/shared/districts';
@@ -329,7 +331,8 @@ function Lights({ time }: { time: TimeOfDay }) {
   }, []);
   const k = time === 'night' ? 0.45 : time === 'evening' ? 0.8 : 1;
   const sunColor = time === 'night' ? R.night : time === 'evening' ? R.evening : R.sun;
-  const small = typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 700;
+  // 가벼운 모드(휴대폰)는 그림자 해상도를 낮춘다
+  const mapSize = quality().shadowMapSize;
   return (
     <>
       <hemisphereLight args={[R.hemiSky, R.hemiGround, 1.7 * k]} />
@@ -339,7 +342,7 @@ function Lights({ time }: { time: TimeOfDay }) {
         color={sunColor}
         intensity={1.9 * k}
         castShadow
-        shadow-mapSize={[small ? 1024 : 2048, small ? 1024 : 2048]}
+        shadow-mapSize={[mapSize, mapSize]}
         shadow-bias={-0.0005}
         shadow-normalBias={0.02}
         shadow-radius={4}
@@ -1041,7 +1044,7 @@ function EmoteBubble({
     sp.visible = true;
     sp.material.map = textures[g.emote];
     const pop = Math.min(1, t / 0.15);
-    sp.scale.setScalar(0.55 * (0.6 + 0.4 * pop));
+    sp.scale.setScalar(0.7 * (0.6 + 0.4 * pop));
     sp.position.set(model.position.x, CHARACTER_HEIGHT * AVATAR_SCALE + 0.72 + Math.sin(t * 5) * 0.03, model.position.z);
   });
   return (
@@ -1795,11 +1798,15 @@ function SceneContent(props: RoomSceneProps) {
 }
 
 export default function RoomScene(props: RoomSceneProps) {
+  const low = lowQuality();
+  // 가방·도감 같은 창이 화면을 다 덮으면 뒤 장면은 그리지 않는다
+  const paused = usePanelOpen();
   return (
     <Canvas
       shadows="percentage"
-      dpr={[1, 2]}
-      gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
+      dpr={low ? [1, 1.25] : [1, 2]}
+      gl={{ antialias: !low, alpha: true, powerPreference: 'high-performance' }}
+      frameloop={paused ? 'never' : 'always'}
       camera={{ fov: roomConfig.fovDeg, position: [W / 2, 8, D + 8], near: 0.1, far: 200 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NeutralToneMapping;
@@ -1808,6 +1815,8 @@ export default function RoomScene(props: RoomSceneProps) {
       style={{ touchAction: 'none' }}
     >
       <SceneContent {...props} />
+      <AdaptiveResolution />
+      <ShadowThrottle every={quality().shadowEvery} />
     </Canvas>
   );
 }

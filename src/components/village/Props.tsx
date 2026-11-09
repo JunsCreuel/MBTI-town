@@ -78,7 +78,7 @@ const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
  * 같은 소품을 한 번에 그린다. 내 캐릭터를 가리는 소품은 불투명 묶음에서 빼서
  * 반투명 묶음(최대 MAX_FADING개)으로 옮겨 그린다. 다시 다 보이면 불투명 묶음으로 돌아간다.
  */
-export function InstancedProps({ group, onPick }: { group: PropGroup; onPick?: (index: number) => void }) {
+export function InstancedProps({ group, onPick, castShadow = true }: { group: PropGroup; onPick?: (index: number) => void; castShadow?: boolean }) {
   const { map, input } = useTown();
   const solidRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
   const fadeRefs = useRef<(THREE.InstancedMesh | null)[]>([]);
@@ -218,7 +218,7 @@ export function InstancedProps({ group, onPick }: { group: PropGroup; onPick?: (
             solidRefs.current[k] = el;
           }}
           args={[p.geometry, p.material, group.placements.length]}
-          castShadow
+          castShadow={castShadow}
           receiveShadow
           {...pick}
         />
@@ -232,7 +232,7 @@ export function InstancedProps({ group, onPick }: { group: PropGroup; onPick?: (
           }}
           args={[f.geometry, f.material, MAX_FADING]}
           frustumCulled={false}
-          castShadow
+          castShadow={castShadow}
           renderOrder={5}
         />
       ))}

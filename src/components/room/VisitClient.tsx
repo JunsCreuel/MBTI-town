@@ -206,7 +206,7 @@ export function VisitClient({ handle }: { handle: string }) {
 
       <div className="room-bottom" data-hud="bottom">
         {presence && (
-          <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} onPet={() => setPetCall((n) => n + 1)} />
+          <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} onPet={() => setPetCall((n) => n + 1)} selfPop={!overview} />
         )}
         {view.room && <BgmPlayer ref={player} trackKey={view.room.bgm} onPlayingChange={setPlaying} />}
         <div className="quick-actions">

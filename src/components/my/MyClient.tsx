@@ -16,6 +16,7 @@ import { InventorySheet, ItemIcon } from '../app/Inventory';
 import { ALL_FRUITS, FISH } from '@/shared/play';
 import { Icon } from '../app/Icon';
 import { TabBar } from '../app/TabBar';
+import { GraphicsSetting } from './GraphicsSetting';
 import { useMe } from '../app/useMe';
 
 interface Friends {
@@ -339,6 +340,8 @@ export function MyClient({ embedded = false }: { embedded?: boolean } = {}) {
           <p className="muted">차단한 사람이 없어요.</p>
         )}
       </section>
+
+      <GraphicsSetting />
 
       <section className="section card">
         <h2 className="section-title">기록 관리</h2>

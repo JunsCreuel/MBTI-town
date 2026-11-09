@@ -11,6 +11,7 @@ import { GROUND_BLEND_RADIUS, WATER_LEVEL, blendWeight, groundHeightAt, type Tow
 import { isIndoor } from './club';
 import { useTown } from './context';
 import { windUniforms } from './wind';
+import { lowQuality } from '@/lib/quality';
 
 // 맵의 terrain 속성으로 3D 땅을 만든다. 장식은 모두 인스턴싱으로 그려 그리기 호출을 줄인다.
 // 지역 땅의 잔디에는 지역 색을 살짝 섞어 어느 지역인지 걸으면서도 느껴지게 한다.
@@ -314,6 +315,8 @@ const planterGeometry = new RoundedBoxGeometry(1, PLANTER_H, 1, 2, 0.05);
 const soilGeometry = new THREE.BoxGeometry(0.84, 0.02, 0.84);
 
 export function Terrain({ onGroundClick }: { onGroundClick: (e: ThreeEvent<MouseEvent>) => void }) {
+  // 가벼운 모드: 바다는 그림자를 받지 않고, 화분·잎 덩이는 그림자를 드리우지 않는다
+  const low = lowQuality();
   const { map } = useTown();
   const all = useMemo(() => cells(map), [map]);
   const indoor = useMemo(() => isIndoor(map), [map]);
@@ -402,15 +405,15 @@ export function Terrain({ onGroundClick }: { onGroundClick: (e: ThreeEvent<Mouse
       </mesh>
       {/* 바다와 호수 (땅이 수면 아래로 내려간 곳에 보인다). 실내에는 없다 */}
       {!indoor && (
-        <mesh rotation-x={-Math.PI / 2} position={[map.width / 2, WATER_LEVEL, map.height / 2]} receiveShadow material={water.material}>
+        <mesh rotation-x={-Math.PI / 2} position={[map.width / 2, WATER_LEVEL, map.height / 2]} receiveShadow={!low} material={water.material}>
           <planeGeometry args={[map.width + 900, map.height + 900]} />
         </mesh>
       )}
-      <Instances geometry={planterGeometry} items={deco.planters} castShadow />
+      <Instances geometry={planterGeometry} items={deco.planters} castShadow={!low} />
       <Instances geometry={soilGeometry} items={deco.soils} />
       <Instances geometry={slabGeometry} items={deco.slabs} roughness={0.85} />
       <Instances geometry={hedgeGeometry} items={deco.hedges} castShadow />
-      <Instances geometry={blobGeometry} items={deco.leaves} castShadow />
+      <Instances geometry={blobGeometry} items={deco.leaves} castShadow={!low} />
       <Instances geometry={blobGeometry} items={deco.flowers} roughness={0.7} />
       <Instances geometry={blobGeometry} items={deco.pebbles} />
     </>

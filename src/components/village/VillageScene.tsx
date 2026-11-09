@@ -30,10 +30,10 @@ import { ClubLights } from './ClubLights';
 import { PlazaScreen } from './PlazaScreen';
 import { MarketStalls } from './Market';
 import { panelOpen } from '../app/panelState';
+import { AdaptiveResolution, ShadowThrottle, usePanelOpen } from '../app/RenderQuality';
+import { quality } from '@/lib/quality';
 
 const S = tokens.scene;
-/** 저가폰을 고려해 휴대폰에서는 그림자 해상도를 낮춘다 */
-const isSmallScreen = () => typeof window !== 'undefined' && Math.min(window.innerWidth, window.innerHeight) < 700;
 
 /** 위는 파랗고 지평선은 옅은 하늘 */
 function Sky() {
@@ -141,7 +141,8 @@ function Lights() {
   const { input } = useTown();
   const sun = useRef<THREE.DirectionalLight>(null);
   const hemi = useRef<THREE.HemisphereLight>(null);
-  const mapSize = isSmallScreen() ? 1024 : 2048;
+  // 가벼운 모드(휴대폰)는 그림자 해상도를 낮춘다
+  const mapSize = quality().shadowMapSize;
   useEffect(() => {
     const cam = sun.current!.shadow.camera;
     cam.left = -15;
@@ -428,7 +429,7 @@ function Players() {
         return { id, d: pl ? Math.hypot(pl.x - input.self.x, pl.z - input.self.z) : Infinity };
       })
       .sort((a, b) => a.d - b.d)
-      .slice(0, townConfig.maxVisiblePlayers)
+      .slice(0, Math.min(townConfig.maxVisiblePlayers, quality().maxPlayers))
       .map((o) => o.id)
       .sort();
     if (next.join() !== p.visible.join()) {
@@ -550,38 +551,6 @@ function DayCycle() {
 function WindClock() {
   useFrame(() => {
     windUniforms.uWindTime.value = now();
-  });
-  return null;
-}
-
-/**
- * 휴대폰에서 프레임이 밀리면(끊겨 보이면) 해상도를 한 단계씩 낮춘다. 다시 올리지는 않는다 (오르내리며 깜빡이지 않게).
- * 처음 몇 초는 셰이더 준비로 느리므로 세지 않는다.
- */
-function AdaptiveResolution() {
-  const setDpr = useThree((st) => st.setDpr);
-  const viewport = useThree((st) => st.viewport);
-  const state = useRef({ frames: 0, time: 0, skip: 3, dpr: 0 });
-  useFrame((_, dt) => {
-    const st = state.current;
-    if (!st.dpr) st.dpr = viewport.dpr;
-    if (document.hidden || dt > 1) return;
-    if (st.skip > 0) {
-      st.skip -= dt;
-      return;
-    }
-    st.frames++;
-    st.time += dt;
-    if (st.time < 2) return;
-    const fps = st.frames / st.time;
-    st.frames = 0;
-    st.time = 0;
-    if (fps < townConfig.minFps && st.dpr > 1) {
-      st.dpr = Math.max(1, Math.round((st.dpr - 0.25) * 100) / 100);
-      setDpr(st.dpr);
-      // 바뀐 해상도가 자리 잡을 때까지 잠깐 쉰다
-      st.skip = 1;
-    }
   });
   return null;
 }
@@ -837,11 +806,15 @@ function FirstFrame({ onFrame }: { onFrame: () => void }) {
 
 export default function VillageScene({ value, onFirstFrame }: { value: TownContextValue; onFirstFrame: () => void }) {
   const firstFrame = useRef(false);
+  const q = quality();
+  // 가방·도감 같은 창이 화면을 다 덮으면 뒤 장면은 그리지 않는다 (배터리·발열)
+  const paused = usePanelOpen();
   return (
     <Canvas
       shadows="percentage"
-      dpr={[1, 1.5]}
-      gl={{ antialias: true, powerPreference: 'high-performance' }}
+      dpr={q.dpr}
+      gl={{ antialias: q.antialias, powerPreference: 'high-performance' }}
+      frameloop={paused ? 'never' : 'always'}
       camera={{ fov: cameraConfig.fov, near: 0.3, far: 1600 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NeutralToneMapping;
@@ -866,6 +839,7 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
         <CameraRig />
         <KeyboardInput />
         <AdaptiveResolution />
+        <ShadowThrottle every={q.shadowEvery} />
         <FruitDrops />
         <ClubFx />
         <ClubScreen />
@@ -895,11 +869,15 @@ export default function VillageScene({ value, onFirstFrame }: { value: TownConte
  */
 export function MapScene({ value, onFirstFrame }: { value: TownContextValue; onFirstFrame: () => void }) {
   const firstFrame = useRef(false);
+  const q = quality();
+  // 가방·도감 같은 창이 화면을 다 덮으면 뒤 장면은 그리지 않는다 (배터리·발열)
+  const paused = usePanelOpen();
   return (
     <Canvas
       shadows="percentage"
-      dpr={[1, 1.5]}
-      gl={{ antialias: true, powerPreference: 'high-performance' }}
+      dpr={q.dpr}
+      gl={{ antialias: q.antialias, powerPreference: 'high-performance' }}
+      frameloop={paused ? 'never' : 'always'}
       camera={{ fov: cameraConfig.fov, near: 0.3, far: 1600 }}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NeutralToneMapping;
@@ -921,6 +899,7 @@ export function MapScene({ value, onFirstFrame }: { value: TownContextValue; onF
         <MapLabelSync />
         <CameraRig />
         <AdaptiveResolution />
+        <ShadowThrottle every={q.shadowEvery} />
         <BeaconSigns />
         <FirstFrame
           onFrame={() => {

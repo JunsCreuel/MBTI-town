@@ -1,6 +1,7 @@
 'use client';
 
 // 캐릭터 미리보기 (온보딩·옷장). 천천히 돌며 서 있다.
+import { lowQuality } from '@/lib/quality';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo } from 'react';
 import * as THREE from 'three';
@@ -57,7 +58,7 @@ function Aim() {
 
 export default function AvatarPreview({ assets, avatar }: { assets: RoomAssets; avatar: Avatar }) {
   return (
-    <Canvas camera={{ fov: 30, position: [0, 1.0, 4.4] }} gl={{ alpha: true, antialias: true }} dpr={[1, 2]}
+    <Canvas camera={{ fov: 30, position: [0, 1.0, 4.4] }} gl={{ alpha: true, antialias: true }} dpr={lowQuality() ? [1, 1.5] : [1, 2]}
       onCreated={({ gl }) => {
         gl.toneMapping = THREE.NeutralToneMapping;
       }}

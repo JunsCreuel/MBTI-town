@@ -1,5 +1,6 @@
 'use client';
 
+import { quality } from '@/lib/quality';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
@@ -9,7 +10,7 @@ import { townConfig } from '@/config/game';
 import { shiftLightness } from '@/design/mbti';
 import { tokens } from '@/design/tokens';
 import { isAvatarBody, profileTag, type AccessoryId, type AvatarBody, type AvatarColor } from '@/shared/avatar';
-import { CHARACTER_HEIGHT, HAND_SOCKET, faceFor, type ClipName } from '@/shared/character';
+import { CHARACTER_HEIGHT, FACE_MATERIAL, HAND_SOCKET, faceFor, type ClipName } from '@/shared/character';
 import { attachAccessory, bodyTintOf, characterActions, characterRig, cloneCharacter, faceControl, tintOutfit } from '@/lib/characterRig';
 import { gesturePose, hopHeight } from '@/shared/gesture';
 import { lerpAngle, moveWithCollision, yawFromVector } from '@/shared/movement';
@@ -47,7 +48,9 @@ const ROD_GRIP = new THREE.Vector3(-0.045, -0.19, 0.04);
 const ROD_DIR = new THREE.Vector3(0, -0.342, 0.94).normalize();
 
 const TAG_HEIGHT = 0.3;
-const EMOTE_SIZE = 0.62;
+/** 머리 위 이모티콘 크기 (마을 카메라가 멀어 크게 그린다, 내 것은 조금 더 크게) */
+const EMOTE_SIZE = 0.8;
+const SELF_EMOTE_SCALE = 1.25;
 
 /** 캐릭터 모습: 색과 머리 소품, 이름표 */
 interface Look {
@@ -130,6 +133,9 @@ function CharacterModel({ actor, look, self = false, gltf }: { actor: RefObject<
   const emote = useRef<THREE.Sprite>(null);
   const playing = useRef<ClipName>('idle');
   const playingStart = useRef(0);
+  const { input } = useTown();
+  /** 멀리 있는 캐릭터: 동작은 몇 장면에 한 번만 계산하고 그림자를 끈다 (q.farDistance) */
+  const far = useRef({ is: false, skipped: 0, frame: 0 });
 
   // 붙을 때마다 서 있기부터 (개발 모드는 붙였다 뗐다 다시 붙인다: 떼면서 멈춘 동작을 다시 튼다)
   useEffect(() => {
@@ -161,7 +167,22 @@ function CharacterModel({ actor, look, self = false, gltf }: { actor: RefObject<
     // 취했으면 (내 화면에서만) 몸이 휘청인다
     const lean = self ? drunkLevel() : 0;
     model.rotation.z = lean > 0 ? Math.sin(now() * 1.8) * 0.09 * lean : 0;
-    mixer.update(Math.min(dt, 0.1));
+    const f = far.current;
+    const isFar = !self && Math.hypot(a.x - input.self.x, a.z - input.self.z) > quality().farDistance;
+    if (isFar !== f.is) {
+      f.is = isFar;
+      model.traverse((o) => {
+        const m = o as THREE.Mesh;
+        // 얼굴 그림은 원래 그림자를 드리우지 않는다
+        if (m.isMesh && (m.material as THREE.Material).name !== FACE_MATERIAL) m.castShadow = !isFar;
+      });
+    }
+    f.skipped += Math.min(dt, 0.1);
+    f.frame = (f.frame + 1) % 3;
+    if (!isFar || f.frame === 0) {
+      mixer.update(Math.min(f.skipped, 0.3));
+      f.skipped = 0;
+    }
 
     const em = emote.current!;
     const t = now() - a.emoteStart;
@@ -173,7 +194,7 @@ function CharacterModel({ actor, look, self = false, gltf }: { actor: RefObject<
       em.material.map = assets.emotes[a.emote];
       // 톡 튀어나왔다가 살짝 떠 있는 느낌
       const pop = Math.min(1, t / 0.15);
-      em.scale.setScalar(EMOTE_SIZE * (0.6 + 0.4 * pop));
+      em.scale.setScalar(EMOTE_SIZE * (self ? SELF_EMOTE_SCALE : 1) * (0.6 + 0.4 * pop));
       em.position.y = CHARACTER_HEIGHT + TAG_HEIGHT + 0.3 * (tag.rel - 1) + 0.42 + Math.sin(t * 5) * 0.03;
     } else {
       em.visible = false;

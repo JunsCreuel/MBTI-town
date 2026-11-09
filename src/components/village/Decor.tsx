@@ -2,6 +2,7 @@
 
 // 땅에 흩뿌리는 작은 장식: 풀·꽃·버섯·작은 돌(지나갈 수 있다), 호수의 연잎.
 // 맵에는 넣지 않고 칸 위치로 정해지는 난수로 늘 같은 자리에 놓는다. 지역마다 그 지역 식물을 쓴다.
+import { quality } from '@/lib/quality';
 import { useMemo } from 'react';
 import { DISTRICTS } from '@/shared/districts';
 import { FLORA, floraOf, hash01, LILIES, pickWeighted, PLAZA_FLOWERS } from '@/shared/flora';
@@ -60,6 +61,8 @@ function scatter(map: TownMap): PropPlacement[] {
 
 export function Decor() {
   const { map, assets } = useTown();
+  // 가벼운 모드: 풀·꽃·작은 덤불은 그림자를 드리우지 않는다 (수천 개라 그림자 그리기가 무겁다)
+  const decorShadows = quality().decorShadows;
   const groups = useMemo(() => {
     const byKey = new Map<string, PropPlacement[]>();
     for (const p of scatter(map)) {
@@ -73,7 +76,7 @@ export function Decor() {
   return (
     <>
       {groups.map((g) => (
-        <InstancedProps key={g.key} group={g} />
+        <InstancedProps key={g.key} group={g} castShadow={decorShadows} />
       ))}
     </>
   );

@@ -347,7 +347,7 @@ export function HomeClient() {
               </div>
             )}
             {presence && (
-              <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} onPet={() => setPetCall((n) => n + 1)} />
+              <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} onPet={() => setPetCall((n) => n + 1)} selfPop={!overview} />
             )}
             <BgmPlayer ref={player} trackKey={bgm} onPlayingChange={setPlaying} />
             <div className="quick-actions">

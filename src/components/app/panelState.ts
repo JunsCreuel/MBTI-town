@@ -7,8 +7,20 @@ export function panelOpen(): boolean {
   return open;
 }
 
+const listeners = new Set<() => void>();
+
 export function setPanelOpen(v: boolean): void {
+  if (open === v) return;
   open = v;
+  listeners.forEach((fn) => fn());
+}
+
+/** 창이 열리고 닫히는 것을 듣는다 (useSyncExternalStore용) */
+export function subscribePanel(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
 }
 
 export type PanelTab = 'bag' | 'dex' | 'character' | 'archive' | 'my';

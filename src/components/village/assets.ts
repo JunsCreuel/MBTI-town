@@ -1,4 +1,5 @@
 // 마을에서 쓰는 3D 모델과 머리 위 표시를 manifest 키로 불러온다.
+import { lowQuality } from '@/lib/quality';
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { assetUrl } from '@/assets/manifest';
@@ -195,6 +196,9 @@ export async function loadTownAssets(map: TownMap, onProgress: (ratio: number) =
 
 const speechCache = new Map<string, { texture: THREE.Texture; aspect: number; height: number }>();
 
+/** 글 그림 해상도 배율 (가벼운 모드는 작게: 이름표가 수백 개라 그림 메모리가 크다) */
+const textScale = () => (lowQuality() ? 2.5 : 4);
+
 /**
  * 글 말풍선 (NPC가 하는 말). 한 줄에 너무 길면 낱말 사이에서 줄을 바꾼다. 같은 말은 한 번만 만든다.
  * height = 화면 높이 (월드 단위, 이름표와 같은 글자 크기가 되게)
@@ -202,7 +206,7 @@ const speechCache = new Map<string, { texture: THREE.Texture; aspect: number; he
 export function speechTexture(text: string) {
   const cached = speechCache.get(text);
   if (cached) return cached;
-  const scale = 4;
+  const scale = textScale();
   const font = `600 ${13 * scale}px ${tokens.font.base}`;
   const maxW = 190 * scale;
   const probe = canvas(1, 1).ctx;
@@ -255,7 +259,7 @@ export function tagTexture(label: string, dotColor: string | null, self = false,
   const key = `${label}|${dotColor}|${self}|${sub}`;
   const cached = tagCache.get(key);
   if (cached) return cached;
-  const scale = 4;
+  const scale = textScale();
   const font = `700 ${15 * scale}px ${tokens.font.base}`;
   const subFont = `600 ${11 * scale}px ${tokens.font.base}`;
   const probe = canvas(1, 1).ctx;
