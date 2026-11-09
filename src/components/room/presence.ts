@@ -9,11 +9,12 @@ import type { AnnounceBroadcast } from '@/shared/announce';
 import { townConfig } from '@/config/game';
 import {
   MSG,
-  type ActionBroadcast, type ActionKind, type DogLeadMessage, type DogMessage, type EmoteBroadcast, type EmoteKind, type FurniBroadcast, type FurniMessage,
+  type ActionBroadcast, type ActionKind, type CoEditMessage, type DogLeadMessage, type DogMessage, type EmoteBroadcast, type EmoteKind, type FurniBroadcast, type FurniMessage,
   type HouseJoinOptions, type MoveMessage, type SnapMessage,
 } from '@/shared/protocol';
 import type { TownPass } from '@/shared/townToken';
 import { SELF_GESTURE, now, type Gesture, type PlayerView } from '../village/session';
+import { LIFT_SEC } from '@/shared/character';
 import { showAnnouncement } from '../app/AnnounceBanner';
 
 /**
@@ -33,6 +34,8 @@ export interface PresenceSnapshot {
   pass: TownPass | null;
   /** 내 화면에서 숨길 사람 번호 (차단 관계) */
   hidden: readonly string[];
+  /** 같이 꾸미기 중 (주인이 켰다) */
+  coEdit: boolean;
 }
 
 /** 방 꾸미기에서 가구를 든 사람: holding = 든 가구 id (없으면 null), liftAt·dropAt = 든·내려놓은 시각 (now()) */
@@ -58,7 +61,7 @@ export class HousePresence {
   private dogAt = 0;
   private readonly furniListeners = new Set<(m: FurniBroadcast) => void>();
   private readonly petListeners = new Set<(id: string) => void>();
-  private snapshot: PresenceSnapshot = { status: 'loading', selfId: '', playerIds: [], pass: null, hidden: [] };
+  private snapshot: PresenceSnapshot = { status: 'loading', selfId: '', playerIds: [], pass: null, hidden: [], coEdit: false };
   private readonly listeners = new Set<() => void>();
   private readonly snapListeners = new Set<(s: SnapMessage) => void>();
   private ticket: Promise<HouseTicket | null> | null = null;
@@ -141,13 +144,21 @@ export class HousePresence {
       room.onMessage(MSG.dogLead, (m: DogLeadMessage) => {
         this.dogLead = !!m.lead;
       });
+      room.onMessage(MSG.coedit, (m: CoEditMessage) => {
+        // 같이 꾸미기가 끝나면 손님들이 들고 있던 가구를 내려놓은 것으로 본다 (주인 것은 다음 '옮겼다'에 다시 잡힌다)
+        if (!m.on) {
+          const owner = !!this.snapshot.pass && this.snapshot.pass.pid === this.snapshot.pass.house;
+          for (const id of [...this.carries.keys()]) if (id !== SELF_GESTURE || !owner) this.carries.delete(id);
+        }
+        this.update({ coEdit: !!m.on });
+      });
       room.onLeave(() => {
         if (attempt !== this.attempt) return;
         this.room = null;
         this.dogLead = false;
         this.dog = null;
         this.carries.clear();
-        this.update({ status: 'offline', playerIds: [], selfId: '' });
+        this.update({ status: 'offline', playerIds: [], selfId: '', coEdit: false });
       });
       this.update({ status: 'ready', selfId: room.sessionId });
     } catch (e) {
@@ -195,7 +206,12 @@ export class HousePresence {
     if (this.connected) this.room!.send(MSG.furni, msg);
   }
 
-  /** 다른 사람(주인)이 보낸 방 꾸미기 알림을 받는다 */
+  /** 같이 꾸미기를 켜고 끈다 (집 주인만, 서버가 주인인지 본다) */
+  sendCoEdit(on: boolean) {
+    if (this.connected) this.room!.send(MSG.coedit, { on } satisfies CoEditMessage);
+  }
+
+  /** 다른 사람이 보낸 방 꾸미기 알림을 받는다 (주인, 같이 꾸미기 중인 손님) */
   onFurni(fn: (m: FurniBroadcast) => void) {
     this.furniListeners.add(fn);
     return () => {
@@ -226,10 +242,18 @@ export class HousePresence {
     if (msg.op === 'carry') {
       c.holding = msg.item.id;
       c.liftAt = now();
+    } else if (msg.op === 'move' && c.holding !== msg.item.id) {
+      // '들었다'를 놓쳤으면(같이 꾸미기가 끝났다 다시 켜졌을 때 등) 이미 든 것으로 본다
+      c.holding = msg.item.id;
+      c.liftAt = now() - LIFT_SEC;
     } else if (msg.op === 'drop') {
       if (c.holding) c.dropAt = now();
       c.holding = null;
-    } else if (msg.op === 'reset' || (msg.op === 'remove' && c.holding === msg.id)) {
+    } else if (msg.op === 'reset') {
+      // 주인이 꾸미기를 끝냈다: 누가 들고 있던 것이든 모두 내려놓는다
+      for (const other of this.carries.values()) other.holding = null;
+      c.holding = null;
+    } else if (msg.op === 'remove' && c.holding === msg.id) {
       c.holding = null;
     }
     this.carries.set(id, c);

@@ -8,8 +8,8 @@ import { schema, t, type SchemaType } from '@colyseus/schema';
 import { roomConfig, townConfig } from '../../src/config/game';
 import { MOVE_BUDGET_MAX, normalizeAngle, refillMoveBudget } from '../../src/shared/movement';
 import {
-  ACTIONS, EMOTES, MSG, isDogMessage, parseFurniMessage,
-  type ActionBroadcast, type ActionKind, type DogLeadMessage, type DogMessage, type EmoteBroadcast, type EmoteKind, type FurniBroadcast, type HouseJoinOptions, type MoveMessage,
+  ACTIONS, COEDIT_OPS, EMOTES, MSG, isDogMessage, parseFurniMessage,
+  type ActionBroadcast, type CoEditMessage, type ActionKind, type DogLeadMessage, type DogMessage, type EmoteBroadcast, type EmoteKind, type FurniBroadcast, type HouseJoinOptions, type MoveMessage,
 } from '../../src/shared/protocol';
 import { ROOM_BODY_RADIUS } from '../../src/shared/room';
 import type { AnnounceBroadcast } from '../../src/shared/announce';
@@ -70,6 +70,8 @@ export class HouseRoom extends Room<{ state: HouseState }> {
   private house = '';
   /** 강아지를 맡은 화면 (세션 id) */
   private dogLead = '';
+  /** 같이 꾸미기 중 (주인이 켰다): 손님도 가구를 들고 옮길 수 있다 */
+  private coEdit = false;
 
   onCreate(options?: HouseJoinOptions) {
     // 집 번호(주인의 마을 사람 번호) 모양이 아니면 방을 열지 않는다
@@ -90,13 +92,20 @@ export class HouseRoom extends Room<{ state: HouseState }> {
       const payload: EmoteBroadcast = { id: client.sessionId, kind };
       this.broadcast(MSG.emote, payload, { except: client });
     });
-    // 방 꾸미기: 집 주인만. 모양을 검사해 다른 사람들에게 전한다
+    // 방 꾸미기: 집 주인, 또는 같이 꾸미기 중인 손님(들고·옮기고·내려놓기만). 모양을 검사해 다른 사람들에게 전한다
     this.onMessage(MSG.furni, (client, message: unknown) => {
-      if (this.passes.get(client.sessionId)?.pid !== this.house) return;
+      const owner = this.isOwner(client);
       const furni = parseFurniMessage(message);
       if (!furni) return;
+      if (!owner && !(this.coEdit && (COEDIT_OPS as readonly string[]).includes(furni.op))) return;
       const payload: FurniBroadcast = { ...furni, by: client.sessionId };
       this.broadcast(MSG.furni, payload, { except: client });
+      // 주인이 꾸미기를 끝내면 같이 꾸미기도 끝난다
+      if (owner && furni.op === 'reset') this.setCoEdit(false);
+    });
+    this.onMessage(MSG.coedit, (client, message: unknown) => {
+      if (!this.isOwner(client)) return;
+      this.setCoEdit((message as CoEditMessage | null)?.on === true);
     });
     // 방 강아지: 맡은 화면만 자리를 알린다
     this.onMessage(MSG.dog, (client, message: unknown) => {
@@ -104,6 +113,16 @@ export class HouseRoom extends Room<{ state: HouseState }> {
       const dog: DogMessage = { x: message.x, z: message.z, rot: normalizeAngle(message.rot), moving: message.moving, pose: message.pose };
       this.broadcast(MSG.dog, dog, { except: client });
     });
+  }
+
+  private isOwner(client: Client): boolean {
+    return this.passes.get(client.sessionId)?.pid === this.house;
+  }
+
+  private setCoEdit(on: boolean) {
+    if (this.coEdit === on) return;
+    this.coEdit = on;
+    this.broadcast(MSG.coedit, { on } satisfies CoEditMessage);
   }
 
   /** 강아지를 맡을 화면을 정한다 (맡은 사람이 없거나 나갔으면 남은 사람 중 먼저 들어온 사람) */
@@ -140,6 +159,7 @@ export class HouseRoom extends Room<{ state: HouseState }> {
     this.state.players.set(client.sessionId, player);
     this.budgets.set(client.sessionId, { value: MOVE_BUDGET_MAX, at: Date.now() });
     this.pickDogLead();
+    if (this.coEdit) client.send(MSG.coedit, { on: true } satisfies CoEditMessage);
     // 운영자가 남의 집에 들어오면 방에 있는 사람들에게 알린다
     if (pass.admin && pass.pid !== this.house) {
       const notice: AnnounceBroadcast = { kind: 'visit', text: '운영자님이 방에 들어왔어요.', at: Date.now() };
@@ -161,6 +181,7 @@ export class HouseRoom extends Room<{ state: HouseState }> {
     if (pass?.pid === this.house) {
       const reset: FurniBroadcast = { op: 'reset', by: client.sessionId };
       this.broadcast(MSG.furni, reset);
+      this.setCoEdit(false);
     }
     if (client.sessionId === this.dogLead) {
       this.dogLead = '';

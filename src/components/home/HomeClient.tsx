@@ -230,7 +230,26 @@ export function HomeClient() {
   }
 
   // 내 방에 들어온 친구·손님과 함께 있는다
-  const { presence, others } = useHousePresence(profile?.handle ?? null);
+  const { presence, snap: presenceSnap, others } = useHousePresence(profile?.handle ?? null);
+  // 같이 꾸미기: 손님이 옮긴 가구를 내 초안에 넣는다 (놓을 수 없는 자리면 내 자리로 되돌려 알린다)
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  useEffect(
+    () =>
+      presence?.onFurni((m) => {
+        if (m.op !== 'carry' && m.op !== 'move' && m.op !== 'drop') return;
+        const d = draftRef.current;
+        const cur = d?.layout.items.find((i) => i.id === m.item.id);
+        if (!d || !cur || cur.key !== m.item.key) return;
+        if (!canPlace(d.layout.items, m.item)) {
+          if (m.op === 'drop') presence.sendFurni({ op: 'set', item: cur });
+          return;
+        }
+        const next = { ...cur, x: m.item.x, z: m.item.z, ...(m.item.wall ? { wall: m.item.wall } : {}) };
+        setDraft((dd) => (dd ? { ...dd, layout: { ...dd.layout, items: dd.layout.items.map((i) => (i.id === next.id ? next : i)) } } : dd));
+      }),
+    [presence],
+  );
 
   // HUD 사이에 방이 오게 (모드가 바뀌거나 HUD가 처음 그려지면 다시 잰다)
   const insets = useHudInsets(`${mode}:${!!(me && profile && shown)}`, mode === 'edit' ? { top: 70, bottom: 190 } : { top: 104, bottom: 250 });
@@ -383,6 +402,16 @@ export function HomeClient() {
             </button>
           </header>
           <div className="edit-panel" data-hud="bottom">
+            {/* 방에 손님이 있으면 같이 꾸미기를 켤 수 있다 (손님은 가구를 들고 옮기기만, 저장은 내가) */}
+            {(others > 0 || presenceSnap?.coEdit) && (
+              <button
+                className={`pill-btn coedit-toggle${presenceSnap?.coEdit ? ' coedit-toggle--on' : ''}`}
+                aria-pressed={!!presenceSnap?.coEdit}
+                onClick={() => presence?.sendCoEdit(!presenceSnap?.coEdit)}
+              >
+                <Icon name="friends" size={16} /> {presenceSnap?.coEdit ? '같이 꾸미는 중 · 끄기' : '손님과 같이 꾸미기'}
+              </button>
+            )}
             {selectedItem && selectedDef ? (
               <div className="edit-selected">
                 <span className="edit-selected__name">{selectedDef.name}</span>

@@ -6,7 +6,7 @@
 // 방 전체 보기(꾸미기·가입 미리보기·보기 전환): 앞 벽과 천장을 걷어 내고 앞쪽 위에서 비스듬히 내려다본다.
 //       꾸미기에서는 소품을 눌러 고르고, 끌어서 칸에 맞춰 옮긴다 (놓을 수 있는 자리로만).
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import * as THREE from 'three';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { roomConfig, townConfig } from '@/config/game';
@@ -25,7 +25,7 @@ import {
   blockedCells, canPlace, canStandInRoom, findRoomPath, footprintSize, furnitureDef, itemCenter, moveInRoom,
   type FurnitureAction, type PlacedItem, type Point, type RoomLayout,
 } from '@/shared/room';
-import type { EmoteKind } from '@/shared/protocol';
+import type { EmoteKind, FurniMessage } from '@/shared/protocol';
 import { bubbleTexture, loadEmoteTextures, tagTexture } from '../village/assets';
 import { SELF_GESTURE, now as clockNow } from '../village/session';
 import type { RoomAssets } from './assets';
@@ -79,6 +79,8 @@ export interface RoomSceneProps {
   petCall?: number;
   /** 집 주인이 꾸미기를 끝냈다 (저장·취소). 손님 화면은 저장된 방을 다시 받는다 */
   onLayoutStale?: () => void;
+  /** 같이 꾸미기 중인 손님 (mode 'edit'로 가구를 들고 옮긴다. 저장은 주인이 한다) */
+  coEdit?: boolean;
   /** 화면 위아래를 가리는 HUD 높이 (px). 방이 그 사이에 들어오게 맞춘다. */
   insetTop?: number;
   insetBottom?: number;
@@ -1106,6 +1108,9 @@ function RoomAvatar({
     return c.grid;
   };
   const carryGoal = useRef<Point | null>(null);
+  /** 같은 방에 붙은 뒤 한 번: 다른 사람과 같은 자리에 서 있으면 옆 빈 칸으로 비킨다 (1인칭 화면이 남의 머리에 가리지 않게) */
+  const spawnChecked = useRef(false);
+  const connectedAt = useRef(0);
   const state = useRef({ pos: startSpot(blockedAll), rot: 0, facing: 0, path: null as Point[] | null });
   const keys = useRef(new Set<string>());
   const sent = useRef({ x: Number.NaN, z: Number.NaN, rot: 0, moving: false, at: 0 });
@@ -1160,6 +1165,30 @@ function RoomAvatar({
     if (blocked[cell]) {
       s.pos = nearestFree(blocked, s.pos);
       s.path = null;
+    }
+    // 붙고 0.5초 뒤에 한 번만 본다 (먼저 와 있던 사람은 나중에 온 사람 때문에 움직이지 않는다)
+    if (!presence?.connected) connectedAt.current = 0;
+    else if (!connectedAt.current) connectedAt.current = t;
+    if (presence && !spawnChecked.current && connectedAt.current && t - connectedAt.current > 0.5) {
+      spawnChecked.current = true;
+      const near = presence.others().map((id) => presence.player(id)).filter((p): p is NonNullable<typeof p> => !!p);
+      const crowded = (p: Point) => near.some((o) => Math.hypot(o.x - p.x, o.z - p.z) < 0.9);
+      if (crowded(s.pos)) {
+        let best: Point | null = null;
+        let bestD = Infinity;
+        for (let z = 0; z < D; z++) for (let x = 0; x < W; x++) {
+          const c = { x: x + 0.5, z: z + 0.5 };
+          const d = Math.hypot(c.x - s.pos.x, c.z - s.pos.z);
+          if (!blocked[z * W + x] && !crowded(c) && d < bestD) {
+            bestD = d;
+            best = c;
+          }
+        }
+        if (best) {
+          s.pos = best;
+          s.path = null;
+        }
+      }
     }
     const pg = pet.current;
     if (walkTo.current) {
@@ -1592,32 +1621,34 @@ function PetDog({
 }
 
 /**
- * 손님 화면: 집 주인이 꾸미는 동안 보내온 가구 자리를 저장된 방 위에 덧입힌다.
+ * 손님 화면: 집 주인(같이 꾸미기 중이면 다른 손님도)이 꾸미는 동안 보내온 가구 자리를 저장된 방 위에 덧입힌다.
  * 주인이 꾸미기를 끝내면(reset) onStale로 저장된 방을 다시 받는다 (새 방이 오면 덧입힌 것은 지운다).
+ * apply: 같이 꾸미기 중인 손님이 내가 옮긴 것도 덧입힌다.
  */
-function useLiveLayout(layout: RoomLayout, presence: HousePresence | null | undefined, onStale?: () => void): RoomLayout {
+function useLiveLayout(layout: RoomLayout, presence: HousePresence | null | undefined, onStale?: () => void): [RoomLayout, (m: FurniMessage) => void] {
   const [over, setOver] = useState<{ base: RoomLayout; map: Map<string, PlacedItem | null> }>(() => ({ base: layout, map: new Map() }));
   const base = useRef(layout);
   base.current = layout;
   const stale = useRef(onStale);
   stale.current = onStale;
+  const apply = useCallback((m: FurniMessage) => {
+    if (m.op === 'reset') return;
+    setOver((prev) => {
+      const map = prev.base === base.current ? new Map(prev.map) : new Map<string, PlacedItem | null>();
+      if (m.op === 'remove') map.set(m.id, null);
+      else map.set(m.item.id, m.item);
+      return { base: base.current, map };
+    });
+  }, []);
   useEffect(
     () =>
       presence?.onFurni((m) => {
-        if (m.op === 'reset') {
-          stale.current?.();
-          return;
-        }
-        setOver((prev) => {
-          const map = prev.base === base.current ? new Map(prev.map) : new Map<string, PlacedItem | null>();
-          if (m.op === 'remove') map.set(m.id, null);
-          else map.set(m.item.id, m.item);
-          return { base: base.current, map };
-        });
+        if (m.op === 'reset') stale.current?.();
+        else apply(m);
       }),
-    [presence],
+    [presence, apply],
   );
-  return useMemo(() => {
+  const shown = useMemo(() => {
     if (over.base !== layout || !over.map.size) return layout;
     const items: PlacedItem[] = [];
     for (const it of layout.items) {
@@ -1628,12 +1659,16 @@ function useLiveLayout(layout: RoomLayout, presence: HousePresence | null | unde
     for (const [id, o] of over.map) if (o && !layout.items.some((i) => i.id === id)) items.push(o);
     return { ...layout, items };
   }, [layout, over]);
+  return [shown, apply];
 }
 
 function SceneContent(props: RoomSceneProps) {
   const { assets, district, avatar, mode, selectedId = null, onSelect, onMove, onAction, playing = false, photoUrl, presence } = props;
   // 손님 화면은 집 주인이 꾸미는 대로 가구가 바로 움직인다 (저장 전에도)
-  const layout = useLiveLayout(props.layout, presence, props.onLayoutStale);
+  const [layout, applyLocal] = useLiveLayout(props.layout, presence, props.onLayoutStale);
+  // 같이 꾸미기 중인 손님: 내가 옮긴 가구도 내 화면에 덧입힌다 (주인은 onMove로 자기 초안을 고친다)
+  const coEditRef = useRef(!!props.coEdit);
+  coEditRef.current = !!props.coEdit;
   const framing: RoomFraming = mode === 'edit' ? 'overview' : (props.framing ?? 'inside');
   const time = useMemo(timeOfDay, []);
   const walkTo = useRef<Point | null>(null);
@@ -1676,6 +1711,7 @@ function SceneContent(props: RoomSceneProps) {
   const onMoveRef = useRef<((item: PlacedItem) => void) | undefined>(undefined);
   onMoveRef.current = (item: PlacedItem) => {
     onMove?.(item);
+    if (coEditRef.current) applyLocal({ op: 'move', item });
     if (!presence || mode !== 'edit') return;
     if (carrying.current !== item.id) {
       const before = itemsRef.current.find((i) => i.id === item.id) ?? item;

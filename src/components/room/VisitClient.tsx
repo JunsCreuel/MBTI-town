@@ -17,6 +17,8 @@ import { GesturePicker } from '../app/GesturePicker';
 import { Guide } from '../app/Guide';
 import { Icon } from '../app/Icon';
 import { Sheet } from '../app/Sheet';
+import { CompatCard } from './CompatCard';
+import { isMbtiType } from '@/design/mbti';
 import { TabBar } from '../app/TabBar';
 import { loadRoomAssets, type RoomAssets } from './assets';
 import { Guestbook } from './Guestbook';
@@ -35,11 +37,14 @@ export function VisitClient({ handle }: { handle: string }) {
   const [ready, setReady] = useState(false);
   /** 보기: 1인칭(기본) 또는 방 전체를 위에서 */
   const [overview, setOverview] = useState(false);
-  const [sheet, setSheet] = useState<'guestbook' | 'records' | 'more' | null>(null);
+  const [sheet, setSheet] = useState<'guestbook' | 'records' | 'more' | 'compat' | null>(null);
   const [playing, setPlaying] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   /** 쓰다듬기 버튼을 누른 횟수 (방 장면이 강아지 곁으로 걸어가 쓰다듬는다) */
   const [petCall, setPetCall] = useState(0);
+  /** 같이 꾸미기: 주인이 켜면 가구를 들고 옮길 수 있다 (저장은 주인이 한다) */
+  const [editing, setEditing] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
   const player = useRef<BgmHandle>(null);
 
   const load = useCallback(async () => {
@@ -104,6 +109,10 @@ export function VisitClient({ handle }: { handle: string }) {
   // 방을 볼 수 있으면 같은 방에 들어간다: 내 캐릭터로 걷고, 주인·다른 손님이 있으면 함께 보인다
   const { presence, snap: presenceSnap, others } = useHousePresence(view?.room ? handle : null);
   const pass = presenceSnap?.pass;
+  const coEdit = !!presenceSnap?.coEdit;
+  const myMbti = isMbtiType(pass?.mbti) ? pass.mbti : null;
+  // 주인이 같이 꾸미기를 끄면 나도 그만둔다
+  const coEditing = editing && coEdit;
   const myAvatar: Avatar | null = pass
     ? { body: pass.body, color: pass.color, skin: pass.skin, hair: pass.hair, accessory: pass.acc, pet: '', petNames: {} }
     : presenceSnap?.status === 'denied'
@@ -143,8 +152,11 @@ export function VisitClient({ handle }: { handle: string }) {
             selfName={pass?.name}
             selfTag={profileTag(pass?.mbti)}
             presence={presence}
-            mode="view"
+            mode={coEditing ? 'edit' : 'view'}
             framing={overview ? 'overview' : 'inside'}
+            coEdit={coEditing}
+            selectedId={coEditing ? selected : null}
+            onSelect={setSelected}
             onAction={onAction}
             playing={playing}
             photoUrl={(id) => `/api/photos/${id}`}
@@ -176,7 +188,13 @@ export function VisitClient({ handle }: { handle: string }) {
             <strong>{owner.displayName}의 방</strong>
             <span>{others > 0 ? `지금 ${others + 1}명이 함께 있어요` : owner.bio || `@${owner.handle}`}</span>
           </div>
-          <span className="district-chip">{DISTRICT[district].name}</span>
+          {myMbti && owner.mbti ? (
+            <button className="district-chip compat-chip" aria-label="MBTI 궁합 보기" onClick={() => setSheet('compat')}>
+              <Icon name="heart" size={14} /> 궁합
+            </button>
+          ) : (
+            <span className="district-chip">{DISTRICT[district].name}</span>
+          )}
         </div>
         <div className="room-top__actions">
           <button className={`icon-btn${overview ? ' icon-btn--accent' : ''}`} aria-label={overview ? '눈높이로 보기' : '방 전체 보기'} aria-pressed={overview} onClick={() => setOverview((o) => !o)}>
@@ -205,7 +223,22 @@ export function VisitClient({ handle }: { handle: string }) {
       </header>
 
       <div className="room-bottom" data-hud="bottom">
-        {presence && (
+        {coEdit && view.room && (
+          <div className="coedit-bar" role="status">
+            <Icon name="friends" size={18} />
+            <span>{coEditing ? '가구를 눌러 끌어서 옮겨요' : `${owner.displayName}님이 같이 꾸미자고 해요`}</span>
+            <button
+              className="btn-primary btn-primary--inline"
+              onClick={() => {
+                setEditing((e) => !e);
+                setSelected(null);
+              }}
+            >
+              {coEditing ? '다 했어요' : '같이 꾸미기'}
+            </button>
+          </div>
+        )}
+        {presence && !coEditing && (
           <GesturePicker variant="button" onAction={(k) => presence.sendAction(k)} onEmote={(k) => presence.sendEmote(k)} onPet={() => setPetCall((n) => n + 1)} selfPop={!overview} />
         )}
         {view.room && <BgmPlayer ref={player} trackKey={view.room.bgm} onPlayingChange={setPlaying} />}
@@ -234,6 +267,11 @@ export function VisitClient({ handle }: { handle: string }) {
       </div>
       <TabBar stay />
 
+      {sheet === 'compat' && myMbti && owner.mbti && (
+        <Sheet title="MBTI 궁합" onClose={() => setSheet(null)}>
+          <CompatCard me={{ name: pass?.name ?? '나', mbti: myMbti }} them={{ name: owner.displayName, mbti: owner.mbti }} />
+        </Sheet>
+      )}
       {sheet === 'guestbook' && (
         <Sheet title={`${owner.displayName}의 방명록`} onClose={() => setSheet(null)}>
           {!view.canWriteGuestbook && (

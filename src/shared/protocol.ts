@@ -137,6 +137,8 @@ export const MSG = {
   dog: 'dog',
   /** 집: 강아지를 맡을 화면인지 (서버 → 그 사람, DogLeadMessage) */
   dogLead: 'dog_lead',
+  /** 집: 같이 꾸미기 켜고 끄기 (주인 화면 → 서버 → 모두, CoEditMessage) */
+  coedit: 'coedit',
 } as const;
 
 /**
@@ -176,6 +178,14 @@ export interface DogMessage {
   moving: boolean;
   pose: PetPose | null;
 }
+
+/** 같이 꾸미기: 켜면 방에 있는 손님도 가구를 들고 옮길 수 있다 (새로 두기·빼기·저장은 주인만) */
+export interface CoEditMessage {
+  on: boolean;
+}
+
+/** 손님이 같이 꾸미기로 보낼 수 있는 방 꾸미기 알림 */
+export const COEDIT_OPS = ['carry', 'move', 'drop'] as const;
 
 export interface DogLeadMessage {
   lead: boolean;

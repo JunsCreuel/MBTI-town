@@ -495,6 +495,39 @@ describe('집 안: 방 꾸미기 실시간·방 강아지', () => {
     expect(atGuest[3]).toMatchObject({ op: 'reset' });
   });
 
+  it('같이 꾸미기: 주인이 켜야 손님도 가구를 옮길 수 있고, 빼기·되돌리기는 못 한다. 주인이 끝내면 꺼진다', async () => {
+    const owner = townPid('user-coedit-owner');
+    const host = await enter(pass({ pid: owner, name: '주인', house: owner }), owner);
+    rooms.push(host);
+    const guest = await enter(pass({ name: '손님', house: owner }), owner);
+    rooms.push(guest);
+    const atHost: FurniBroadcast[] = [];
+    const coAtGuest: boolean[] = [];
+    host.onMessage(MSG.furni, (m: FurniBroadcast) => atHost.push(m));
+    host.onMessage(MSG.coedit, () => {});
+    guest.onMessage(MSG.furni, () => {});
+    guest.onMessage(MSG.coedit, (m: { on: boolean }) => coAtGuest.push(m.on));
+    await until(() => host.state.players.size === 2);
+    const chair = { id: 'chair1', key: 'furn.chair', x: 2, z: 2, rot: 0 };
+    guest.send(MSG.furni, { op: 'move', item: chair });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(atHost).toEqual([]);
+    guest.send(MSG.coedit, { on: true });
+    await new Promise((r) => setTimeout(r, 200));
+    expect(coAtGuest).toEqual([]);
+    host.send(MSG.coedit, { on: true });
+    await until(() => coAtGuest.length === 1);
+    guest.send(MSG.furni, { op: 'move', item: chair });
+    guest.send(MSG.furni, { op: 'remove', id: 'chair1' });
+    guest.send(MSG.furni, { op: 'reset' });
+    await until(() => atHost.length === 1);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(atHost).toEqual([{ op: 'move', item: chair, by: guest.sessionId }]);
+    host.send(MSG.furni, { op: 'reset' });
+    await until(() => coAtGuest.length === 2);
+    expect(coAtGuest).toEqual([true, false]);
+  });
+
   it('먼저 들어온 사람이 강아지를 맡고, 그 사람만 강아지 자리를 알린다. 나가면 다음 사람이 맡는다', async () => {
     const house = townPid('user-dog-house');
     const leads: string[] = [];

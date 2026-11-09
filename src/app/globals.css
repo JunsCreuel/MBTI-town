@@ -5358,3 +5358,84 @@ canvas {
   grid-template-columns: 1fr 1fr;
   gap: var(--space-2);
 }
+
+/* 같이 꾸미기 (방 주인 꾸미기 화면, 손님 화면) */
+.coedit-toggle {
+  justify-self: start;
+  margin-bottom: var(--space-2);
+}
+.coedit-toggle--on {
+  background: var(--color-accent);
+  color: var(--color-accentText);
+}
+.coedit-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-radius: 999px;
+  background: var(--color-surface);
+  box-shadow: 0 4px 18px var(--color-shadow);
+  font-size: 14px;
+}
+.coedit-bar span {
+  flex: 1;
+}
+
+/* MBTI 궁합 카드 (친구 방) */
+.compat {
+  display: grid;
+  gap: var(--space-3);
+  text-align: center;
+}
+.compat__pair {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-6);
+}
+.compat__person {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+}
+.compat__badge {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  color: var(--color-accentText);
+  font-weight: 800;
+  font-size: 18px;
+}
+.compat__hearts {
+  margin: 0;
+  font-size: 28px;
+  color: var(--color-danger);
+  letter-spacing: 2px;
+}
+.compat__empty {
+  color: var(--color-border);
+}
+.compat__title {
+  margin: 0;
+  font-size: 22px;
+}
+.compat__text {
+  margin: 0;
+  line-height: 1.6;
+}
+.compat__tip {
+  margin: 0;
+  color: var(--color-accentInk);
+  font-weight: 700;
+}
+
+.compat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
